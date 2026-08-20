@@ -10,17 +10,19 @@
 
 ## 1. 최초 부트스트랩 (서버에서 1회)
 
+현재 운영 서버 기준: 계정 `ybbarng`, 경로 `/home/ybbarng/wine.byb.kr`, 포트 `3104`.
+
 ```bash
 # 서버에 SSH 접속 후
-cd ~/apps            # 원하는 상위 경로 (SERVER_PATH 의 부모)
+cd ~                 # 저장소를 홈 바로 아래 둔다 (SERVER_PATH 의 부모)
 git clone https://github.com/ybbarng/wine.byb.kr.git
 cd wine.byb.kr
 
 # 배포 환경 종속 값 — 이 파일은 서버에만 존재한다
-cat > .env <<'EOF'
-PORT=3103
+cat > .env <<EOF
+PORT=3104
 ADMIN_PASSWORD=여기에-실제-비밀번호
-SESSION_SECRET=충분히-긴-임의-문자열
+SESSION_SECRET=$(openssl rand -hex 32)
 EOF
 chmod 600 .env
 
@@ -45,17 +47,31 @@ sudo certbot --nginx -d wine.byb.kr
 
 ## 3. 자동 배포용 GitHub Secrets (1회)
 
-저장소 Settings → Secrets and variables → Actions 에 등록:
+저장소 Settings → Secrets and variables → Actions 에 등록(현재 운영 서버 기준):
 
 | Secret | 값 |
 | --- | --- |
-| `SERVER_HOST` | 서버 IP 또는 호스트 |
-| `SERVER_USER` | SSH 사용자 |
-| `SERVER_SSH_KEY` | 배포용 개인키 (해당 공개키를 서버 `~/.ssh/authorized_keys` 에) |
-| `SERVER_PORT` | SSH 포트 (기본 22면 생략 가능) |
-| `SERVER_PATH` | 서버의 저장소 경로 (예: `/home/ubuntu/apps/wine.byb.kr`) |
+| `SERVER_HOST` | `byb.kr` |
+| `SERVER_USER` | `ybbarng` |
+| `SERVER_SSH_KEY` | 배포용 개인키. 공개키는 서버 `~/.ssh/authorized_keys` 에 **forced command** 로 등록 |
+| `SERVER_PORT` | SSH 포트 (기본 22면 생략) |
+| `SERVER_PATH` | `/home/ybbarng/wine.byb.kr` |
 
 이후 `main` push → `.github/workflows/deploy.yml` 이 서버에서 `./server` 실행.
+
+### 배포 키 보안 (forced command)
+
+배포 전용 키는 만능키를 재사용하지 않고 별도로 만든다. 서버 `~/.ssh/authorized_keys` 에서 그 공개키 앞에 강제 명령을 걸어, 키가 유출돼도 배포 외에는 아무것도 못 하게 한다.
+
+```
+command="cd /home/ybbarng/wine.byb.kr && ./server",no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 AAAA...공개키... wine-deploy
+```
+
+로컬에서 검증할 때는 지정 키만 쓰도록 `-o IdentitiesOnly=yes` 를 붙인다(안 그러면 다른 키로 붙어 일반 셸이 열린다):
+
+```bash
+ssh -i ~/.ssh/wine_deploy -o IdentitiesOnly=yes ybbarng@byb.kr   # 접속하면 ./server 가 자동 실행
+```
 
 ## 참고
 
