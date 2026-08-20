@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css");
 
 :root {
   /* 와인셀러 톤: 딥 버건디 배경 + 골드/로제 액센트 */
@@ -19,7 +20,8 @@
   --color-gold: var(--gold);
   --color-rose: var(--rose);
   --color-muted: var(--muted);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: "Pretendard Variable", var(--font-geist-sans), system-ui,
+    sans-serif;
   --font-serif: var(--font-playfair);
   --font-mono: var(--font-geist-mono);
 }
@@ -27,7 +29,8 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-sans);
+  word-break: keep-all;
 }
 
 /* 배경에서 천천히 떠도는 와인빛 오브 */
