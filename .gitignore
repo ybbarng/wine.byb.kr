@@ -1,0 +1,53 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files — 배포 환경 종속 값(PORT, ADMIN_PASSWORD 등)은 서버의 .env 에만 둔다.
+# .env.example 만 커밋해 어떤 키가 필요한지 문서화한다.
+.env*
+!.env.example
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# prisma / sqlite
+/src/generated/
+/data/
+*.db
+*.db-journal
+*.db.bak.*
+
+# claude — 개인/세션 축적 권한은 공유하지 않는다.
+.claude/settings.local.json

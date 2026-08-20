@@ -1,0 +1,19 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2a0a18"/>
+      <stop offset="1" stop-color="#5e162e"/>
+    </linearGradient>
+    <linearGradient id="wine" x1="20" y1="14" x2="44" y2="34" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#e8b4be"/>
+      <stop offset="1" stop-color="#b83259"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
+  <!-- 잔 볼: 위는 열려 있고 아래로 좁아지는 형태 -->
+  <path d="M20 13h24c0 12-5.5 20-12 20S20 25 20 13Z" fill="url(#wine)"/>
+  <path d="M20 13h24c0 12-5.5 20-12 20S20 25 20 13Z" stroke="#d9a441" stroke-width="2" stroke-linejoin="round"/>
+  <!-- 스템과 베이스 -->
+  <path d="M32 33v13" stroke="#d9a441" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M23 49h18" stroke="#d9a441" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(tsx *)",
+      "Bash(git *)",
+      "Bash(gh *)",
+      "Bash(biome *)",
+      "Bash(next *)",
+      "Bash(prisma *)",
+      "Bash(mkdir *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(rg *)",
+      "Bash(chmod *)"
+    ]
+  }
+}

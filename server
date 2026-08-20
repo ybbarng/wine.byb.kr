@@ -1,0 +1,53 @@
+#!/bin/bash
+set -e
+
+cd "$(dirname "$0")"
+
+# 비대화형 셸(GitHub Actions SSH 등)에서도 nvm 환경 로드
+export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+# shellcheck disable=SC1090,SC1091
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+# 0) 배포 환경 종속 값 로드 — PORT, ADMIN_PASSWORD 등은 이 서버의 .env 에만 있다.
+#    저장소에는 커밋되지 않으므로, 여기서 읽어 process.env 로 넘긴다.
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+PORT="${PORT:-3000}"
+
+# 1) DB 안전: 배포 직전 SQLite 백업, 최근 14개만 유지
+DB_PATH="${DB_PATH:-data/wine.db}"
+if [ -f "$DB_PATH" ]; then
+  TS=$(date +%Y%m%d-%H%M%S)
+  cp "$DB_PATH" "$DB_PATH.bak.$TS"
+  echo "🗃  Backed up $DB_PATH → $DB_PATH.bak.$TS"
+  # ls -t는 새 것 → 옛 것 순. tail -n +15부터가 오래된 것
+  ls -1t "$DB_PATH.bak."* 2>/dev/null | tail -n +15 | xargs -r rm -f
+fi
+
+echo "📥 Pulling latest changes..."
+git pull
+
+echo "📦 Installing dependencies..."
+pnpm install
+
+echo "🔨 Building..."
+pnpm run build
+
+echo "🔄 Restarting pm2..."
+# --update-env: .env 에서 갱신된 PORT 등을 기존 프로세스에도 반영
+pm2 restart ecosystem.config.js --update-env || pm2 start ecosystem.config.js
+
+# 헬스체크 — pm2가 새 빌드 띄울 시간 잠깐 확보 후 200 응답 확인
+sleep 3
+HEALTH_URL="${HEALTH_URL:-http://localhost:$PORT/}"
+CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$HEALTH_URL" || echo "000")
+if [ "$CODE" = "200" ]; then
+  echo "✅ Deploy complete! (health $CODE @ $HEALTH_URL)"
+else
+  echo "❌ Health check failed: $HEALTH_URL → $CODE"
+  exit 1
+fi

@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+:root {
+  /* 와인셀러 톤: 딥 버건디 배경 + 골드/로제 액센트 */
+  --background: #1a0510;
+  --foreground: #f4e9ec;
+  --wine: #7b1e3b;
+  --wine-bright: #b83259;
+  --gold: #d9a441;
+  --rose: #e8b4be;
+  --muted: #9a7a83;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-wine: var(--wine);
+  --color-wine-bright: var(--wine-bright);
+  --color-gold: var(--gold);
+  --color-rose: var(--rose);
+  --color-muted: var(--muted);
+  --font-sans: var(--font-geist-sans);
+  --font-serif: var(--font-playfair);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* 배경에서 천천히 떠도는 와인빛 오브 */
+@keyframes drift {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(4%, -3%) scale(1.08);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes swirl {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-drift {
+  animation: drift 18s ease-in-out infinite;
+}
+.animate-drift-slow {
+  animation: drift 26s ease-in-out infinite;
+}
+.animate-shimmer {
+  animation: shimmer 4s ease-in-out infinite;
+}
+.animate-swirl {
+  animation: swirl 40s linear infinite;
+}
+
+/* 접근성: 모션을 줄이려는 사용자에게는 애니메이션을 멈춘다 */
+@media (prefers-reduced-motion: reduce) {
+  .animate-drift,
+  .animate-drift-slow,
+  .animate-shimmer,
+  .animate-swirl {
+    animation: none;
+  }
+}
