@@ -51,3 +51,7 @@ next-env.d.ts
 
 # claude — 개인/세션 축적 권한은 공유하지 않는다.
 .claude/settings.local.json
+
+# 로컬 캡처/디버그 스크립트
+/shot.mjs
+/shot-bowl.mjs
