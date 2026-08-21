@@ -252,7 +252,7 @@ export default function FluidLab() {
       restDensityUniform = uniform(1.5);
       dynamicViscosityUniform = uniform(2.0);
       dtUniform = uniform(1 / 60);
-      gravityUniform = uniform(new THREE.Vector3(0, -(9.81 * 9.81), 0));
+      gravityUniform = uniform(new THREE.Vector3(0, -9.81, 0)); // 진단: 정상 중력
     }
 
     function setupComputeShaders() {
