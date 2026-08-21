@@ -10,10 +10,10 @@ import {
   float,
   hash,
   instanceIndex,
+  positionLocal,
   storage,
   uniform,
   vec3,
-  vertexIndex,
 } from "three/tsl";
 
 extend(THREE as unknown as Record<string, unknown>);
@@ -104,17 +104,15 @@ function Particles() {
       p.assign(np);
     })().compute(COUNT);
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute(
-      "position",
-      new THREE.BufferAttribute(new Float32Array(COUNT * 3), 3),
-    );
-    const material = new THREE.PointsNodeMaterial();
-    material.positionNode = positions.element(vertexIndex);
-    material.colorNode = vec3(0.72, 0.2, 0.35);
-    material.size = 10;
+    // 각 입자를 작은 구(球)로 인스턴싱 — WebGPU 표준 입자 렌더
+    const sphereGeo = new THREE.SphereGeometry(0.06, 8, 6);
+    const material = new THREE.MeshStandardNodeMaterial();
+    material.positionNode = positionLocal.add(positions.element(instanceIndex));
+    material.colorNode = vec3(0.62, 0.12, 0.24);
+    material.roughness = 0.25;
+    material.metalness = 0.0;
 
-    const points = new THREE.Points(geometry, material);
+    const points = new THREE.InstancedMesh(sphereGeo, material, COUNT);
     points.frustumCulled = false;
 
     return { points, initNode, forceNode, stepNode, uDelta };
@@ -149,6 +147,9 @@ export default function FluidLab() {
       onCreated={({ camera }) => camera.lookAt(0, 1, 0)}
     >
       <color attach="background" args={["#1a0510"]} />
+      <ambientLight intensity={0.5} />
+      <directionalLight position={[3, 6, 4]} intensity={2.5} />
+      <directionalLight position={[-3, 2, -2]} intensity={0.8} color="#e8b4be" />
       <mesh position={[0, 1.5, 0]}>
         <cylinderGeometry args={[RADIUS, RADIUS, 3, 48, 1, true]} />
         <meshBasicMaterial color="#e8b4be" wireframe transparent opacity={0.15} />
