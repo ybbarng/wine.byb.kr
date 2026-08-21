@@ -118,7 +118,7 @@ export default function FluidLab() {
       g2pKernelWorkgroupBuffer: any;
     let particleMesh: THREE.Mesh;
 
-    const params = { particleCount: 8192 * 4 };
+    const params = { particleCount: 8192 * 2 };
 
     // ── 잔 하나의 데이터 ────────────────────────────────────────────
     // 외벽 프로파일 + 벽 두께 + 볼(유체가 담기는) y 범위 + 월드 배치.
@@ -136,7 +136,7 @@ export default function FluidLab() {
       ] as [number, number][],
       wallThickness: 0.025, // 프로파일 단위 유리 두께 (내벽 = 외벽 − 이 값)
       bowlBottomY: 1.44, // 볼 안쪽 바닥 (유체 최저, 스템 제외)
-      bowlTopY: 2.5, // 유체 최대 높이 (입구 아래)
+      bowlTopY: 2.7, // 유체 최대 높이 (입구 아래, 넘침 여유)
       worldScale: 0.42, // 프로파일 → 월드 스케일
       worldY: -0.06, // 프로파일 y=0 의 월드 y
     };
@@ -471,9 +471,11 @@ export default function FluidLab() {
           coordRMax.assign(coordRMax.mul(cy).add(bowlCoefU[k]));
         }
         coordRMax.assign(coordRMax.max(0.002));
+        // 초과분을 경계보다 약간 안쪽(×1.6)까지 되돌려, 좁은 볼 바닥에서
+        // 유체가 옆으로 새지 않고 위로 쌓이게 한다. (예제의 rounded box 는 ×1.3)
         const over = r.sub(coordRMax).max(0.0).toVar();
         If(over.greaterThan(0.0), () => {
-          const inv = over.div(r);
+          const inv = over.mul(1.6).div(r);
           result.assign(vec3(p.x.sub(dx.mul(inv)), p.y, p.z.sub(dz.mul(inv))));
         });
         return result;
@@ -551,12 +553,8 @@ export default function FluidLab() {
             vec3(gridSize).sub(1).div(gridSizeUniform),
           ),
         );
-        // 잔 볼(구 캡 근사) 안에 머물도록 속도에 되돌림 힘을 준다.
-        const posNext = particlePosition
-          .add(particleVelocity.mul(dtUniform).mul(2.0))
-          .toConst("posNext");
-        const posNextClamped = clampToBowl(posNext);
-        particleVelocity.addAssign(posNextClamped.sub(posNext));
+        // 위치 hard clamp: 실제 유리벽처럼 입자를 볼 안에 확실히 가둔다.
+        particlePosition.assign(clampToBowl(particlePosition));
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
