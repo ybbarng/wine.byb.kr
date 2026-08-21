@@ -582,12 +582,13 @@ export default function FluidLab() {
         );
         // 볼 경계: 미래 위치가 볼을 벗어난 양의 3배로 속도를 되돌린다.
         // 위치 순간이동은 흩어짐을 유발하므로 건드리지 않고 속도만 강하게 되돌린다.
+        // 흡수형 경계: 미래 위치(dt×4 앞)가 벽을 넘으면, 벽 밖으로 향하는
+        // 속도(법선 성분)만 제거한다. 위치는 안 건드리므로 진동이 없고,
+        // 넘기 훨씬 전에 미리 감속하므로 벽을 넘지 않는다(압축도 없다).
         const posNext = particlePosition
-          .add(particleVelocity.mul(dtUniform).mul(2.0))
+          .add(particleVelocity.mul(dtUniform).mul(4.0))
           .toConst("posNext");
         const posNextClamped = clampToBowl(posNext);
-        // 흡수형 경계: 벽 밖으로 향하는 속도(법선 성분)만 제거한다. 안으로
-        // 밀지 않으므로 유체를 압축하지 않는다(되돌림 방식은 과밀집을 유발했다).
         const outward = posNext.sub(posNextClamped).toVar();
         const outLen = outward.length().toVar();
         If(outLen.greaterThan(1e-6), () => {
@@ -597,12 +598,6 @@ export default function FluidLab() {
             particleVelocity.subAssign(n.mul(vn));
           });
         });
-        // 이미 벽 밖에 있는 입자는 부드럽게(20%씩) 안으로 되돌린다.
-        // 급격히 안 밀어 압축을 피하면서, 여러 스텝에 걸쳐 새는 걸 막는다.
-        const posClamped = clampToBowl(particlePosition);
-        particlePosition.assign(
-          particlePosition.add(posClamped.sub(particlePosition).mul(0.1)),
-        );
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
