@@ -2,7 +2,7 @@
 
 import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
 import { useMemo } from "react";
-import { gaussianBlur } from "three/examples/jsm/tsl/display/GaussianBlurNode.js";
+import { bilateralBlur } from "three/examples/jsm/tsl/display/BilateralBlurNode.js";
 import * as THREE from "three/webgpu";
 import {
   Fn,
@@ -404,7 +404,13 @@ function PostFX() {
   const post = useMemo(() => {
     const p = new THREE.PostProcessing(gl as unknown as THREE.WebGPURenderer);
     const scenePass = pass(scene, camera);
-    const depth = gaussianBlur(scenePass.getLinearDepthNode(), null, 20).x;
+    // Bilateral: 표면 형태(깊이 경계)는 지키고 잡티만 스무딩 → 덩어리 없이 매끈
+    const depth = bilateralBlur(
+      scenePass.getLinearDepthNode(),
+      null,
+      12,
+      0.15,
+    ).x;
 
     const dx = dFdx(depth);
     const dy = dFdy(depth);
