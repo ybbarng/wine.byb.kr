@@ -345,7 +345,6 @@ function Fluid() {
 
       particleBuffer.element(instanceIndex).get("C").assign(B.mul(4));
       vel.addAssign(gravityU.mul(dtU));
-      vel.mulAssign(0.992); // 약한 감쇠: 붓고 난 뒤 서서히 잦아들어 멈춤
       vel.divAssign(gridSizeU);
       pos.addAssign(vel.mul(dtU));
       pos.assign(
@@ -367,6 +366,8 @@ function Fluid() {
         pos.y.assign(0.08);
       });
 
+      // 예제 g2p 의 마지막: 속도를 grid 스케일로 되돌려 저장 (이식에서 빠뜨렸던 핵심)
+      vel.mulAssign(gridSizeU);
       particleBuffer.element(instanceIndex).get("position").assign(pos);
       particleBuffer.element(instanceIndex).get("velocity").assign(vel);
     })().compute(PARTICLE_COUNT);
@@ -386,9 +387,9 @@ function Fluid() {
     return { mesh, clearK, p2g1K, p2g2K, updateGridK, g2pK, dtU };
   }, []);
 
-  useFrame((_, dt) => {
-    // 실제 프레임 시간을 반영(clamp) → fps 가 낮아도 슬로모션이 되지 않음
-    built.dtU.value = Math.min(dt, 1 / 45);
+  useFrame(() => {
+    // 예제와 동일하게 dt 고정(1/60) — 물리 거동을 그대로 유지
+    built.dtU.value = 1 / 60;
     gl.compute(built.clearK);
     gl.compute(built.p2g1K);
     gl.compute(built.p2g2K);
@@ -412,13 +413,18 @@ function PostFX() {
 
     const dx = dFdx(depth);
     const dy = dFdy(depth);
-    const normal = vec3(dx.mul(-120.0), dy.mul(-120.0), float(1.0)).normalize();
+    // 가장자리에서 깊이 기울기가 폭발하면 하이라이트가 세로선으로 튄다.
+    // 기울기를 clamp 해 법선을 완만하게 유지한다.
+    const gx = dx.mul(-40.0).clamp(-1.0, 1.0);
+    const gy = dy.mul(-40.0).clamp(-1.0, 1.0);
+    const normal = vec3(gx, gy, float(1.0)).normalize();
 
     const lightDir = vec3(0.4, 0.85, 0.5).normalize();
-    // 가장자리(법선 급경사)가 어둡게 죽지 않도록 ambient 를 올린다
     const diff = normal.dot(lightDir).max(0.0).mul(0.5).add(0.55);
     const halfV = lightDir.add(vec3(0.0, 0.0, 1.0)).normalize();
-    const spec = normal.dot(halfV).max(0.0).pow(60.0).mul(0.9);
+    // 가장자리(정면을 안 보는 곳)에서는 하이라이트를 억제(normal.z 로 마스크)
+    const edgeMask = normal.z.clamp(0.0, 1.0).pow(6.0);
+    const spec = normal.dot(halfV).max(0.0).pow(80.0).mul(0.4).mul(edgeMask);
 
     const wine = vec3(0.46, 0.06, 0.14);
     // 굴절: 법선만큼 배경을 왜곡해 샘플 → 뒤가 비치는 투명한 와인
@@ -455,7 +461,6 @@ export default function FluidLab() {
       <ambientLight intensity={0.6} />
       <directionalLight position={[2, 4, 2]} intensity={2.5} />
       <Fluid />
-      <PostFX />
     </Canvas>
   );
 }
