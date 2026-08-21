@@ -115,6 +115,11 @@ export default function FluidLab() {
       onCreated={({ camera }) => camera.lookAt(0, 1, 0)}
     >
       <color attach="background" args={["#1a0510"]} />
+      {/* 참조용 원통(잔 대용) — 입자 충돌 경계를 눈으로 보이게 */}
+      <mesh position={[0, 1.5, 0]}>
+        <cylinderGeometry args={[RADIUS, RADIUS, 3, 48, 1, true]} />
+        <meshBasicMaterial color="#e8b4be" wireframe transparent opacity={0.15} />
+      </mesh>
       <Particles />
     </Canvas>
   );
