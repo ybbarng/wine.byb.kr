@@ -25,6 +25,7 @@
       "Bash(tail *)",
       "Bash(find *)",
       "Bash(pkill *)",
+      "Bash(magick *)",
       "Bash(true)"
     ]
   }
