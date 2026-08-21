@@ -248,7 +248,7 @@ export default function FluidLab() {
     function setupUniforms() {
       gridSizeUniform = uniform(gridSize);
       particleCountUniform = uniform(params.particleCount, "uint");
-      stiffnessUniform = uniform(200);
+      stiffnessUniform = uniform(50);
       restDensityUniform = uniform(1.5);
       dynamicViscosityUniform = uniform(2.0);
       dtUniform = uniform(1 / 60);
@@ -599,11 +599,14 @@ export default function FluidLab() {
           });
         });
         // 흡수가 미리 감속해도 넘어버린 소수 입자만 부드럽게(20%) 되돌린다.
-        // 넘는 입자가 적으니 위치 이동에 의한 진동도 작다.
         const posClamped = clampToBowl(particlePosition);
-        particlePosition.assign(
-          particlePosition.add(posClamped.sub(particlePosition).mul(0.2)),
-        );
+        const backDelta = posClamped.sub(particlePosition).toVar();
+        particlePosition.assign(particlePosition.add(backDelta.mul(0.2)));
+        // 되돌려진(벽 밖에 있던) 입자만 속도를 감쇠해 벽 왕복 진동을 억제한다.
+        // 낙하 중인 입자는 벽 밖이 아니라 감쇠되지 않아 낙하는 그대로다.
+        If(backDelta.length().greaterThan(1e-5), () => {
+          particleVelocity.mulAssign(0.5);
+        });
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
