@@ -342,17 +342,30 @@ export default function FluidLab() {
         .compute(cellCount)
         .setName("updateGridKernel");
 
-      // 잔 볼을 구의 아래쪽 캡으로 근사한 경계.
-      // 유체 좌표(0~1)에서 중심 (0.5, BOWL_CENTER_Y, 0.5), 반경 BOWL_RADIUS 인
-      // 구 안쪽에 가둔다. 중력으로 아래 캡(오목한 그릇)에 유체가 고인다.
+      // 잔 볼 프로파일 R(y) 안에 유체를 가둔다.
+      // 유체 좌표(0~1) → 월드 y → profile y 로 변환해, 그 높이의 볼 내벽
+      // 반경을 넘는 (x,z) 초과분만 예제처럼 '부드럽게' 안으로 되돌린다.
+      // 볼 바닥은 profile 반경이 자연히 좁아지므로 별도 바닥 clamp 없이 좁게 고인다.
       // biome-ignore lint/suspicious/noExplicitAny: TSL
       const clampToBowl = (p: any) => {
-        const c = vec3(0.5, BOWL_CENTER_Y, 0.5);
-        const d = p.sub(c).toVar();
-        const len = d.length().toVar();
         const result = p.toVar();
-        If(len.greaterThan(BOWL_RADIUS), () => {
-          result.assign(c.add(d.div(len).mul(BOWL_RADIUS)));
+        const dx = p.x.sub(0.5).toVar();
+        const dz = p.z.sub(0.5).toVar();
+        const r = dx.mul(dx).add(dz.mul(dz)).sqrt().max(1e-5).toVar();
+        // 유체 coord y → 월드 y → profile y (볼 목=1.36 기준 d)
+        const worldY = p.y.mul(FLUID_SCALE).add(FLUID_Y);
+        const py = worldY.sub(GLASS_Y).div(GLASS_SCALE);
+        const d = clamp(py.sub(1.36), 0.0, 1.0).toVar();
+        // 볼 내벽 반경(profile 2차근사) → coord 반경
+        const rProfile = d.mul(d).mul(-0.5).add(d.mul(0.908)).add(0.042);
+        const coordRMax = rProfile
+          .mul(GLASS_SCALE / FLUID_SCALE)
+          .max(0.01)
+          .toVar();
+        const over = r.sub(coordRMax).max(0.0).toVar();
+        If(over.greaterThan(0.0), () => {
+          const inv = over.div(r);
+          result.assign(vec3(p.x.sub(dx.mul(inv)), p.y, p.z.sub(dz.mul(inv))));
         });
         return result;
       };
@@ -509,13 +522,10 @@ export default function FluidLab() {
     const GLASS_Y = -0.06;
 
     // 유체 렌더를 잔 볼 안으로 축소·이동하는 값 (캡처로 조정).
-    // FLUID_Y + coord*FLUID_SCALE = 월드 y. 프로파일 SDF 가 이 값으로 볼과 정렬한다.
+    // FLUID_Y + coord*FLUID_SCALE = 월드 y. 프로파일 경계가 이 값으로 볼과 정렬한다.
+    // FLUID_Y 를 볼 바닥(월드 ~0.5)에 맞춰 유체 coord 0 이 볼 바닥에 오게 한다.
     const FLUID_SCALE = 0.4;
-    const FLUID_Y = 0.68;
-
-    // 유체 물리 경계 = 잔 볼을 근사한 구 캡 (유체 좌표 0~1 기준).
-    const BOWL_CENTER_Y = 0.62;
-    const BOWL_RADIUS = 0.42;
+    const FLUID_Y = 0.57;
 
     function setupGlass() {
       const curve = new THREE.CatmullRomCurve3(
