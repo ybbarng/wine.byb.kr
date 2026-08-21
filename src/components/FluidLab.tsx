@@ -605,14 +605,7 @@ export default function FluidLab() {
         // 되돌려진(벽 밖에 있던) 입자만 속도를 감쇠해 벽 왕복 진동을 억제한다.
         // 낙하 중인 입자는 벽 밖이 아니라 감쇠되지 않아 낙하는 그대로다.
         If(backDelta.length().greaterThan(1e-5), () => {
-          particleVelocity.mulAssign(0.5);
-        });
-
-        // 정지 마찰: 느린 입자(정착 중)만 추가 감쇠해 완전히 멈추게 한다.
-        // 실제 물도 느린 잔류 운동은 정지 마찰·표면장력으로 멈춘다. 낙하 중
-        // 빠른 입자는 임계를 넘어 감쇠되지 않으므로 낙하는 그대로다.
-        If(particleVelocity.length().lessThan(0.1), () => {
-          particleVelocity.mulAssign(0.8);
+          particleVelocity.mulAssign(0.3);
         });
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
