@@ -248,7 +248,7 @@ export default function FluidLab() {
     function setupUniforms() {
       gridSizeUniform = uniform(gridSize);
       particleCountUniform = uniform(params.particleCount, "uint");
-      stiffnessUniform = uniform(50);
+      stiffnessUniform = uniform(300);
       restDensityUniform = uniform(1.5);
       dynamicViscosityUniform = uniform(4.0);
       dtUniform = uniform(1 / 60);
@@ -582,11 +582,11 @@ export default function FluidLab() {
         );
         // 볼 경계: 미래 위치가 볼을 벗어난 양의 3배로 속도를 되돌린다.
         // 위치 순간이동은 흩어짐을 유발하므로 건드리지 않고 속도만 강하게 되돌린다.
-        // 흡수형 경계: 미래 위치(dt×4 앞)가 벽을 넘으면, 벽 밖으로 향하는
-        // 속도(법선 성분)만 제거한다. 위치는 안 건드리므로 진동이 없고,
+        // 흡수형 경계: 미래 위치(dt×8 앞)가 벽을 넘으면, 벽 밖으로 향하는
+        // 속도(법선 성분)만 제거한다. 위치는 안 건드리므로 진동/대류가 없고,
         // 넘기 훨씬 전에 미리 감속하므로 벽을 넘지 않는다(압축도 없다).
         const posNext = particlePosition
-          .add(particleVelocity.mul(dtUniform).mul(4.0))
+          .add(particleVelocity.mul(dtUniform).mul(8.0))
           .toConst("posNext");
         const posNextClamped = clampToBowl(posNext);
         const outward = posNext.sub(posNextClamped).toVar();
@@ -601,7 +601,7 @@ export default function FluidLab() {
         // 흡수가 미리 감속해도 넘어버린 소수 입자만 부드럽게(20%) 되돌린다.
         const posClamped = clampToBowl(particlePosition);
         const backDelta = posClamped.sub(particlePosition).toVar();
-        particlePosition.assign(particlePosition.add(backDelta.mul(0.2)));
+        particlePosition.assign(particlePosition.add(backDelta.mul(0.05)));
         // 되돌려진(벽 밖에 있던) 입자만 속도를 감쇠해 벽 왕복 진동을 억제한다.
         // 낙하 중인 입자는 벽 밖이 아니라 감쇠되지 않아 낙하는 그대로다.
         If(backDelta.length().greaterThan(1e-5), () => {
@@ -740,6 +740,8 @@ export default function FluidLab() {
             let nWall = 0; // 벽 근처(반경 85%+) 입자 속도
             let vInSum = 0;
             let nIn = 0; // 내부(반경 50% 미만) 입자 속도
+            let vrSum = 0; // 반경 방향 속도 합 (밖으로 +, 대류 확인)
+            let vrAbsSum = 0;
             const wallCoord =
               (glass.wallThickness * glass.worldScale) / FLUID_SCALE;
             for (let i = 0; i < N; i++) {
@@ -767,9 +769,15 @@ export default function FluidLab() {
                 vInSum += v;
                 nIn++;
               }
+              // 반경 방향(수평) 속도: 밖으로 + / 안으로 −. 대류 확인용
+              if (rr > 1e-4) {
+                const vr = (vx * (px - 0.5) + vz * (pz - 0.5)) / rr / gridSize1d;
+                vrSum += vr;
+                vrAbsSum += Math.abs(vr);
+              }
             }
             console.log(
-              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} | vWall=${(vWallSum / Math.max(nWall, 1)).toFixed(4)} vIn=${(vInSum / Math.max(nIn, 1)).toFixed(4)} | dAvg=${(sumD / N).toFixed(3)} | out=${outGlass}`,
+              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} | vrNet=${(vrSum / N).toFixed(4)} vrAbs=${(vrAbsSum / N).toFixed(4)} | dAvg=${(sumD / N).toFixed(3)} | out=${outGlass}`,
             );
           })
           .catch(() => {});
