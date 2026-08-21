@@ -85,6 +85,7 @@ export default function FluidLab() {
     let camera: THREE.PerspectiveCamera;
     let controls: OrbitControls;
     let disposed = false;
+    let frameCount = 0;
 
     const timer = new THREE.Timer();
     timer.connect(document);
@@ -227,6 +228,7 @@ export default function FluidLab() {
         particleArray[i * particleStructSize + 2] = 0.5 + rr * Math.sin(ang);
       }
       particleBuffer = instancedArray(particleArray, particleStruct);
+      particleBuffer.setPBO(true); // 속도 로그용 CPU readback 활성화
 
       const cellCount = gridSize.x * gridSize.y * gridSize.z;
       const cellStruct = struct({
@@ -242,7 +244,7 @@ export default function FluidLab() {
     function setupUniforms() {
       gridSizeUniform = uniform(gridSize);
       particleCountUniform = uniform(params.particleCount, "uint");
-      stiffnessUniform = uniform(10);
+      stiffnessUniform = uniform(4);
       restDensityUniform = uniform(1.5);
       dynamicViscosityUniform = uniform(2.0);
       dtUniform = uniform(1 / 60);
@@ -690,6 +692,32 @@ export default function FluidLab() {
         renderer.compute(g2pKernel, g2pKernelWorkgroupBuffer);
       }
       renderer.render(scene, camera);
+
+      // 실제 입자 속도를 GPU 에서 읽어 로그 (픽셀 diff 는 부정확하므로).
+      // velocity 는 gridSize 스케일이라 /gridSize 하면 coord/s 단위가 된다.
+      frameCount++;
+      if (frameCount % 60 === 0) {
+        renderer
+          .getArrayBufferAsync(particleBuffer.value)
+          .then((buf: ArrayBuffer) => {
+            const arr = new Float32Array(buf);
+            const N = params.particleCount;
+            let maxV = 0;
+            let sumV = 0;
+            for (let i = 0; i < N; i++) {
+              const vx = arr[i * 20 + 4];
+              const vy = arr[i * 20 + 5];
+              const vz = arr[i * 20 + 6];
+              const v = Math.sqrt(vx * vx + vy * vy + vz * vz) / gridSize1d;
+              if (v > maxV) maxV = v;
+              sumV += v;
+            }
+            console.log(
+              `[speed] t=${(frameCount / 60).toFixed(0)}s avg=${(sumV / N).toFixed(4)} max=${maxV.toFixed(4)} (coord/s)`,
+            );
+          })
+          .catch(() => {});
+      }
     }
 
     async function init() {
