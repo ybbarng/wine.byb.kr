@@ -414,7 +414,7 @@ export default function FluidLab() {
         const volume = float(1).div(density);
         const pressure = max(
           0.0,
-          pow(density.div(restDensityUniform), 2.0).sub(1).mul(stiffnessUniform),
+          pow(density.div(restDensityUniform), 5.0).sub(1).mul(stiffnessUniform),
         ).toConst("pressure");
         const stress = mat3(
           pressure.negate(),
@@ -568,7 +568,7 @@ export default function FluidLab() {
         // 에너지 보존 속도 상한: 낙하 높이가 준 v_max=√(2gh) 를 못 넘게 한다.
         // 충돌 순간 속도 급증(→ 벽 건너뜀)을 물리적으로 타당하게 차단한다.
         const speed = particleVelocity.length().toVar();
-        const maxSpeed = float(MAX_SPEED);
+        const maxSpeed = float(100.0); // 진단: 속도 상한 임시 해제
         If(speed.greaterThan(maxSpeed), () => {
           particleVelocity.mulAssign(maxSpeed.div(speed));
         });
