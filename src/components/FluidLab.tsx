@@ -257,7 +257,7 @@ export default function FluidLab() {
         coordRMax.assign(coordRMax.max(0.002));
         const over = r.sub(coordRMax).max(0.0).toVar();
         If(over.greaterThan(0.0), () => {
-          const inv = over.mul(4.0).div(r);
+          const inv = over.div(r);
           result.assign(vec3(p.x.sub(dx.mul(inv)), p.y, p.z.sub(dz.mul(inv))));
         });
         return result;
@@ -549,12 +549,20 @@ export default function FluidLab() {
             vec3(gridSize).sub(1).div(gridSizeUniform),
           ),
         );
-        // 볼 경계: 미래 위치가 볼을 벗어나는 만큼 속도를 되돌린다 (예제식).
-        const posNext = particlePosition
-          .add(particleVelocity.mul(dtUniform).mul(2.0))
-          .toConst("posNext");
-        const posNextClamped = clampToBowl(posNext);
-        particleVelocity.addAssign(posNextClamped.sub(posNext));
+        // 볼 경계: 위치를 벽 안으로 가두고, 벽 밖으로 향한 속도 성분만 제거한다.
+        // 접선 속도는 유지 → 흩어지지 않고 벽을 따라 미끄러지며 위로 쌓인다.
+        const clamped = clampToBowl(particlePosition).toVar();
+        const push = clamped.sub(particlePosition).toVar(); // 안쪽으로 민 벡터
+        particlePosition.assign(clamped);
+        const pushLen = push.length().toVar();
+        If(pushLen.greaterThan(0.0001), () => {
+          const n = push.div(pushLen); // 안쪽 단위벡터
+          const vn = particleVelocity.dot(n).toVar(); // 속도의 안쪽 성분
+          // 밖으로 향하면(vn<0) 그 법선 성분만 제거
+          If(vn.lessThan(0.0), () => {
+            particleVelocity.subAssign(n.mul(vn));
+          });
+        });
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
