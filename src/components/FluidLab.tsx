@@ -135,7 +135,7 @@ export default function FluidLab() {
         [0.325, 2.92],
       ] as [number, number][],
       wallThickness: 0.025, // 프로파일 단위 유리 두께 (내벽 = 외벽 − 이 값)
-      bowlBottomY: 1.44, // 볼 안쪽 바닥 (스템 위, 볼 그릇 시작)
+      bowlBottomY: 1.7, // 볼 안쪽 바닥 (넓어지는 부분부터 담아 압력↓)
       bowlTopY: 2.7, // 유체 최대 높이 (입구 아래, 넘침 여유)
       worldScale: 0.42, // 프로파일 → 월드 스케일
       worldY: -0.06, // 프로파일 y=0 의 월드 y
@@ -549,20 +549,13 @@ export default function FluidLab() {
             vec3(gridSize).sub(1).div(gridSizeUniform),
           ),
         );
-        // 볼 경계: 위치를 벽 안으로 가두고, 벽 밖으로 향한 속도 성분만 제거한다.
-        // 접선 속도는 유지 → 흩어지지 않고 벽을 따라 미끄러지며 위로 쌓인다.
-        const clamped = clampToBowl(particlePosition).toVar();
-        const push = clamped.sub(particlePosition).toVar(); // 안쪽으로 민 벡터
-        particlePosition.assign(clamped);
-        const pushLen = push.length().toVar();
-        If(pushLen.greaterThan(0.0001), () => {
-          const n = push.div(pushLen); // 안쪽 단위벡터
-          const vn = particleVelocity.dot(n).toVar(); // 속도의 안쪽 성분
-          // 밖으로 향하면(vn<0) 그 법선 성분만 제거
-          If(vn.lessThan(0.0), () => {
-            particleVelocity.subAssign(n.mul(vn));
-          });
-        });
+        // 볼 경계: 미래 위치가 볼을 벗어난 양의 3배로 속도를 되돌린다.
+        // 위치 순간이동은 흩어짐을 유발하므로 건드리지 않고 속도만 강하게 되돌린다.
+        const posNext = particlePosition
+          .add(particleVelocity.mul(dtUniform).mul(2.0))
+          .toConst("posNext");
+        const posNextClamped = clampToBowl(posNext);
+        particleVelocity.addAssign(posNextClamped.sub(posNext).mul(3.0));
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
