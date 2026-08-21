@@ -6,6 +6,7 @@ import * as THREE from "three/webgpu";
 import {
   Fn,
   If,
+  Loop,
   float,
   hash,
   instanceIndex,
@@ -17,14 +18,19 @@ import {
 
 extend(THREE as unknown as Record<string, unknown>);
 
-const COUNT = 8000;
-const RADIUS = 1.0; // 원통(잔 대용) 반지름
+const COUNT = 4000;
+const RADIUS = 1.0;
 const FLOOR = 0.0;
+// 물리 파라미터 (프로토타입 — 캡처로 튜닝)
+const H = 0.2; // 상호작용 반경
+const STIFF = 45.0; // 반발 강도
+const VISC = 1.2; // 점성(속도 정렬)
+const GRAV = 3.0;
 
 function Particles() {
   const { gl } = useThree();
 
-  const { points, initNode, updateNode, uDelta } = useMemo(() => {
+  const { points, initNode, forceNode, stepNode, uDelta } = useMemo(() => {
     const positions = storage(
       new THREE.StorageInstancedBufferAttribute(COUNT, 3),
       "vec3",
@@ -35,9 +41,13 @@ function Particles() {
       "vec3",
       COUNT,
     );
+    const forces = storage(
+      new THREE.StorageInstancedBufferAttribute(COUNT, 3),
+      "vec3",
+      COUNT,
+    );
     const uDelta = uniform(0.016);
 
-    // 초기화: 위쪽 상자 안에 흩뿌린다
     const initNode = Fn(() => {
       const pos = positions.element(instanceIndex);
       const vel = velocities.element(instanceIndex);
@@ -45,30 +55,53 @@ function Particles() {
       const rx = hash(fi.mul(0.1731).add(11)).sub(0.5);
       const ry = hash(fi.mul(0.3719).add(37));
       const rz = hash(fi.mul(0.9137).add(91)).sub(0.5);
-      pos.assign(vec3(rx.mul(1.4), ry.mul(1.6).add(2.2), rz.mul(1.4)));
+      pos.assign(vec3(rx.mul(1.4), ry.mul(1.6).add(1.8), rz.mul(1.4)));
       vel.assign(vec3(0.0));
     })().compute(COUNT);
 
-    // 매 프레임: 중력 + 바닥/원통벽 충돌
-    const updateNode = Fn(() => {
-      const pos = positions.element(instanceIndex);
-      const vel = velocities.element(instanceIndex);
-
-      vel.addAssign(vec3(0.0, -4.0, 0.0).mul(uDelta));
-      pos.addAssign(vel.mul(uDelta));
-
-      // 바닥
-      If(pos.y.lessThan(FLOOR), () => {
-        pos.y.assign(FLOOR);
-        vel.y.assign(vel.y.mul(-0.3));
+    // 1패스: 힘 계산(반발 + 점성 + 중력). 모든 위치를 읽기만 하므로 race 없음.
+    const forceNode = Fn(() => {
+      const posI = positions.element(instanceIndex);
+      const velI = velocities.element(instanceIndex);
+      const force = vec3(0.0, GRAV.valueOf() * -1, 0.0).toVar();
+      Loop(COUNT, ({ i }: { i: unknown }) => {
+        If(instanceIndex.notEqual(i as never), () => {
+          const posJ = positions.element(i as never);
+          const velJ = velocities.element(i as never);
+          const d = posI.sub(posJ);
+          const r = d.length();
+          If(r.lessThan(H).and(r.greaterThan(0.0001)), () => {
+            const dir = d.div(r);
+            const w = float(H).sub(r);
+            force.addAssign(dir.mul(w.mul(STIFF)));
+            force.addAssign(velJ.sub(velI).mul(w.mul(VISC)));
+          });
+        });
       });
+      forces.element(instanceIndex).assign(force);
+    })().compute(COUNT);
 
-      // 원통 벽
-      const rxz = pos.xz.length();
+    // 2패스: 적분 + 경계
+    const stepNode = Fn(() => {
+      const p = positions.element(instanceIndex);
+      const v = velocities.element(instanceIndex);
+      const f = forces.element(instanceIndex);
+      const nv = v.add(f.mul(uDelta)).mul(0.98).toVar();
+      const np = p.add(nv.mul(uDelta)).toVar();
+      If(np.y.lessThan(FLOOR), () => {
+        np.y.assign(FLOOR);
+        nv.y.assign(nv.y.mul(-0.2));
+      });
+      const rxz = np.xz.length();
       If(rxz.greaterThan(RADIUS), () => {
-        pos.xz.assign(pos.xz.normalize().mul(RADIUS));
-        vel.xz.assign(vel.xz.mul(-0.3));
+        const clamped = np.xz.normalize().mul(RADIUS);
+        np.x.assign(clamped.x);
+        np.z.assign(clamped.y);
+        nv.x.assign(nv.x.mul(-0.2));
+        nv.z.assign(nv.z.mul(-0.2));
       });
+      v.assign(nv);
+      p.assign(np);
     })().compute(COUNT);
 
     const geometry = new THREE.BufferGeometry();
@@ -79,12 +112,12 @@ function Particles() {
     const material = new THREE.PointsNodeMaterial();
     material.positionNode = positions.element(vertexIndex);
     material.colorNode = vec3(0.72, 0.2, 0.35);
-    material.size = 8;
+    material.size = 10;
 
     const points = new THREE.Points(geometry, material);
     points.frustumCulled = false;
 
-    return { points, initNode, updateNode, uDelta };
+    return { points, initNode, forceNode, stepNode, uDelta };
   }, []);
 
   useEffect(() => {
@@ -92,8 +125,9 @@ function Particles() {
   }, [gl, initNode]);
 
   useFrame((_, dt) => {
-    uDelta.value = Math.min(dt, 1 / 30);
-    gl.compute(updateNode);
+    uDelta.value = Math.min(dt, 1 / 60);
+    gl.compute(forceNode);
+    gl.compute(stepNode);
   });
 
   return <primitive object={points} />;
@@ -115,7 +149,6 @@ export default function FluidLab() {
       onCreated={({ camera }) => camera.lookAt(0, 1, 0)}
     >
       <color attach="background" args={["#1a0510"]} />
-      {/* 참조용 원통(잔 대용) — 입자 충돌 경계를 눈으로 보이게 */}
       <mesh position={[0, 1.5, 0]}>
         <cylinderGeometry args={[RADIUS, RADIUS, 3, 48, 1, true]} />
         <meshBasicMaterial color="#e8b4be" wireframe transparent opacity={0.15} />
