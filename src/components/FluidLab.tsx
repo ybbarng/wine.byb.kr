@@ -15,6 +15,7 @@ import {
   attribute,
   clamp,
   cross,
+  exp,
   float,
   instanceIndex,
   instancedArray,
@@ -196,6 +197,10 @@ export default function FluidLab() {
     let fluidScene: THREE.Scene;
     // biome-ignore lint/suspicious/noExplicitAny: TSL RenderTarget/QuadMesh
     let depthRT: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let blurRT: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let blurQuad: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let surfaceQuad: any;
 
@@ -544,6 +549,10 @@ export default function FluidLab() {
       renderer.setClearColor(0x000000, 1);
       renderer.clear();
       renderer.render(fluidScene, camera);
+      // 깊이 bilateral blur: depthRT → blurRT (개별 입자 요철 제거)
+      renderer.setRenderTarget(blurRT);
+      renderer.clear();
+      blurQuad.render(renderer);
       renderer.setRenderTarget(null);
       surfaceQuad.render(renderer);
 
@@ -632,15 +641,50 @@ export default function FluidLab() {
       const rtH = Math.floor(container.clientHeight * dpr);
       depthRT = new THREE.RenderTarget(rtW, rtH);
       depthRT.texture.type = THREE.HalfFloatType;
+      blurRT = new THREE.RenderTarget(rtW, rtH);
+      blurRT.texture.type = THREE.HalfFloatType;
+      const texel = new THREE.Vector2(1 / rtW, 1 / rtH);
+
+      // SSFR 2.5단계: 깊이 bilateral blur (개별 입자 요철 제거)
+      blurQuad = new A.QuadMesh(new A.MeshBasicNodeMaterial());
+      blurQuad.material.colorNode = Fn(() => {
+        const uv = screenUV;
+        const dCen = texture(depthRT.texture, uv).x.toVar();
+        const out = dCen.toVar();
+        If(dCen.greaterThan(0.001), () => {
+          const sum = dCen.toVar();
+          const wsum = float(1).toVar();
+          const R = 6;
+          const sigR2 = 2 * 0.04 * 0.04; // 깊이 차(range) 분산
+          for (let i = -R; i <= R; i++) {
+            for (let j = -R; j <= R; j++) {
+              if (i === 0 && j === 0) continue;
+              const du = texture(
+                depthRT.texture,
+                uv.add(vec2(i * texel.x, j * texel.y)),
+              ).x.toVar();
+              const dd = du.sub(dCen);
+              const wr = exp(dd.mul(dd).div(-sigR2));
+              const ws = Math.exp(-(i * i + j * j) / (2 * (R * 0.5) ** 2));
+              const w = du
+                .greaterThan(0.001)
+                .select(float(ws).mul(wr), float(0));
+              sum.addAssign(du.mul(w));
+              wsum.addAssign(w);
+            }
+          }
+          out.assign(sum.div(wsum));
+        });
+        return vec4(out, 0, 0, 1);
+      })();
 
       // SSFR 2단계: 깊이에서 view 위치→법선 재구성 + 와인 셰이딩(색+프레넬)
       const tanF = Math.tan(((40 * Math.PI) / 180) / 2); // fov 40°
       const aspect = rtW / rtH;
-      const texel = new THREE.Vector2(1 / rtW, 1 / rtH);
       surfaceQuad = new A.QuadMesh(new A.MeshBasicNodeMaterial());
       surfaceQuad.material.colorNode = Fn(() => {
         const uv = screenUV;
-        const dC = texture(depthRT.texture, uv).x.toVar();
+        const dC = texture(blurRT.texture, uv).x.toVar();
         const outCol = vec3(0.02, 0.02, 0.025).toVar(); // 배경(임시)
         If(dC.greaterThan(0.001), () => {
           // uv+깊이 → view 위치
@@ -653,8 +697,8 @@ export default function FluidLab() {
               depth.negate(),
             );
           };
-          const dR = texture(depthRT.texture, uv.add(vec2(texel.x, 0))).x;
-          const dU = texture(depthRT.texture, uv.add(vec2(0, texel.y))).x;
+          const dR = texture(blurRT.texture, uv.add(vec2(texel.x, 0))).x;
+          const dU = texture(blurRT.texture, uv.add(vec2(0, texel.y))).x;
           const pC = vp(uv, dC);
           const pR = vp(uv.add(vec2(texel.x, 0)), dR);
           const pU = vp(uv.add(vec2(0, texel.y)), dU);
