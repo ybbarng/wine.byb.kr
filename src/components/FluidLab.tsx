@@ -342,6 +342,7 @@ function Fluid() {
 
       particleBuffer.element(instanceIndex).get("C").assign(B.mul(4));
       vel.addAssign(gravityU.mul(dtU));
+      vel.mulAssign(0.992); // 약한 감쇠: 붓고 난 뒤 서서히 잦아들어 멈춤
       vel.divAssign(gridSizeU);
       pos.addAssign(vel.mul(dtU));
       pos.assign(
@@ -406,13 +407,13 @@ function PostFX() {
     const normal = vec3(dx.mul(-120.0), dy.mul(-120.0), float(1.0)).normalize();
 
     const lightDir = vec3(0.4, 0.85, 0.5).normalize();
-    const diff = normal.dot(lightDir).max(0.0).mul(0.7).add(0.35);
+    // 가장자리(법선 급경사)가 어둡게 죽지 않도록 ambient 를 올린다
+    const diff = normal.dot(lightDir).max(0.0).mul(0.5).add(0.55);
     const halfV = lightDir.add(vec3(0.0, 0.0, 1.0)).normalize();
     const spec = normal.dot(halfV).max(0.0).pow(60.0).mul(0.9);
-    const fres = float(1.0).sub(normal.z.clamp(0.0, 1.0)).pow(3.0).mul(0.4);
 
-    const wine = vec3(0.42, 0.05, 0.12);
-    const surf = wine.mul(diff).add(spec).add(fres.mul(vec3(0.6, 0.2, 0.3)));
+    const wine = vec3(0.46, 0.06, 0.14);
+    const surf = wine.mul(diff).add(spec);
 
     const bg = vec3(0.1, 0.02, 0.06);
     p.outputNode = mix(bg, surf, step(depth, 0.985));
