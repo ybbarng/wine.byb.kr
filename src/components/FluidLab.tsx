@@ -537,11 +537,12 @@ export default function FluidLab() {
     }
 
     async function render() {
-      timer.update();
-      const deltaTime = THREE.MathUtils.clamp(timer.getDelta(), 0.00001, 1 / 60);
-      // PBF substep: 한 프레임을 작은 스텝으로 나눠 위치 보정을 작게 → 튐↓
+      // 물리 타임스텝을 프레임 타이밍에서 분리(고정). getDelta 기반이면
+      // 탭 복귀(누적된 큰 delta)·큰 화면(낮은 프레임률)에서 스텝이 커져 확
+      // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
+      // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       const PBF_SUBSTEPS = 2;
-      dtUniform.value = deltaTime / PBF_SUBSTEPS;
+      dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
         renderer.compute(clearCellKernel);
