@@ -351,9 +351,17 @@ function Fluid() {
           vec3(GRID, GRID, GRID).sub(1).div(gridSizeU),
         ),
       );
-      const innerBox = gridSizeU.mul(0.5).sub(9.0).div(gridSizeU);
-      const innerRadius = float(6.0).div(gridSizeU.x);
-      pos.assign(clampToRoundedBox(pos, innerBox, innerRadius));
+      // 원통(잔 대용) 경계: 중심축 y, 반지름 0.4, 바닥 0.08
+      const cxz = pos.xz.sub(0.5).toVar();
+      const rr = cxz.length().toVar();
+      If(rr.greaterThan(0.4), () => {
+        const nn = cxz.div(rr).mul(0.4);
+        pos.x.assign(nn.x.add(0.5));
+        pos.z.assign(nn.y.add(0.5));
+      });
+      If(pos.y.lessThan(0.08), () => {
+        pos.y.assign(0.08);
+      });
 
       particleBuffer.element(instanceIndex).get("position").assign(pos);
       particleBuffer.element(instanceIndex).get("velocity").assign(vel);
@@ -391,7 +399,7 @@ function PostFX() {
   const post = useMemo(() => {
     const p = new THREE.PostProcessing(gl as unknown as THREE.WebGPURenderer);
     const scenePass = pass(scene, camera);
-    const depth = gaussianBlur(scenePass.getLinearDepthNode(), null, 10).x;
+    const depth = gaussianBlur(scenePass.getLinearDepthNode(), null, 20).x;
 
     const dx = dFdx(depth);
     const dy = dFdy(depth);
