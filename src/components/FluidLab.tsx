@@ -108,8 +108,8 @@ export default function FluidLab() {
     const SCORR_K = 0.00001; // 표면장력 (원래 3e-5 → 순환 완화·응집 유지 절충)
     const DELTA_Q2 = (0.2 * H) ** 2; // (0.2·H)² 기준 거리²
     const POLY6_DQ = POLY6 * (H2 - DELTA_Q2) ** 3; // poly6(ΔQ²)
-    // coord 스케일 중력 (실제 물리값 — 튜닝하지 않음).
-    const GRAVITY = -(9.81 * 9.81) / 64;
+    // GRAVITY 는 실제 g를 좌표 공간으로 매핑해야 하므로 잔 스케일이 정해진 뒤
+    // (cubeSpanProfile 계산 후) 아래에서 유도한다.
 
     // ── 잔 데이터 + 경계 SDF (MLS-MPM 에서 재활용) ────────────────────
     const glass = {
@@ -153,6 +153,16 @@ export default function FluidLab() {
     );
     const FLUID_SCALE = cubeSpanProfile * glass.worldScale;
     const FLUID_Y = glass.bowlBottomY * glass.worldScale + glass.worldY;
+
+    // ── 실제 중력을 좌표 공간으로 매핑 ────────────────────────────────
+    // coord 1.0 = cubeSpanProfile profile 단위. 볼 세로(bowlBottomY~bowlTopY)가
+    // 실제 BOWL_HEIGHT_M(≈10cm)이므로 1 coord = 실제 몇 m 인지 유도한다.
+    const BOWL_HEIGHT_M = 0.1; // 실제 와인잔 볼 높이 ~10cm
+    const metersPerProfile =
+      BOWL_HEIGHT_M / (glass.bowlTopY - glass.bowlBottomY);
+    const metersPerCoord = cubeSpanProfile * metersPerProfile;
+    // 실제 g = 9.81 m/s² 를 coord/s² 로. (예전 −9.81²/64 는 임의 스케일이었음)
+    const GRAVITY = -9.81 / metersPerCoord;
 
     const POLY_DEG = 5;
     const lutXs: number[] = [];
@@ -541,7 +551,7 @@ export default function FluidLab() {
       // 탭 복귀(누적된 큰 delta)·큰 화면(낮은 프레임률)에서 스텝이 커져 확
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
-      const PBF_SUBSTEPS = 2;
+      const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
@@ -571,8 +581,8 @@ export default function FluidLab() {
 
       // 디버그 로그: 속도·밀도·대류·볼 밖 입자 (MLS-MPM 여정에서 만든 지표)
       frameCount++;
-      if (frameCount % 60 === 0) {
-        const t = (frameCount / 60).toFixed(0);
+      if (frameCount % 12 === 0) {
+        const t = (frameCount / 60).toFixed(1);
         Promise.all([
           renderer.getArrayBufferAsync(particleBuffer.value),
           renderer.getArrayBufferAsync(densityBuffer.value),
