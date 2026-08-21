@@ -32,6 +32,7 @@ import {
   step,
   struct,
   uniform,
+  vec2,
   vec3,
   vec4,
   viewportSharedTexture,
@@ -42,7 +43,7 @@ extend(THREE as unknown as Record<string, unknown>);
 // three.js 공식 webgpu_compute_particles_fluid (MLS-MPM) 이식
 const GRID = 64;
 const CELL_COUNT = GRID * GRID * GRID;
-const PARTICLE_COUNT = 8192 * 16;
+const PARTICLE_COUNT = 8192 * 24;
 const FP = 1e7; // fixed-point 배율 (WebGPU는 int atomic만)
 
 function Fluid() {
@@ -404,13 +405,10 @@ function PostFX() {
   const post = useMemo(() => {
     const p = new THREE.PostProcessing(gl as unknown as THREE.WebGPURenderer);
     const scenePass = pass(scene, camera);
-    // Bilateral: 표면 형태(깊이 경계)는 지키고 잡티만 스무딩 → 덩어리 없이 매끈
-    const depth = bilateralBlur(
-      scenePass.getLinearDepthNode(),
-      null,
-      12,
-      0.15,
-    ).x;
+    // Bilateral 2패스(가로→세로): 개별 입자를 녹이되 실루엣은 지킨다
+    const ld = scenePass.getLinearDepthNode();
+    const bH = bilateralBlur(ld, vec2(1, 0), 16, 0.5);
+    const depth = bilateralBlur(bH, vec2(0, 1), 16, 0.5).x;
 
     const dx = dFdx(depth);
     const dy = dFdy(depth);
