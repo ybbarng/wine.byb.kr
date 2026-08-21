@@ -94,6 +94,7 @@ export default function FluidLab() {
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
     const EPS_RELAX = 100.0; // λ 분모 relaxation
+    const C_XSPH = 0.1; // XSPH 점성 계수 (속도 감쇠)
     // coord 스케일 중력 (MLS-MPM 과 동일 스케일: 9.81²/gridSize)
     const GRAVITY = -(9.81 * 9.81) / 64;
 
@@ -422,8 +423,16 @@ export default function FluidLab() {
         const p = particleBuffer.element(instanceIndex);
         const pos = p.get("position").toConst();
         const pred = p.get("predicted").toConst();
-        const v = pred.sub(pos).div(dtUniform);
-        p.get("velocity").assign(v);
+        const vi = pred.sub(pos).div(dtUniform).toVar();
+        // XSPH 점성: 이웃과의 속도 차를 줄여 유체가 매끄럽게 잦아든다.
+        const dv = vec3(0).toVar();
+        forEachNeighbor(pred, ({ j, r2 }) => {
+          const pj = particleBuffer.element(j);
+          const vj = pj.get("predicted").sub(pj.get("position")).div(dtUniform);
+          dv.addAssign(vj.sub(vi).mul(poly6(r2)));
+        });
+        vi.addAssign(dv.div(restDensityUniform).mul(C_XSPH));
+        p.get("velocity").assign(vi);
         p.get("position").assign(pred);
       })()
         .compute(N)
