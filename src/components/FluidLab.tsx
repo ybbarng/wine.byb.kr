@@ -551,7 +551,7 @@ export default function FluidLab() {
       // 탭 복귀(누적된 큰 delta)·큰 화면(낮은 프레임률)에서 스텝이 커져 확
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
-      const PBF_SUBSTEPS = 8;
+      const PBF_SUBSTEPS = 16;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
