@@ -179,7 +179,7 @@ export default function FluidLab() {
 
     // ── 버퍼/유니폼/커널 핸들 ─────────────────────────────────────────
     // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let dtUniform: any, restDensityUniform: any;
+    let dtUniform: any, restDensityUniform: any, viscUniform: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let particleBuffer: any,
       lambdaBuffer: any,
@@ -238,6 +238,10 @@ export default function FluidLab() {
     function setupUniforms() {
       dtUniform = uniform(1 / 60);
       restDensityUniform = uniform(50000);
+      // 점성(substep당 속도 유지율). 실제 유체의 점성 소산 — 출렁임(슬로싱)이
+      // 잦아들게 한다. 0.99는 약해서 낙하 종단속도(1.25)가 관측 낙하(0.44)보다
+      // 훨씬 높아 낙하를 안 늦춘다(과거 0.9는 종단 0.125로 낙하를 깎았음).
+      viscUniform = uniform(0.99);
     }
 
     function setupComputeShaders() {
@@ -457,6 +461,8 @@ export default function FluidLab() {
           dv.addAssign(vj.sub(vi).mul(poly6(r2)));
         });
         vi.addAssign(dv.div(restDensityUniform).mul(C_XSPH));
+        // 점성 소산: 출렁임(슬로싱)을 잦아들게 (약하게 — 낙하는 안 늦춤)
+        vi.mulAssign(viscUniform);
         p.get("velocity").assign(vi);
         p.get("position").assign(pred);
       })()
