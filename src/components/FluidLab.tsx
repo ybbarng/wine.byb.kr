@@ -7,11 +7,15 @@ import {
   Fn,
   If,
   Loop,
+  dFdx,
+  dFdy,
   float,
   hash,
   instanceIndex,
+  mix,
   pass,
   positionLocal,
+  step,
   storage,
   uniform,
   vec3,
@@ -143,9 +147,25 @@ function PostFX() {
       gl as unknown as THREE.WebGPURenderer,
     );
     const scenePass = pass(scene, camera);
-    // 뷰공간 선형 깊이를 회색조로 (가까울수록 밝게)
     const depth = scenePass.getLinearDepthNode();
-    p.outputNode = float(1.0).sub(depth.mul(0.12));
+
+    // 깊이 기울기로 표면 법선 재구성
+    const dx = dFdx(depth);
+    const dy = dFdy(depth);
+    const normal = vec3(dx.mul(-8.0), dy.mul(-8.0), float(1.0)).normalize();
+
+    // 라이팅 + 프레넬(가장자리 밝게)
+    const lightDir = vec3(0.4, 0.8, 0.6).normalize();
+    const diff = normal.dot(lightDir).max(0.0);
+    const wine = vec3(0.5, 0.08, 0.16);
+    const fres = float(1.0).sub(normal.z.clamp(0.0, 1.0)).pow(3.0);
+    const surf = wine
+      .mul(diff.mul(0.7).add(0.28))
+      .add(fres.mul(vec3(0.7, 0.35, 0.4)));
+
+    // 입자가 없는(먼) 픽셀은 배경
+    const bg = vec3(0.1, 0.02, 0.06);
+    p.outputNode = mix(surf, bg, step(0.985, depth));
     return p;
   }, [gl, scene, camera]);
 
