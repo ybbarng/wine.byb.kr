@@ -2,6 +2,7 @@
 
 import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
 import { useMemo } from "react";
+import { gaussianBlur } from "three/examples/jsm/tsl/display/GaussianBlurNode.js";
 import * as THREE from "three/webgpu";
 import {
   Fn,
@@ -14,6 +15,8 @@ import {
   atomicStore,
   clamp,
   cross,
+  dFdx,
+  dFdy,
   float,
   instanceIndex,
   instancedArray,
@@ -21,6 +24,8 @@ import {
   ivec3,
   mat3,
   max,
+  mix,
+  pass,
   pow,
   positionLocal,
   step,
@@ -380,6 +385,39 @@ function Fluid() {
   return <primitive object={built.mesh} />;
 }
 
+// SSFR: 입자 깊이 → 블러 → 법선 재구성 → 셰이딩 (개별 입자를 매끈한 표면으로)
+function PostFX() {
+  const { gl, scene, camera } = useThree();
+  const post = useMemo(() => {
+    const p = new THREE.PostProcessing(gl as unknown as THREE.WebGPURenderer);
+    const scenePass = pass(scene, camera);
+    const depth = gaussianBlur(scenePass.getLinearDepthNode(), null, 10).x;
+
+    const dx = dFdx(depth);
+    const dy = dFdy(depth);
+    const normal = vec3(dx.mul(-120.0), dy.mul(-120.0), float(1.0)).normalize();
+
+    const lightDir = vec3(0.4, 0.85, 0.5).normalize();
+    const diff = normal.dot(lightDir).max(0.0).mul(0.7).add(0.35);
+    const halfV = lightDir.add(vec3(0.0, 0.0, 1.0)).normalize();
+    const spec = normal.dot(halfV).max(0.0).pow(60.0).mul(0.9);
+    const fres = float(1.0).sub(normal.z.clamp(0.0, 1.0)).pow(3.0).mul(0.4);
+
+    const wine = vec3(0.42, 0.05, 0.12);
+    const surf = wine.mul(diff).add(spec).add(fres.mul(vec3(0.6, 0.2, 0.3)));
+
+    const bg = vec3(0.1, 0.02, 0.06);
+    p.outputNode = mix(bg, surf, step(depth, 0.985));
+    return p;
+  }, [gl, scene, camera]);
+
+  useFrame(() => {
+    (post as unknown as { render: () => void }).render();
+  }, 1);
+
+  return null;
+}
+
 export default function FluidLab() {
   return (
     <Canvas
@@ -398,6 +436,7 @@ export default function FluidLab() {
       <ambientLight intensity={0.6} />
       <directionalLight position={[2, 4, 2]} intensity={2.5} />
       <Fluid />
+      <PostFX />
     </Canvas>
   );
 }
