@@ -569,11 +569,6 @@ export default function FluidLab() {
         const posNextClamped = clampToBowl(posNext);
         particleVelocity.addAssign(posNextClamped.sub(posNext).mul(3.0));
 
-        // 난류 에너지 소산 근사: 속도를 매 프레임 ×0.95 로 줄인다.
-        // 실제 물은 난류로 에너지가 열로 흩어져 1~2초에 멈춘다. MLS-MPM 엔
-        // 그 소산이 거의 없어, ×0.99 로는 계속 튀었다. ×0.95(τ≈0.3s)로 강화.
-        particleVelocity.mulAssign(0.95);
-
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
         particleBuffer
@@ -670,13 +665,18 @@ export default function FluidLab() {
     async function render() {
       timer.update();
       const deltaTime = THREE.MathUtils.clamp(timer.getDelta(), 0.00001, 1 / 60);
-      dtUniform.value = deltaTime;
+      // 물리 substep: 한 프레임을 여러 작은 스텝으로 나눠 CFL 조건을 만족한다.
+      // (한 스텝 이동이 셀 크기보다 작아야 벽을 건너뛰지 않는다)
+      const SUBSTEPS = 3;
+      dtUniform.value = deltaTime / SUBSTEPS;
       renderer.compute(workgroupKernel);
-      renderer.compute(clearGridKernel);
-      renderer.compute(p2g1Kernel, p2g1KernelWorkgroupBuffer);
-      renderer.compute(p2g2Kernel, p2g2KernelWorkgroupBuffer);
-      renderer.compute(updateGridKernel);
-      renderer.compute(g2pKernel, g2pKernelWorkgroupBuffer);
+      for (let s = 0; s < SUBSTEPS; s++) {
+        renderer.compute(clearGridKernel);
+        renderer.compute(p2g1Kernel, p2g1KernelWorkgroupBuffer);
+        renderer.compute(p2g2Kernel, p2g2KernelWorkgroupBuffer);
+        renderer.compute(updateGridKernel);
+        renderer.compute(g2pKernel, g2pKernelWorkgroupBuffer);
+      }
       renderer.render(scene, camera);
     }
 
