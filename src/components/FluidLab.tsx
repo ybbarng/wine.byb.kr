@@ -78,7 +78,7 @@ function Fluid() {
     const restDensityU = uniform(1.5);
     const viscosityU = uniform(0.1);
     const dtU = uniform(1 / 60);
-    const gravityU = uniform(new THREE.Vector3(0, -9.81 * 9.81 * 3, 0));
+    const gravityU = uniform(new THREE.Vector3(0, -9.81 * 9.81, 0));
 
     const enc = (f: ReturnType<typeof float>) => int(f.mul(FP));
     const dec = (i: ReturnType<typeof int>) => float(i).div(FP);
@@ -344,7 +344,7 @@ function Fluid() {
 
       particleBuffer.element(instanceIndex).get("C").assign(B.mul(4));
       vel.addAssign(gravityU.mul(dtU));
-      vel.mulAssign(0.997); // 아주 약한 감쇠(낙하는 방해 않되 서서히 잦아듦)
+      vel.mulAssign(0.992); // 약한 감쇠: 붓고 난 뒤 서서히 잦아들어 멈춤
       vel.divAssign(gridSizeU);
       pos.addAssign(vel.mul(dtU));
       pos.assign(
