@@ -231,9 +231,9 @@ export default function FluidLab() {
       });
       const arr = new Float32Array(N * STRIDE);
       for (let i = 0; i < N; i++) {
-        // 초기 입자를 '가라앉은 위치'(아래 ~45%)에 배치 — 전체[0~1]에 뿌리면
-        // 2배 높이가 무너지며 격렬해져 많은 substep·iter이 필요해진다.
-        const cy = Math.random();
+        // 처음부터 '가라앉은 위치'(아래 절반)에 배치 — 전체[0~1]에 퍼뜨리면
+        // 통째로 무너지며 격렬히 튀어(crown splash) 포도알 블롭이 생긴다.
+        const cy = Math.random() * 0.5;
         const rMax = bowlRadiusAtCoordY(cy) * 0.9;
         const rr = Math.sqrt(Math.random()) * rMax;
         const ang = Math.random() * Math.PI * 2;
