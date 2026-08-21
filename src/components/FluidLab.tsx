@@ -601,7 +601,7 @@ export default function FluidLab() {
         // 급격히 안 밀어 압축을 피하면서, 여러 스텝에 걸쳐 새는 걸 막는다.
         const posClamped = clampToBowl(particlePosition);
         particlePosition.assign(
-          particlePosition.add(posClamped.sub(particlePosition).mul(0.2)),
+          particlePosition.add(posClamped.sub(particlePosition).mul(0.1)),
         );
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
