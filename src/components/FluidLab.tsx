@@ -564,8 +564,8 @@ export default function FluidLab() {
 
       // 디버그 로그: 속도·밀도·대류·볼 밖 입자 (MLS-MPM 여정에서 만든 지표)
       frameCount++;
-      if (frameCount % 60 === 0) {
-        const t = (frameCount / 60).toFixed(0);
+      if (frameCount % 20 === 0) {
+        const t = (frameCount / 60).toFixed(1);
         Promise.all([
           renderer.getArrayBufferAsync(particleBuffer.value),
           renderer.getArrayBufferAsync(densityBuffer.value),
@@ -580,6 +580,8 @@ export default function FluidLab() {
             let vrAbs = 0;
             let vrNet = 0; // 부호 있는 평균 반경 속도(+팽창/−수축) — 결맞은 진동 진단
             let vyNet = 0; // 부호 있는 평균 수직 속도 — 위아래 출렁임 진단
+            let comX = 0; // 무게중심 x — 덩어리 슬로싱(한쪽 쏠림) 진단
+            let comZ = 0;
             const wallCoord =
               (glass.wallThickness * glass.worldScale) / FLUID_SCALE;
             for (let i = 0; i < N; i++) {
@@ -597,6 +599,8 @@ export default function FluidLab() {
               const rInner = bowlRadiusAtCoordY(cy);
               const rr = Math.hypot(px - 0.5, pz - 0.5);
               if (rr > rInner + wallCoord) outGlass++;
+              comX += px - 0.5;
+              comZ += pz - 0.5;
               vyNet += vy;
               if (rr > 1e-4) {
                 const vr = (vx * (px - 0.5) + vz * (pz - 0.5)) / rr;
@@ -604,8 +608,9 @@ export default function FluidLab() {
                 vrNet += vr;
               }
             }
+            const comOff = Math.hypot(comX / N, comZ / N);
             console.log(
-              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(3)} | vrAbs=${(vrAbs / N).toFixed(4)} vrNet=${(vrNet / N).toFixed(4)} vyNet=${(vyNet / N).toFixed(4)} | dAvg=${(sumD / N).toFixed(1)} out=${outGlass}`,
+              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(3)} | vrNet=${(vrNet / N).toFixed(4)} vyNet=${(vyNet / N).toFixed(4)} comOff=${comOff.toFixed(4)} | dAvg=${(sumD / N).toFixed(1)} out=${outGlass}`,
             );
           })
           .catch(() => {});
