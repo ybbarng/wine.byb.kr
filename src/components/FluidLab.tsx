@@ -237,7 +237,7 @@ export default function FluidLab() {
     function setupUniforms() {
       gridSizeUniform = uniform(gridSize);
       particleCountUniform = uniform(params.particleCount, "uint");
-      stiffnessUniform = uniform(50);
+      stiffnessUniform = uniform(10);
       restDensityUniform = uniform(1.5);
       dynamicViscosityUniform = uniform(0.1);
       dtUniform = uniform(1 / 60);
