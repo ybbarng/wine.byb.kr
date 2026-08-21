@@ -509,6 +509,7 @@ export default function FluidLab() {
     const GLASS_Y = -0.06;
 
     // 유체 렌더를 잔 볼 안으로 축소·이동하는 값 (캡처로 조정).
+    // FLUID_Y + coord*FLUID_SCALE = 월드 y. 프로파일 SDF 가 이 값으로 볼과 정렬한다.
     const FLUID_SCALE = 0.4;
     const FLUID_Y = 0.68;
 
@@ -529,15 +530,23 @@ export default function FluidLab() {
       const geometry = new THREE.LatheGeometry(pts, 240);
       geometry.computeVertexNormals();
 
+      // 실제 소다라임 유리 물성값 기반:
+      //  - IOR 1.52 (와인잔 유리 표준 굴절률)
+      //  - thickness 얇게: 실제 잔 벽은 ~1mm. 두꺼우면 굴절이 배경을 과하게
+      //    휘어 뒤의 와인 대신 밝은 배경을 비춰 '비어 보이는' 착시가 난다.
+      //  - attenuation: 유리 철분에 의한 옅은 청록 흡수
       const material = new A.MeshPhysicalNodeMaterial({
         color: 0xffffff,
         metalness: 0,
         roughness: 0.03,
         transmission: 1,
-        ior: 1.5,
-        thickness: 0.7,
+        ior: 1.52,
+        thickness: 0.15,
+        attenuationColor: new THREE.Color(0xf6fbf9),
+        attenuationDistance: 1.2,
         side: THREE.DoubleSide,
       });
+      material.envMapIntensity = 1.0;
 
       const glass = new THREE.Mesh(geometry, material);
       glass.scale.setScalar(GLASS_SCALE);
