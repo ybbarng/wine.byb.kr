@@ -92,6 +92,11 @@ export default function FluidLab() {
     const maxParticles = 8192 * 16;
     const gridSize1d = 64;
     const workgroupSize = 64;
+
+    // 에너지 보존 속도 상한: 낙하 높이 h 에서 v_max = √(2·g·h).
+    // 개별 입자는 위치에너지가 준 속도 이상으로 빨라질 수 없다.
+    // g_coord = 9.81²/gridSize (coord 스케일 중력), h = 1 (볼 높이 낙하).
+    const MAX_SPEED = Math.sqrt((2 * 9.81 * 9.81 * 1.0) / gridSize1d); // ≈1.73
     const gridSize = new THREE.Vector3(gridSize1d, gridSize1d, gridSize1d);
     const fixedPointMultiplier = 1e7;
 
@@ -553,10 +558,10 @@ export default function FluidLab() {
         particleBuffer.element(instanceIndex).get("C").assign(B.mul(4));
         particleVelocity.addAssign(gravityUniform.mul(dtUniform));
         particleVelocity.divAssign(gridSizeUniform);
-        // 최고 속도 제한(CFL): 한 스텝에 벽을 건너뛸 만큼 빠르지 않게 한다.
-        // 특히 바닥 충돌 순간 속도가 급증해 튀어나가는 걸 막는다.
+        // 에너지 보존 속도 상한: 낙하 높이가 준 v_max=√(2gh) 를 못 넘게 한다.
+        // 충돌 순간 속도 급증(→ 벽 건너뜀)을 물리적으로 타당하게 차단한다.
         const speed = particleVelocity.length().toVar();
-        const maxSpeed = float(3.0);
+        const maxSpeed = float(MAX_SPEED);
         If(speed.greaterThan(maxSpeed), () => {
           particleVelocity.mulAssign(maxSpeed.div(speed));
         });
