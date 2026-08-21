@@ -244,7 +244,7 @@ export default function FluidLab() {
       particleCountUniform = uniform(params.particleCount, "uint");
       stiffnessUniform = uniform(10);
       restDensityUniform = uniform(1.5);
-      dynamicViscosityUniform = uniform(0.1);
+      dynamicViscosityUniform = uniform(1.0);
       dtUniform = uniform(1 / 60);
       gravityUniform = uniform(new THREE.Vector3(0, -(9.81 * 9.81), 0));
     }
