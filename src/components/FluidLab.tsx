@@ -597,6 +597,12 @@ export default function FluidLab() {
             particleVelocity.subAssign(n.mul(vn));
           });
         });
+        // 이미 벽 밖에 있는 입자는 부드럽게(20%씩) 안으로 되돌린다.
+        // 급격히 안 밀어 압축을 피하면서, 여러 스텝에 걸쳐 새는 걸 막는다.
+        const posClamped = clampToBowl(particlePosition);
+        particlePosition.assign(
+          particlePosition.add(posClamped.sub(particlePosition).mul(0.2)),
+        );
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
@@ -725,6 +731,10 @@ export default function FluidLab() {
             let sumV = 0;
             let maxD = 0;
             let sumD = 0;
+            let outGlass = 0; // 유리 외벽 밖으로 나간 입자 수
+            // 유리 외벽 = 내벽(다항식) + 벽 두께 (coord 단위)
+            const wallCoord =
+              (glass.wallThickness * glass.worldScale) / FLUID_SCALE;
             for (let i = 0; i < N; i++) {
               const vx = arr[i * 20 + 4];
               const vy = arr[i * 20 + 5];
@@ -735,9 +745,17 @@ export default function FluidLab() {
               const d = den[i];
               if (d > maxD) maxD = d;
               sumD += d;
+              // 볼 밖 판정: (x,z) 반경이 그 높이 유리 외벽 반경을 넘으면 밖
+              const px = arr[i * 20];
+              const py = arr[i * 20 + 1];
+              const pz = arr[i * 20 + 2];
+              const cy = Math.max(0, Math.min(1, py));
+              const rMax = bowlRadiusAtCoordY(cy) + wallCoord;
+              const rr = Math.hypot(px - 0.5, pz - 0.5);
+              if (rr > rMax) outGlass++;
             }
             console.log(
-              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(4)} | dAvg=${(sumD / N).toFixed(3)} dMax=${maxD.toFixed(3)} (rest=${restDensityUniform.value.toFixed(1)})`,
+              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(4)} | dAvg=${(sumD / N).toFixed(3)} | out=${outGlass}`,
             );
           })
           .catch(() => {});
