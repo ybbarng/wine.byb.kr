@@ -24,7 +24,6 @@ import {
   mat3,
   max,
   pow,
-  step,
   storage,
   struct,
   uniform,
@@ -343,18 +342,18 @@ export default function FluidLab() {
         .compute(cellCount)
         .setName("updateGridKernel");
 
+      // 잔 볼을 구의 아래쪽 캡으로 근사한 경계.
+      // 유체 좌표(0~1)에서 중심 (0.5, BOWL_CENTER_Y, 0.5), 반경 BOWL_RADIUS 인
+      // 구 안쪽에 가둔다. 중력으로 아래 캡(오목한 그릇)에 유체가 고인다.
       // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const clampToRoundedBox = (pos: any, box: any, radius: any) => {
-        const result = pos.sub(0.5).toVar();
-        const pp = step(box, result.abs()).mul(
-          result.add(box.negate().mul(result.sign())),
-        );
-        const ppLen = pp.length().toVar();
-        const dist = ppLen.sub(radius);
-        If(dist.greaterThan(0.0), () => {
-          result.subAssign(pp.normalize().mul(dist).mul(1.3));
+      const clampToBowl = (p: any) => {
+        const c = vec3(0.5, BOWL_CENTER_Y, 0.5);
+        const d = p.sub(c).toVar();
+        const len = d.length().toVar();
+        const result = p.toVar();
+        If(len.greaterThan(BOWL_RADIUS), () => {
+          result.assign(c.add(d.div(len).mul(BOWL_RADIUS)));
         });
-        result.addAssign(0.5);
         return result;
       };
 
@@ -430,17 +429,11 @@ export default function FluidLab() {
             vec3(gridSize).sub(1).div(gridSizeUniform),
           ),
         );
-        // add force for particles to stay within rounded box
-        const innerBox = gridSizeUniform
-          .mul(0.5)
-          .sub(9.0)
-          .div(gridSizeUniform)
-          .toVar();
-        const innerRadius = float(6.0).div(gridSizeUniform.x);
+        // 잔 볼(구 캡 근사) 안에 머물도록 속도에 되돌림 힘을 준다.
         const posNext = particlePosition
           .add(particleVelocity.mul(dtUniform).mul(2.0))
           .toConst("posNext");
-        const posNextClamped = clampToRoundedBox(posNext, innerBox, innerRadius);
+        const posNextClamped = clampToBowl(posNext);
         particleVelocity.addAssign(posNextClamped.sub(posNext));
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
@@ -472,9 +465,85 @@ export default function FluidLab() {
       particleMesh = new THREE.Mesh(geometry, material);
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
       (particleMesh as any).count = params.particleCount;
-      particleMesh.position.set(-0.5, 0, -0.5);
+      // 유체 물리는 0~1 큐브에서 돌지만, 렌더는 잔 볼 안으로 축소·이동한다.
+      // (월드 중심 = position + FLUID_SCALE*0.5)
+      particleMesh.scale.setScalar(FLUID_SCALE);
+      particleMesh.position.set(
+        -FLUID_SCALE * 0.5,
+        FLUID_Y,
+        -FLUID_SCALE * 0.5,
+      );
       particleMesh.frustumCulled = false;
       scene.add(particleMesh);
+    }
+
+    // 보르도 잔 프로파일 (WineGlass.tsx 에서 옮겨옴).
+    // Catmull-Rom 으로 부드럽게 이어 LatheGeometry 회전체를 만든다.
+    const GLASS_KEY: [number, number][] = [
+      [0.0, 0.0],
+      [0.55, 0.0],
+      [0.55, 0.018],
+      [0.42, 0.04],
+      [0.12, 0.09],
+      [0.05, 0.16],
+      [0.042, 0.7],
+      [0.042, 1.25],
+      [0.05, 1.36],
+      [0.1, 1.44],
+      [0.17, 1.53],
+      [0.26, 1.65],
+      [0.34, 1.79],
+      [0.4, 1.94],
+      [0.44, 2.1],
+      [0.46, 2.26],
+      [0.455, 2.42],
+      [0.43, 2.57],
+      [0.4, 2.7],
+      [0.36, 2.82],
+      [0.325, 2.92],
+    ];
+
+    // 유체 큐브(x,z∈[-0.5,0.5], y∈[0,1])에 유리잔을 맞추기 위한 변환.
+    // 잔 원본은 높이 2.92 → 축소해서 유체 큐브 영역에 얹는다. 캡처로 조정.
+    const GLASS_SCALE = 0.42;
+    const GLASS_Y = -0.06;
+
+    // 유체 렌더를 잔 볼 안으로 축소·이동하는 값 (캡처로 조정).
+    const FLUID_SCALE = 0.4;
+    const FLUID_Y = 0.68;
+
+    // 유체 물리 경계 = 잔 볼을 근사한 구 캡 (유체 좌표 0~1 기준).
+    const BOWL_CENTER_Y = 0.62;
+    const BOWL_RADIUS = 0.42;
+
+    function setupGlass() {
+      const curve = new THREE.CatmullRomCurve3(
+        GLASS_KEY.map(([r, y]) => new THREE.Vector3(r, y, 0)),
+        false,
+        "centripetal",
+        0.5,
+      );
+      const pts = curve
+        .getPoints(260)
+        .map((p) => new THREE.Vector2(Math.max(p.x, 0.0006), p.y));
+      const geometry = new THREE.LatheGeometry(pts, 240);
+      geometry.computeVertexNormals();
+
+      const material = new A.MeshPhysicalNodeMaterial({
+        color: 0xffffff,
+        metalness: 0,
+        roughness: 0.03,
+        transmission: 1,
+        ior: 1.5,
+        thickness: 0.7,
+        side: THREE.DoubleSide,
+      });
+
+      const glass = new THREE.Mesh(geometry, material);
+      glass.scale.setScalar(GLASS_SCALE);
+      glass.position.set(0, GLASS_Y, 0);
+      glass.frustumCulled = false;
+      scene.add(glass);
     }
 
     function setupParticles() {
@@ -482,6 +551,7 @@ export default function FluidLab() {
       setupUniforms();
       setupComputeShaders();
       setupMesh();
+      setupGlass();
     }
 
     function onWindowResize() {
@@ -526,7 +596,8 @@ export default function FluidLab() {
       controls = new OrbitControls(camera, renderer.domElement);
       controls.minDistance = 1;
       controls.maxDistance = 3;
-      controls.maxPolarAngle = Math.PI * 0.35;
+      controls.maxPolarAngle = Math.PI * 0.5;
+      controls.target.set(0, 0.7, 0);
 
       const hdrLoader = new UltraHDRLoader().setPath(
         "/textures/equirectangular/",
