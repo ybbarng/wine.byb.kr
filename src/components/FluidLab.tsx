@@ -10,6 +10,7 @@ import {
   float,
   hash,
   instanceIndex,
+  pass,
   positionLocal,
   storage,
   uniform,
@@ -134,6 +135,27 @@ function Particles() {
   return <primitive object={points} />;
 }
 
+// 스크린스페이스 후처리 파이프라인 (1차: 입자 씬의 깊이를 화면에 시각화)
+function PostFX() {
+  const { gl, scene, camera } = useThree();
+  const post = useMemo(() => {
+    const p = new THREE.PostProcessing(
+      gl as unknown as THREE.WebGPURenderer,
+    );
+    const scenePass = pass(scene, camera);
+    // 뷰공간 선형 깊이를 회색조로 (가까울수록 밝게)
+    const depth = scenePass.getLinearDepthNode();
+    p.outputNode = float(1.0).sub(depth.mul(0.12));
+    return p;
+  }, [gl, scene, camera]);
+
+  useFrame(() => {
+    (post as unknown as { render: () => void }).render();
+  }, 1);
+
+  return null;
+}
+
 export default function FluidLab() {
   return (
     <Canvas
@@ -158,6 +180,7 @@ export default function FluidLab() {
         <meshBasicMaterial color="#e8b4be" wireframe transparent opacity={0.15} />
       </mesh>
       <Particles />
+      <PostFX />
     </Canvas>
   );
 }
