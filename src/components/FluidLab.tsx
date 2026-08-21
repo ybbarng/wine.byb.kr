@@ -135,7 +135,7 @@ export default function FluidLab() {
         [0.325, 2.92],
       ] as [number, number][],
       wallThickness: 0.025, // 프로파일 단위 유리 두께 (내벽 = 외벽 − 이 값)
-      bowlBottomY: 1.7, // 볼 안쪽 바닥 (넓어지는 부분부터 담아 옆샘 방지)
+      bowlBottomY: 1.44, // 볼 안쪽 바닥 (스템 위, 볼 그릇 시작)
       bowlTopY: 2.7, // 유체 최대 높이 (입구 아래, 넘침 여유)
       worldScale: 0.42, // 프로파일 → 월드 스케일
       worldY: -0.06, // 프로파일 y=0 의 월드 y
