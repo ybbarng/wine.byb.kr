@@ -195,6 +195,12 @@ export default function FluidLab() {
     // 계수를 개별 스칼라 uniform 으로 넘긴다 (배열/조회 없음 → 가장 확실).
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     const bowlCoefU: any[] = bowlCoef.map((v) => uniform(v));
+    // 다항식(내벽 반경) CPU 평가 — 초기 입자를 볼 안에 배치하는 데 쓴다.
+    const bowlRadiusAtCoordY = (cy: number): number => {
+      let a = bowlCoef[POLY_DEG];
+      for (let k = POLY_DEG - 1; k >= 0; k--) a = a * cy + bowlCoef[k];
+      return Math.max(a, 0.002);
+    };
 
     function setupBuffers() {
       const particleStruct = struct({
@@ -205,9 +211,15 @@ export default function FluidLab() {
       const particleStructSize = 20;
       const particleArray = new Float32Array(maxParticles * particleStructSize);
       for (let i = 0; i < maxParticles; i++) {
-        particleArray[i * particleStructSize] = Math.random() * 0.8 + 0.1;
-        particleArray[i * particleStructSize + 1] = Math.random() * 0.8 + 0.1;
-        particleArray[i * particleStructSize + 2] = Math.random() * 0.8 + 0.1;
+        // 초기 입자를 볼 프로파일 안(각 높이의 내벽 반경 이내)에 배치한다.
+        // 볼 밖에서 쏟아져 들어오는 초기 에너지를 없애 과한 튐·샘을 막는다.
+        const cy = Math.random();
+        const rMax = bowlRadiusAtCoordY(cy) * 0.9;
+        const rr = Math.sqrt(Math.random()) * rMax;
+        const ang = Math.random() * Math.PI * 2;
+        particleArray[i * particleStructSize] = 0.5 + rr * Math.cos(ang);
+        particleArray[i * particleStructSize + 1] = cy;
+        particleArray[i * particleStructSize + 2] = 0.5 + rr * Math.sin(ang);
       }
       particleBuffer = instancedArray(particleArray, particleStruct);
 
