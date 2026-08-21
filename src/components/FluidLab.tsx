@@ -539,7 +539,7 @@ export default function FluidLab() {
       timer.update();
       const deltaTime = THREE.MathUtils.clamp(timer.getDelta(), 0.00001, 1 / 60);
       // PBF substep: 한 프레임을 작은 스텝으로 나눠 위치 보정을 작게 → 튐↓
-      const PBF_SUBSTEPS = 2;
+      const PBF_SUBSTEPS = 4;
       dtUniform.value = deltaTime / PBF_SUBSTEPS;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
