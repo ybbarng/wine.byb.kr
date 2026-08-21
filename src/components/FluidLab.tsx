@@ -9,8 +9,6 @@ import {
   Fn,
   If,
   Loop,
-  Return,
-  array,
   atomicAdd,
   atomicLoad,
   atomicStore,
@@ -21,18 +19,12 @@ import {
   instancedArray,
   int,
   ivec3,
-  mat3,
-  max,
-  pow,
-  storage,
   struct,
   uniform,
   vec3,
-  vec4,
 } from "three/tsl";
 
-// 최소자승 다항식 피팅 (deg 차). 정규방정식 + 가우스 소거.
-// 볼 내벽 반경 곡선을 다항식 계수로 압축해 셰이더에 넘기기 위한 헬퍼.
+// 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
 function polyfit(xs: number[], ys: number[], deg: number): number[] {
   const n = deg + 1;
   const A: number[][] = [];
@@ -67,17 +59,16 @@ function polyfit(xs: number[], ys: number[], deg: number): number[] {
   return b.map((v, i) => v / A[i][i]);
 }
 
-// three.js 공식 webgpu_compute_particles_fluid (r185)를 그대로 이식.
-// 색만 와인으로 바꾸고, 물리/렌더 로직은 원본 그대로 유지한다.
-// biome-ignore lint: 예제 원본 구조 유지
+// Position Based Fluids (Macklin & Müller 2013) 을 three/tsl 로 재구현.
+// 비압축(밀도 제약) + 해시 그리드 이웃 + 잔 SDF 경계.
+// biome-ignore lint: PBF 구조
 export default function FluidLab() {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const container = ref.current;
     if (!container) return;
-
-    // biome-ignore lint/suspicious/noExplicitAny: 예제 vanilla 이식
+    // biome-ignore lint/suspicious/noExplicitAny: TSL/webgpu
     const A = THREE as any;
 
     let renderer: THREE.WebGPURenderer;
@@ -90,50 +81,24 @@ export default function FluidLab() {
     const timer = new THREE.Timer();
     timer.connect(document);
 
-    const maxParticles = 8192 * 16;
-    const gridSize1d = 64;
-    const workgroupSize = 64;
+    const params = { particleCount: 8192 * 2 }; // 16384
+    const N = params.particleCount;
 
-    // 에너지 보존 속도 상한: 낙하 높이 h 에서 v_max = √(2·g·h).
-    // 개별 입자는 위치에너지가 준 속도 이상으로 빨라질 수 없다.
-    // g_coord = 9.81²/gridSize (coord 스케일 중력), h = 1 (볼 높이 낙하).
-    const MAX_SPEED = Math.sqrt((2 * 9.81 * 9.81 * 1.0) / gridSize1d); // ≈1.73
-    const gridSize = new THREE.Vector3(gridSize1d, gridSize1d, gridSize1d);
-    const fixedPointMultiplier = 1e7;
+    // ── PBF 파라미터 (물리는 coord 0~1 공간) ──────────────────────────
+    const H = 0.045; // smoothing radius (커널 반경)
+    const H2 = H * H;
+    const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도
+    const CELL_COUNT = GRID_RES ** 3;
+    const MAX_PER_CELL = 64; // 셀당 최대 입자
+    const SOLVER_ITER = 4; // PBF solver 반복
+    const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
+    const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
+    const EPS_RELAX = 100.0; // λ 분모 relaxation
+    // coord 스케일 중력 (MLS-MPM 과 동일 스케일: 9.81²/gridSize)
+    const GRAVITY = -(9.81 * 9.81) / 64;
 
-    // biome-ignore lint/suspicious/noExplicitAny: TSL 노드 타입 생략
-    let particleCountUniform: any,
-      stiffnessUniform: any,
-      restDensityUniform: any,
-      dynamicViscosityUniform: any,
-      dtUniform: any,
-      gravityUniform: any,
-      gridSizeUniform: any;
-    // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let particleBuffer: any, cellBuffer: any, cellBufferFloat: any;
-    // biome-ignore lint/suspicious/noExplicitAny: TSL (디버그: 입자 밀도 로그용)
-    let densityBuffer: any;
-    // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let clearGridKernel: any,
-      p2g1Kernel: any,
-      p2g2Kernel: any,
-      updateGridKernel: any,
-      g2pKernel: any,
-      workgroupKernel: any;
-    // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let p2g1KernelWorkgroupBuffer: any,
-      p2g2KernelWorkgroupBuffer: any,
-      g2pKernelWorkgroupBuffer: any;
-    let particleMesh: THREE.Mesh;
-
-    const params = { particleCount: 8192 * 2 };
-
-    // ── 잔 하나의 데이터 ────────────────────────────────────────────
-    // 외벽 프로파일 + 벽 두께 + 볼(유체가 담기는) y 범위 + 월드 배치.
-    // 유리 메쉬와 유체 물리 경계를 '모두' 이 데이터에서 파생한다.
-    // 다른 잔은 이 객체만 바꾸면 유리와 물리가 자동으로 일치한다.
+    // ── 잔 데이터 + 경계 SDF (MLS-MPM 에서 재활용) ────────────────────
     const glass = {
-      // 외벽 프로파일 (r, y). LatheGeometry 와 내벽 계산의 공통 원천.
       profile: [
         [0.0, 0.0], [0.55, 0.0], [0.55, 0.018], [0.42, 0.04],
         [0.12, 0.09], [0.05, 0.16], [0.042, 0.7], [0.042, 1.25],
@@ -142,14 +107,12 @@ export default function FluidLab() {
         [0.455, 2.42], [0.43, 2.57], [0.4, 2.7], [0.36, 2.82],
         [0.325, 2.92],
       ] as [number, number][],
-      wallThickness: 0.025, // 프로파일 단위 유리 두께 (내벽 = 외벽 − 이 값)
-      bowlBottomY: 1.7, // 볼 안쪽 바닥 (넓어지는 부분부터 담아 압력↓)
-      bowlTopY: 2.7, // 유체 최대 높이 (입구 아래, 넘침 여유)
-      worldScale: 0.42, // 프로파일 → 월드 스케일
-      worldY: -0.06, // 프로파일 y=0 의 월드 y
+      wallThickness: 0.025,
+      bowlBottomY: 1.7,
+      bowlTopY: 2.7,
+      worldScale: 0.42,
+      worldY: -0.06,
     };
-
-    // 프로파일에서 높이 py 의 외벽/내벽 반경(프로파일 단위)을 선형 보간.
     const outerRadiusAt = (py: number): number => {
       const p = glass.profile;
       if (py <= p[0][1]) return p[0][0];
@@ -166,8 +129,6 @@ export default function FluidLab() {
     const innerRadiusAt = (py: number): number =>
       Math.max(outerRadiusAt(py) - glass.wallThickness, 0);
 
-    // 유체 coord 큐브(0~1)가 볼을 감싸도록 스케일·위치를 자동 계산.
-    // (물리는 0~1 정규화 격자를 쓰므로 월드 변환이 필요하다)
     let bowlRmax = 0;
     for (let py = glass.bowlBottomY; py <= glass.bowlTopY; py += 0.01) {
       bowlRmax = Math.max(bowlRmax, innerRadiusAt(py));
@@ -179,12 +140,6 @@ export default function FluidLab() {
     const FLUID_SCALE = cubeSpanProfile * glass.worldScale;
     const FLUID_Y = glass.bowlBottomY * glass.worldScale + glass.worldY;
 
-    // 내벽 반경 LUT: 유체 coord y(0~1) → 그 높이의 볼 내벽 coord 반경.
-    // 셰이더가 이 표를 직접 조회하므로, 물리 경계 = 실제 잔 내벽.
-    // 내벽 반경 곡선(coord y → coord 반경)을 다항식으로 fit → 계수만 셰이더로.
-    // 컴퓨트 셰이더에서 배열 '동적 인덱스' 조회가 막혀(uniformArray 는 고정 인덱스만,
-    // CPU 초기값 storage 는 업로드 생략), 조회 없는 산술 평가로 우회한다.
-    // 계수는 uniformArray 에 담아 '고정 인덱스'로만 접근하므로 안전하다.
     const POLY_DEG = 5;
     const lutXs: number[] = [];
     const lutYs: number[] = [];
@@ -200,72 +155,71 @@ export default function FluidLab() {
       lutYs.push(Math.max(coordR, 0.002));
     }
     const bowlCoef = polyfit(lutXs, lutYs, POLY_DEG);
-    // 계수를 개별 스칼라 uniform 으로 넘긴다 (배열/조회 없음 → 가장 확실).
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     const bowlCoefU: any[] = bowlCoef.map((v) => uniform(v));
-    // 다항식(내벽 반경) CPU 평가 — 초기 입자를 볼 안에 배치하는 데 쓴다.
     const bowlRadiusAtCoordY = (cy: number): number => {
       let a = bowlCoef[POLY_DEG];
       for (let k = POLY_DEG - 1; k >= 0; k--) a = a * cy + bowlCoef[k];
       return Math.max(a, 0.002);
     };
 
+    // ── 버퍼/유니폼/커널 핸들 ─────────────────────────────────────────
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let dtUniform: any, restDensityUniform: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let particleBuffer: any,
+      lambdaBuffer: any,
+      densityBuffer: any,
+      cellCountBuffer: any,
+      cellIdsBuffer: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let clearCellKernel: any,
+      predictKernel: any,
+      buildGridKernel: any,
+      lambdaKernel: any,
+      deltaPKernel: any,
+      velocityKernel: any;
+    let particleMesh: THREE.Mesh;
+
+    const STRIDE = 12; // vec3 position, velocity, predicted (각 16바이트 정렬 → 4 float)
+
     function setupBuffers() {
-      const particleStruct = struct({
+      const pStruct = struct({
         position: { type: "vec3" },
         velocity: { type: "vec3" },
-        C: { type: "mat3" },
+        predicted: { type: "vec3" },
       });
-      const particleStructSize = 20;
-      const particleArray = new Float32Array(maxParticles * particleStructSize);
-      for (let i = 0; i < maxParticles; i++) {
-        // 초기 입자를 볼 프로파일 안(각 높이의 내벽 반경 이내)에 배치한다.
-        // 볼 밖에서 쏟아져 들어오는 초기 에너지를 없애 과한 튐·샘을 막는다.
+      const arr = new Float32Array(N * STRIDE);
+      for (let i = 0; i < N; i++) {
+        // 초기 입자를 볼 프로파일 안에 배치.
         const cy = Math.random();
         const rMax = bowlRadiusAtCoordY(cy) * 0.9;
         const rr = Math.sqrt(Math.random()) * rMax;
         const ang = Math.random() * Math.PI * 2;
-        particleArray[i * particleStructSize] = 0.5 + rr * Math.cos(ang);
-        particleArray[i * particleStructSize + 1] = cy;
-        particleArray[i * particleStructSize + 2] = 0.5 + rr * Math.sin(ang);
+        arr[i * STRIDE] = 0.5 + rr * Math.cos(ang);
+        arr[i * STRIDE + 1] = cy;
+        arr[i * STRIDE + 2] = 0.5 + rr * Math.sin(ang);
       }
-      particleBuffer = instancedArray(particleArray, particleStruct);
-      particleBuffer.setPBO(true); // 속도 로그용 CPU readback 활성화
-      densityBuffer = instancedArray(maxParticles, "float");
-      densityBuffer.setPBO(true); // 밀도 로그용
+      particleBuffer = instancedArray(arr, pStruct);
+      particleBuffer.setPBO(true);
+      lambdaBuffer = instancedArray(N, "float");
+      densityBuffer = instancedArray(N, "float");
+      densityBuffer.setPBO(true);
 
-      const cellCount = gridSize.x * gridSize.y * gridSize.z;
-      const cellStruct = struct({
-        x: { type: "int", atomic: true },
-        y: { type: "int", atomic: true },
-        z: { type: "int", atomic: true },
-        mass: { type: "int", atomic: true },
-      });
-      cellBuffer = instancedArray(cellCount, cellStruct);
-      cellBufferFloat = instancedArray(cellCount, "vec4");
+      // 해시 그리드: 셀당 입자 카운트(atomic) + 입자 인덱스 버킷
+      const cellStruct = struct({ count: { type: "int", atomic: true } });
+      cellCountBuffer = instancedArray(CELL_COUNT, cellStruct);
+      cellIdsBuffer = instancedArray(CELL_COUNT * MAX_PER_CELL, "int");
     }
 
     function setupUniforms() {
-      gridSizeUniform = uniform(gridSize);
-      particleCountUniform = uniform(params.particleCount, "uint");
-      stiffnessUniform = uniform(300);
-      restDensityUniform = uniform(1.5);
-      dynamicViscosityUniform = uniform(4.0);
       dtUniform = uniform(1 / 60);
-      gravityUniform = uniform(new THREE.Vector3(0, -(9.81 * 9.81), 0));
+      // restDensity 는 초기 밀도 로그를 보고 맞춘다(placeholder).
+      restDensityUniform = uniform(50000);
     }
 
     function setupComputeShaders() {
-      // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const encodeFixedPoint = (f32: any) => int(f32.mul(fixedPointMultiplier));
-      // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const decodeFixedPoint = (i32: any) => float(i32).div(fixedPointMultiplier);
-
-      const cellCount = gridSize.x * gridSize.y * gridSize.z;
-
-      // 잔 볼 내벽 안에 좌표를 가두는 헬퍼 (여러 커널에서 공용).
-      // coord y 로 볼 내벽 반경 다항식(잔 데이터에서 fit)을 Horner 로 평가하고,
-      // 그 반경을 넘는 (x,z) 초과분을 안으로 되돌린 좌표를 반환한다.
+      // 잔 볼 내벽 안으로 (x,z) 반경을 조이는 SDF 경계 (재활용).
       // biome-ignore lint/suspicious/noExplicitAny: TSL
       const clampToBowl = (p: any) => {
         const result = p.toVar();
@@ -283,344 +237,197 @@ export default function FluidLab() {
           const inv = over.div(r);
           result.assign(vec3(p.x.sub(dx.mul(inv)), p.y, p.z.sub(dz.mul(inv))));
         });
+        // 위·아래 grid 경계
+        result.assign(clamp(result, vec3(0.001), vec3(0.999)));
         return result;
       };
 
-      clearGridKernel = Fn(() => {
-        atomicStore(cellBuffer.element(instanceIndex).get("x"), 0);
-        atomicStore(cellBuffer.element(instanceIndex).get("y"), 0);
-        atomicStore(cellBuffer.element(instanceIndex).get("z"), 0);
-        atomicStore(cellBuffer.element(instanceIndex).get("mass"), 0);
-      })()
-        .compute(cellCount)
-        .setName("clearGridKernel");
+      // SPH 커널 (Poly6 밀도, Spiky 그래디언트)
+      // biome-ignore lint/suspicious/noExplicitAny: TSL
+      const poly6 = (r2: any) => {
+        const d = float(H2).sub(r2);
+        return d.mul(d).mul(d).mul(POLY6);
+      };
+      // ∇W_i = -SPIKY (H-r)² (r_ij)/|r_ij|,  r_ij = p_i − p_j
+      // biome-ignore lint/suspicious/noExplicitAny: TSL
+      const spikyGrad = (rij: any, r: any) => {
+        const c = float(H).sub(r);
+        return rij.mul(float(-SPIKY).mul(c).mul(c).div(r));
+      };
 
-      p2g1Kernel = Fn(() => {
-        const particlePosition = particleBuffer
-          .element(instanceIndex)
-          .get("position")
-          .toConst("particlePosition");
-        const particleVelocity = particleBuffer
-          .element(instanceIndex)
-          .get("velocity")
-          .toConst("particleVelocity");
-        const C = particleBuffer.element(instanceIndex).get("C").toConst("C");
-        const gridPosition = particlePosition.mul(gridSizeUniform).toVar();
-        const cellIndex = ivec3(gridPosition).sub(1).toConst("cellIndex");
-        const cellDiff = gridPosition.fract().sub(0.5).toConst("cellDiff");
-        const w0 = float(0.5)
-          .mul(float(0.5).sub(cellDiff))
-          .mul(float(0.5).sub(cellDiff));
-        const w1 = float(0.75).sub(cellDiff.mul(cellDiff));
-        const w2 = float(0.5)
-          .mul(float(0.5).add(cellDiff))
-          .mul(float(0.5).add(cellDiff));
-        const weights = array([w0, w1, w2]).toConst("weights");
+      // 셀 인덱스 계산 (coord → grid cell)
+      // biome-ignore lint/suspicious/noExplicitAny: TSL
+      const cellOf = (p: any) => {
+        const c = ivec3(
+          clamp(p.mul(GRID_RES), float(0), float(GRID_RES - 1)),
+        );
+        return c;
+      };
+      // biome-ignore lint/suspicious/noExplicitAny: TSL
+      const cellId = (c: any) =>
+        c.x.add(c.y.mul(GRID_RES)).add(c.z.mul(GRID_RES * GRID_RES));
+
+      // 1) 셀 카운트 초기화
+      clearCellKernel = Fn(() => {
+        atomicStore(cellCountBuffer.element(instanceIndex).get("count"), 0);
+      })()
+        .compute(CELL_COUNT)
+        .setName("clearCell");
+
+      // 2) 예측: v += g·dt, predicted = x + v·dt
+      predictKernel = Fn(() => {
+        const p = particleBuffer.element(instanceIndex);
+        const v = p.get("velocity").toVar();
+        v.y.addAssign(float(GRAVITY).mul(dtUniform));
+        const pred = p.get("position").add(v.mul(dtUniform)).toVar();
+        pred.assign(clamp(pred, vec3(0.001), vec3(0.999)));
+        p.get("velocity").assign(v);
+        p.get("predicted").assign(pred);
+      })()
+        .compute(N)
+        .setName("predict");
+
+      // 3) 해시 그리드 빌드 (predicted 기준)
+      buildGridKernel = Fn(() => {
+        const pred = particleBuffer.element(instanceIndex).get("predicted");
+        const cid = cellId(cellOf(pred)).toVar();
+        const idx = atomicAdd(
+          cellCountBuffer.element(cid).get("count"),
+          int(1),
+        ).toVar();
+        If(idx.lessThan(int(MAX_PER_CELL)), () => {
+          cellIdsBuffer
+            .element(cid.mul(MAX_PER_CELL).add(idx))
+            .assign(int(instanceIndex));
+        });
+      })()
+        .compute(N)
+        .setName("buildGrid");
+
+      // 이웃 순회 매크로: 27개 이웃 셀 × 버킷을 돌며 body(j, rij, r2, r) 호출
+      // biome-ignore lint/suspicious/noExplicitAny: TSL
+      const forEachNeighbor = (pi: any, body: (ctx: any) => void) => {
+        const base = cellOf(pi).toConst();
         Loop(
-          { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
+          { start: -1, end: 2, type: "int", name: "ox", condition: "<" },
           // biome-ignore lint/suspicious/noExplicitAny: TSL
-          ({ gx }: any) => {
+          ({ ox }: any) => {
             Loop(
-              { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
+              { start: -1, end: 2, type: "int", name: "oy", condition: "<" },
               // biome-ignore lint/suspicious/noExplicitAny: TSL
-              ({ gy }: any) => {
+              ({ oy }: any) => {
                 Loop(
-                  { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
+                  { start: -1, end: 2, type: "int", name: "oz", condition: "<" },
                   // biome-ignore lint/suspicious/noExplicitAny: TSL
-                  ({ gz }: any) => {
-                    const weight = weights
-                      .element(gx)
-                      .x.mul(weights.element(gy).y)
-                      .mul(weights.element(gz).z);
-                    const cellX = cellIndex.add(ivec3(gx, gy, gz)).toConst();
-                    const cellDist = vec3(cellX)
-                      .add(0.5)
-                      .sub(gridPosition)
-                      .toConst("cellDist");
-                    const Q = C.mul(cellDist);
-                    const massContrib = weight;
-                    const velContrib = massContrib
-                      .mul(particleVelocity.add(Q))
-                      .toConst("velContrib");
-                    const cellPtr = cellX.x
-                      .mul(int(gridSize.y * gridSize.z))
-                      .add(cellX.y.mul(int(gridSize.z)))
-                      .add(cellX.z)
-                      .toConst();
-                    const cell = cellBuffer.element(cellPtr);
-                    atomicAdd(cell.get("x"), encodeFixedPoint(velContrib.x));
-                    atomicAdd(cell.get("y"), encodeFixedPoint(velContrib.y));
-                    atomicAdd(cell.get("z"), encodeFixedPoint(velContrib.z));
-                    atomicAdd(cell.get("mass"), encodeFixedPoint(massContrib));
+                  ({ oz }: any) => {
+                    const nc = ivec3(
+                      base.x.add(ox),
+                      base.y.add(oy),
+                      base.z.add(oz),
+                    ).toVar();
+                    const inb = nc.x
+                      .greaterThanEqual(int(0))
+                      .and(nc.x.lessThan(int(GRID_RES)))
+                      .and(nc.y.greaterThanEqual(int(0)))
+                      .and(nc.y.lessThan(int(GRID_RES)))
+                      .and(nc.z.greaterThanEqual(int(0)))
+                      .and(nc.z.lessThan(int(GRID_RES)));
+                    If(inb, () => {
+                      const cid = cellId(nc).toConst();
+                      const cnt = atomicLoad(
+                        cellCountBuffer.element(cid).get("count"),
+                      ).toConst();
+                      Loop(
+                        {
+                          start: 0,
+                          end: MAX_PER_CELL,
+                          type: "int",
+                          name: "k",
+                          condition: "<",
+                        },
+                        // biome-ignore lint/suspicious/noExplicitAny: TSL
+                        ({ k }: any) => {
+                          If(k.lessThan(cnt), () => {
+                            const j = cellIdsBuffer
+                              .element(cid.mul(MAX_PER_CELL).add(k))
+                              .toConst();
+                            const pj = particleBuffer
+                              .element(j)
+                              .get("predicted");
+                            const rij = pi.sub(pj).toVar();
+                            const r2 = rij.dot(rij).toVar();
+                            If(r2.lessThan(H2).and(r2.greaterThan(1e-12)), () => {
+                              body({ j, rij, r2 });
+                            });
+                          });
+                        },
+                      );
+                    });
                   },
                 );
               },
             );
           },
         );
-      })()
-        .compute(params.particleCount, [workgroupSize, 1, 1])
-        .setName("p2g1Kernel");
+      };
 
-      p2g2Kernel = Fn(() => {
-        const particlePosition = particleBuffer
+      // 4) λ 계산: 밀도 제약 C_i = ρ_i/ρ0 − 1, λ_i = −C_i/(Σ|∇C|²+ε)
+      lambdaKernel = Fn(() => {
+        const pi = particleBuffer
           .element(instanceIndex)
-          .get("position")
-          .toConst("particlePosition");
-        const gridPosition = particlePosition.mul(gridSizeUniform).toVar();
-        const cellIndex = ivec3(gridPosition).sub(1).toConst("cellIndex");
-        const cellDiff = gridPosition.fract().sub(0.5).toConst("cellDiff");
-        const w0 = float(0.5)
-          .mul(float(0.5).sub(cellDiff))
-          .mul(float(0.5).sub(cellDiff));
-        const w1 = float(0.75).sub(cellDiff.mul(cellDiff));
-        const w2 = float(0.5)
-          .mul(float(0.5).add(cellDiff))
-          .mul(float(0.5).add(cellDiff));
-        const weights = array([w0, w1, w2]).toConst("weights");
-        const density = float(0).toVar("density");
-        Loop(
-          { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
-          // biome-ignore lint/suspicious/noExplicitAny: TSL
-          ({ gx }: any) => {
-            Loop(
-              { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
-              // biome-ignore lint/suspicious/noExplicitAny: TSL
-              ({ gy }: any) => {
-                Loop(
-                  { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
-                  // biome-ignore lint/suspicious/noExplicitAny: TSL
-                  ({ gz }: any) => {
-                    const weight = weights
-                      .element(gx)
-                      .x.mul(weights.element(gy).y)
-                      .mul(weights.element(gz).z);
-                    const cellX = cellIndex.add(ivec3(gx, gy, gz)).toConst();
-                    const cellPtr = cellX.x
-                      .mul(int(gridSize.y * gridSize.z))
-                      .add(cellX.y.mul(int(gridSize.z)))
-                      .add(cellX.z)
-                      .toConst();
-                    const cell = cellBuffer.element(cellPtr);
-                    const mass = decodeFixedPoint(atomicLoad(cell.get("mass")));
-                    density.addAssign(mass.mul(weight));
-                  },
-                );
-              },
-            );
-          },
-        );
-        densityBuffer.element(instanceIndex).assign(density); // 디버그: 밀도 로그
-        const volume = float(1).div(density);
-        const pressure = max(
-          0.0,
-          pow(density.div(restDensityUniform), 5.0).sub(1).mul(stiffnessUniform),
-        ).toConst("pressure");
-        const stress = mat3(
-          pressure.negate(),
-          0,
-          0,
-          0,
-          pressure.negate(),
-          0,
-          0,
-          0,
-          pressure.negate(),
-        ).toVar("stress");
-        const dudv = particleBuffer.element(instanceIndex).get("C").toConst("C");
-        const strain = dudv.add(dudv.transpose());
-        stress.addAssign(strain.mul(dynamicViscosityUniform));
-        const eq16Term0 = volume.mul(-4).mul(stress).mul(dtUniform);
-        Loop(
-          { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
-          // biome-ignore lint/suspicious/noExplicitAny: TSL
-          ({ gx }: any) => {
-            Loop(
-              { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
-              // biome-ignore lint/suspicious/noExplicitAny: TSL
-              ({ gy }: any) => {
-                Loop(
-                  { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
-                  // biome-ignore lint/suspicious/noExplicitAny: TSL
-                  ({ gz }: any) => {
-                    const weight = weights
-                      .element(gx)
-                      .x.mul(weights.element(gy).y)
-                      .mul(weights.element(gz).z);
-                    const cellX = cellIndex.add(ivec3(gx, gy, gz)).toConst();
-                    const cellDist = vec3(cellX)
-                      .add(0.5)
-                      .sub(gridPosition)
-                      .toConst("cellDist");
-                    const momentum = eq16Term0
-                      .mul(weight)
-                      .mul(cellDist)
-                      .toConst("momentum");
-                    const cellPtr = cellX.x
-                      .mul(int(gridSize.y * gridSize.z))
-                      .add(cellX.y.mul(int(gridSize.z)))
-                      .add(cellX.z)
-                      .toConst();
-                    const cell = cellBuffer.element(cellPtr);
-                    atomicAdd(cell.get("x"), encodeFixedPoint(momentum.x));
-                    atomicAdd(cell.get("y"), encodeFixedPoint(momentum.y));
-                    atomicAdd(cell.get("z"), encodeFixedPoint(momentum.z));
-                  },
-                );
-              },
-            );
-          },
-        );
+          .get("predicted")
+          .toConst();
+        const rho = float(0).toVar();
+        const gradCi = vec3(0).toVar(); // Σ∇W (·1/ρ0 로 ∇C_ii)
+        const sumGrad2 = float(0).toVar(); // Σ_{j} |∇C_ij|²
+        rho.addAssign(poly6(float(0))); // self (r=0)
+        forEachNeighbor(pi, ({ rij, r2 }) => {
+          const r = r2.sqrt();
+          rho.addAssign(poly6(r2));
+          const grad = spikyGrad(rij, r).div(restDensityUniform);
+          gradCi.addAssign(grad);
+          sumGrad2.addAssign(grad.dot(grad));
+        });
+        densityBuffer.element(instanceIndex).assign(rho);
+        const c = rho.div(restDensityUniform).sub(1.0);
+        sumGrad2.addAssign(gradCi.dot(gradCi));
+        const lambda = c.negate().div(sumGrad2.add(EPS_RELAX));
+        lambdaBuffer.element(instanceIndex).assign(lambda);
       })()
-        .compute(params.particleCount, [workgroupSize, 1, 1])
-        .setName("p2g2Kernel");
+        .compute(N)
+        .setName("lambda");
 
-      updateGridKernel = Fn(() => {
-        const cell = cellBuffer.element(instanceIndex);
-        const mass = decodeFixedPoint(atomicLoad(cell.get("mass"))).toConst();
-        If(mass.lessThanEqual(0), () => {
-          Return();
+      // 5) 위치 보정 Δp_i = (1/ρ0) Σ (λ_i+λ_j) ∇W, predicted += Δp, 경계
+      deltaPKernel = Fn(() => {
+        const p = particleBuffer.element(instanceIndex);
+        const pi = p.get("predicted").toVar();
+        const lambdaI = lambdaBuffer.element(instanceIndex).toConst();
+        const dp = vec3(0).toVar();
+        forEachNeighbor(pi, ({ j, rij, r2 }) => {
+          const r = r2.sqrt();
+          const lambdaJ = lambdaBuffer.element(j).toConst();
+          const grad = spikyGrad(rij, r);
+          dp.addAssign(grad.mul(lambdaI.add(lambdaJ)));
         });
-        const vx = decodeFixedPoint(atomicLoad(cell.get("x"))).div(mass).toVar();
-        const vy = decodeFixedPoint(atomicLoad(cell.get("y"))).div(mass).toVar();
-        const vz = decodeFixedPoint(atomicLoad(cell.get("z"))).div(mass).toVar();
-        const x = int(instanceIndex).div(int(gridSize.z * gridSize.y));
-        const y = int(instanceIndex).div(int(gridSize.z)).mod(int(gridSize.y));
-        const z = int(instanceIndex).mod(int(gridSize.z));
-        If(x.lessThan(int(1)).or(x.greaterThan(int(gridSize.x).sub(int(2)))), () => {
-          vx.assign(0);
-        });
-        If(y.lessThan(int(1)).or(y.greaterThan(int(gridSize.y).sub(int(2)))), () => {
-          vy.assign(0);
-        });
-        If(z.lessThan(int(1)).or(z.greaterThan(int(gridSize.z).sub(int(2)))), () => {
-          vz.assign(0);
-        });
-        cellBufferFloat.element(instanceIndex).assign(vec4(vx, vy, vz, mass));
+        dp.divAssign(restDensityUniform);
+        pi.addAssign(dp);
+        pi.assign(clampToBowl(pi));
+        p.get("predicted").assign(pi);
       })()
-        .compute(cellCount)
-        .setName("updateGridKernel");
+        .compute(N)
+        .setName("deltaP");
 
-      g2pKernel = Fn(() => {
-        const particlePosition = particleBuffer
-          .element(instanceIndex)
-          .get("position")
-          .toVar("particlePosition");
-        const gridPosition = particlePosition.mul(gridSizeUniform).toVar();
-        const particleVelocity = vec3(0).toVar();
-        const cellIndex = ivec3(gridPosition).sub(1).toConst("cellIndex");
-        const cellDiff = gridPosition.fract().sub(0.5).toConst("cellDiff");
-        const w0 = float(0.5)
-          .mul(float(0.5).sub(cellDiff))
-          .mul(float(0.5).sub(cellDiff));
-        const w1 = float(0.75).sub(cellDiff.mul(cellDiff));
-        const w2 = float(0.5)
-          .mul(float(0.5).add(cellDiff))
-          .mul(float(0.5).add(cellDiff));
-        const weights = array([w0, w1, w2]).toConst("weights");
-        const B = mat3(0).toVar("B");
-        Loop(
-          { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
-          // biome-ignore lint/suspicious/noExplicitAny: TSL
-          ({ gx }: any) => {
-            Loop(
-              { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
-              // biome-ignore lint/suspicious/noExplicitAny: TSL
-              ({ gy }: any) => {
-                Loop(
-                  { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
-                  // biome-ignore lint/suspicious/noExplicitAny: TSL
-                  ({ gz }: any) => {
-                    const weight = weights
-                      .element(gx)
-                      .x.mul(weights.element(gy).y)
-                      .mul(weights.element(gz).z);
-                    const cellX = cellIndex.add(ivec3(gx, gy, gz)).toConst();
-                    const cellDist = vec3(cellX)
-                      .add(0.5)
-                      .sub(gridPosition)
-                      .toConst("cellDist");
-                    const cellPtr = cellX.x
-                      .mul(int(gridSize.y * gridSize.z))
-                      .add(cellX.y.mul(int(gridSize.z)))
-                      .add(cellX.z)
-                      .toConst();
-                    const weightedVelocity = cellBufferFloat
-                      .element(cellPtr)
-                      .xyz.mul(weight)
-                      .toConst("weightedVelocity");
-                    const term = mat3(
-                      weightedVelocity.mul(cellDist.x),
-                      weightedVelocity.mul(cellDist.y),
-                      weightedVelocity.mul(cellDist.z),
-                    );
-                    B.addAssign(term);
-                    particleVelocity.addAssign(weightedVelocity);
-                  },
-                );
-              },
-            );
-          },
-        );
-        particleBuffer.element(instanceIndex).get("C").assign(B.mul(4));
-        particleVelocity.addAssign(gravityUniform.mul(dtUniform));
-        particleVelocity.divAssign(gridSizeUniform);
-        // 에너지 보존 속도 상한: 낙하 높이가 준 v_max=√(2gh) 를 못 넘게 한다.
-        // 충돌 순간 속도 급증(→ 벽 건너뜀)을 물리적으로 타당하게 차단한다.
-        const speed = particleVelocity.length().toVar();
-        const maxSpeed = float(100.0); // 진단: 속도 상한 임시 해제
-        If(speed.greaterThan(maxSpeed), () => {
-          particleVelocity.mulAssign(maxSpeed.div(speed));
-        });
-        particlePosition.addAssign(particleVelocity.mul(dtUniform));
-        particlePosition.assign(
-          clamp(
-            particlePosition,
-            vec3(1).div(gridSizeUniform),
-            vec3(gridSize).sub(1).div(gridSizeUniform),
-          ),
-        );
-        // 볼 경계: 미래 위치가 볼을 벗어난 양의 3배로 속도를 되돌린다.
-        // 위치 순간이동은 흩어짐을 유발하므로 건드리지 않고 속도만 강하게 되돌린다.
-        // 흡수형 경계: 미래 위치(dt×8 앞)가 벽을 넘으면, 벽 밖으로 향하는
-        // 속도(법선 성분)만 제거한다. 위치는 안 건드리므로 진동/대류가 없고,
-        // 넘기 훨씬 전에 미리 감속하므로 벽을 넘지 않는다(압축도 없다).
-        const posNext = particlePosition
-          .add(particleVelocity.mul(dtUniform).mul(8.0))
-          .toConst("posNext");
-        const posNextClamped = clampToBowl(posNext);
-        const outward = posNext.sub(posNextClamped).toVar();
-        const outLen = outward.length().toVar();
-        If(outLen.greaterThan(1e-6), () => {
-          const n = outward.div(outLen);
-          const vn = particleVelocity.dot(n).toVar();
-          If(vn.greaterThan(0.0), () => {
-            particleVelocity.subAssign(n.mul(vn));
-          });
-        });
-        // 흡수가 미리 감속해도 넘어버린 소수 입자만 부드럽게(20%) 되돌린다.
-        const posClamped = clampToBowl(particlePosition);
-        const backDelta = posClamped.sub(particlePosition).toVar();
-        particlePosition.assign(particlePosition.add(backDelta.mul(0.05)));
-        // 되돌려진(벽 밖에 있던) 입자만 속도를 감쇠해 벽 왕복 진동을 억제한다.
-        // 낙하 중인 입자는 벽 밖이 아니라 감쇠되지 않아 낙하는 그대로다.
-        If(backDelta.length().greaterThan(1e-5), () => {
-          particleVelocity.mulAssign(0.3);
-        });
-
-        // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
-        particleVelocity.mulAssign(gridSizeUniform);
-        particleBuffer
-          .element(instanceIndex)
-          .get("position")
-          .assign(particlePosition);
-        particleBuffer
-          .element(instanceIndex)
-          .get("velocity")
-          .assign(particleVelocity);
+      // 6) 속도 갱신: v = (predicted − x)/dt, x = predicted
+      velocityKernel = Fn(() => {
+        const p = particleBuffer.element(instanceIndex);
+        const pos = p.get("position").toConst();
+        const pred = p.get("predicted").toConst();
+        const v = pred.sub(pos).div(dtUniform);
+        p.get("velocity").assign(v);
+        p.get("position").assign(pred);
       })()
-        .compute(params.particleCount, [workgroupSize, 1, 1])
-        .setName("g2pKernel");
+        .compute(N)
+        .setName("velocity");
     }
 
     function setupMesh() {
@@ -629,22 +436,14 @@ export default function FluidLab() {
       );
       const material = new A.MeshStandardNodeMaterial({ color: "#8a0f2a" });
       material.positionNode = Fn(() => {
-        const particlePosition = particleBuffer
-          .element(instanceIndex)
-          .get("position");
-        return attribute("position").add(particlePosition);
+        const pos = particleBuffer.element(instanceIndex).get("position");
+        return attribute("position").add(pos);
       })();
       particleMesh = new THREE.Mesh(geometry, material);
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
-      (particleMesh as any).count = params.particleCount;
-      // 유체 물리는 0~1 큐브에서 돌지만, 렌더는 잔 볼 안으로 축소·이동한다.
-      // (월드 중심 = position + FLUID_SCALE*0.5)
+      (particleMesh as any).count = N;
       particleMesh.scale.setScalar(FLUID_SCALE);
-      particleMesh.position.set(
-        -FLUID_SCALE * 0.5,
-        FLUID_Y,
-        -FLUID_SCALE * 0.5,
-      );
+      particleMesh.position.set(-FLUID_SCALE * 0.5, FLUID_Y, -FLUID_SCALE * 0.5);
       particleMesh.frustumCulled = false;
       scene.add(particleMesh);
     }
@@ -661,12 +460,6 @@ export default function FluidLab() {
         .map((p) => new THREE.Vector2(Math.max(p.x, 0.0006), p.y));
       const geometry = new THREE.LatheGeometry(pts, 240);
       geometry.computeVertexNormals();
-
-      // 실제 소다라임 유리 물성값 기반:
-      //  - IOR 1.52 (와인잔 유리 표준 굴절률)
-      //  - thickness 얇게: 실제 잔 벽은 ~1mm. 두꺼우면 굴절이 배경을 과하게
-      //    휘어 뒤의 와인 대신 밝은 배경을 비춰 '비어 보이는' 착시가 난다.
-      //  - attenuation: 유리 철분에 의한 옅은 청록 흡수
       const material = new A.MeshPhysicalNodeMaterial({
         color: 0xffffff,
         metalness: 0,
@@ -679,7 +472,6 @@ export default function FluidLab() {
         side: THREE.DoubleSide,
       });
       material.envMapIntensity = 1.0;
-
       const glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
@@ -704,26 +496,23 @@ export default function FluidLab() {
     async function render() {
       timer.update();
       const deltaTime = THREE.MathUtils.clamp(timer.getDelta(), 0.00001, 1 / 60);
-      // 물리 substep: 한 프레임을 여러 작은 스텝으로 나눠 CFL 조건을 만족한다.
-      // (한 스텝 이동이 셀 크기보다 작아야 벽을 건너뛰지 않는다)
-      const SUBSTEPS = 5;
-      dtUniform.value = deltaTime / SUBSTEPS;
-      renderer.compute(workgroupKernel);
-      for (let s = 0; s < SUBSTEPS; s++) {
-        renderer.compute(clearGridKernel);
-        renderer.compute(p2g1Kernel, p2g1KernelWorkgroupBuffer);
-        renderer.compute(p2g2Kernel, p2g2KernelWorkgroupBuffer);
-        renderer.compute(updateGridKernel);
-        renderer.compute(g2pKernel, g2pKernelWorkgroupBuffer);
+      dtUniform.value = deltaTime;
+
+      // PBF 스텝: 예측 → 이웃(해시 그리드) → solver(λ, Δp) 반복 → 속도
+      renderer.compute(predictKernel);
+      renderer.compute(clearCellKernel);
+      renderer.compute(buildGridKernel);
+      for (let it = 0; it < SOLVER_ITER; it++) {
+        renderer.compute(lambdaKernel);
+        renderer.compute(deltaPKernel);
       }
+      renderer.compute(velocityKernel);
       renderer.render(scene, camera);
 
-      // 실제 입자 속도를 GPU 에서 읽어 로그 (픽셀 diff 는 부정확하므로).
-      // velocity 는 gridSize 스케일이라 /gridSize 하면 coord/s 단위가 된다.
+      // 디버그 로그: 속도·밀도·대류·볼 밖 입자 (MLS-MPM 여정에서 만든 지표)
       frameCount++;
       if (frameCount % 60 === 0) {
         const t = (frameCount / 60).toFixed(0);
-        const N = params.particleCount;
         Promise.all([
           renderer.getArrayBufferAsync(particleBuffer.value),
           renderer.getArrayBufferAsync(densityBuffer.value),
@@ -731,53 +520,34 @@ export default function FluidLab() {
           .then(([pbuf, dbuf]: ArrayBuffer[]) => {
             const arr = new Float32Array(pbuf);
             const den = new Float32Array(dbuf);
-            let maxV = 0;
             let sumV = 0;
-            let maxD = 0;
+            let maxV = 0;
             let sumD = 0;
-            let outGlass = 0; // 유리 외벽 밖으로 나간 입자 수
-            let vWallSum = 0;
-            let nWall = 0; // 벽 근처(반경 85%+) 입자 속도
-            let vInSum = 0;
-            let nIn = 0; // 내부(반경 50% 미만) 입자 속도
-            let vrSum = 0; // 반경 방향 속도 합 (밖으로 +, 대류 확인)
-            let vrAbsSum = 0;
+            let outGlass = 0;
+            let vrAbs = 0;
             const wallCoord =
               (glass.wallThickness * glass.worldScale) / FLUID_SCALE;
             for (let i = 0; i < N; i++) {
-              const vx = arr[i * 20 + 4];
-              const vy = arr[i * 20 + 5];
-              const vz = arr[i * 20 + 6];
-              const v = Math.sqrt(vx * vx + vy * vy + vz * vz) / gridSize1d;
-              if (v > maxV) maxV = v;
+              const vx = arr[i * STRIDE + 4];
+              const vy = arr[i * STRIDE + 5];
+              const vz = arr[i * STRIDE + 6];
+              const v = Math.sqrt(vx * vx + vy * vy + vz * vz);
               sumV += v;
-              const d = den[i];
-              if (d > maxD) maxD = d;
-              sumD += d;
-              const px = arr[i * 20];
-              const py = arr[i * 20 + 1];
-              const pz = arr[i * 20 + 2];
+              if (v > maxV) maxV = v;
+              sumD += den[i];
+              const px = arr[i * STRIDE];
+              const py = arr[i * STRIDE + 1];
+              const pz = arr[i * STRIDE + 2];
               const cy = Math.max(0, Math.min(1, py));
               const rInner = bowlRadiusAtCoordY(cy);
               const rr = Math.hypot(px - 0.5, pz - 0.5);
               if (rr > rInner + wallCoord) outGlass++;
-              // 벽 근처 vs 내부 속도 분리 (진동원 규명용)
-              if (rr > rInner * 0.85) {
-                vWallSum += v;
-                nWall++;
-              } else if (rr < rInner * 0.5) {
-                vInSum += v;
-                nIn++;
-              }
-              // 반경 방향(수평) 속도: 밖으로 + / 안으로 −. 대류 확인용
               if (rr > 1e-4) {
-                const vr = (vx * (px - 0.5) + vz * (pz - 0.5)) / rr / gridSize1d;
-                vrSum += vr;
-                vrAbsSum += Math.abs(vr);
+                vrAbs += Math.abs((vx * (px - 0.5) + vz * (pz - 0.5)) / rr);
               }
             }
             console.log(
-              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} | vrNet=${(vrSum / N).toFixed(4)} vrAbs=${(vrAbsSum / N).toFixed(4)} | dAvg=${(sumD / N).toFixed(3)} | out=${outGlass}`,
+              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(3)} | vrAbs=${(vrAbs / N).toFixed(4)} | dAvg=${(sumD / N).toFixed(1)} (rest=${restDensityUniform.value.toFixed(0)}) | out=${outGlass}`,
             );
           })
           .catch(() => {});
@@ -810,9 +580,7 @@ export default function FluidLab() {
       controls.maxPolarAngle = Math.PI * 0.5;
       controls.target.set(0, 0.7, 0);
 
-      const hdrLoader = new UltraHDRLoader().setPath(
-        "/textures/equirectangular/",
-      );
+      const hdrLoader = new UltraHDRLoader().setPath("/textures/equirectangular/");
       const hdrTexture = await hdrLoader.loadAsync("royal_esplanade_2k.hdr.jpg");
       hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
       scene.background = hdrTexture;
@@ -820,32 +588,6 @@ export default function FluidLab() {
       scene.environment = hdrTexture;
 
       setupParticles();
-
-      const numWorkgroups = Math.ceil(params.particleCount / workgroupSize);
-      p2g1KernelWorkgroupBuffer = new A.IndirectStorageBufferAttribute(
-        new Uint32Array([numWorkgroups, 1, 1]),
-        1,
-      );
-      p2g2KernelWorkgroupBuffer = new A.IndirectStorageBufferAttribute(
-        new Uint32Array([numWorkgroups, 1, 1]),
-        1,
-      );
-      g2pKernelWorkgroupBuffer = new A.IndirectStorageBufferAttribute(
-        new Uint32Array([numWorkgroups, 1, 1]),
-        1,
-      );
-      const p2g1WorkgroupStorage = storage(p2g1KernelWorkgroupBuffer, "uint", 3);
-      const p2g2WorkgroupStorage = storage(p2g2KernelWorkgroupBuffer, "uint", 3);
-      const g2pWorkgroupStorage = storage(g2pKernelWorkgroupBuffer, "uint", 3);
-      workgroupKernel = Fn(() => {
-        const workgroupsToDispatch = particleCountUniform
-          .sub(1)
-          .div(workgroupSize)
-          .add(1);
-        p2g1WorkgroupStorage.element(0).assign(workgroupsToDispatch);
-        p2g2WorkgroupStorage.element(0).assign(workgroupsToDispatch);
-        g2pWorkgroupStorage.element(0).assign(workgroupsToDispatch);
-      })().compute(1);
 
       window.addEventListener("resize", onWindowResize);
       controls.update();
