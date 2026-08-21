@@ -14,16 +14,20 @@ import {
   atomicStore,
   attribute,
   clamp,
+  cross,
   float,
   instanceIndex,
   instancedArray,
   int,
   ivec3,
+  normalize,
   positionView,
+  pow,
   screenUV,
   struct,
   texture,
   uniform,
+  vec2,
   vec3,
   vec4,
 } from "three/tsl";
@@ -624,17 +628,46 @@ export default function FluidLab() {
       // SSFR: 유체 입자만 담는 씬 + 깊이 RenderTarget + 화면 표면 quad
       fluidScene = new THREE.Scene();
       const dpr = renderer.getPixelRatio();
-      depthRT = new THREE.RenderTarget(
-        Math.floor(container.clientWidth * dpr),
-        Math.floor(container.clientHeight * dpr),
-      );
+      const rtW = Math.floor(container.clientWidth * dpr);
+      const rtH = Math.floor(container.clientHeight * dpr);
+      depthRT = new THREE.RenderTarget(rtW, rtH);
       depthRT.texture.type = THREE.HalfFloatType;
-      // 1단계 검증용: depthRT 를 grayscale 로 화면에 표시
+
+      // SSFR 2단계: 깊이에서 view 위치→법선 재구성 + 와인 셰이딩(색+프레넬)
+      const tanF = Math.tan(((40 * Math.PI) / 180) / 2); // fov 40°
+      const aspect = rtW / rtH;
+      const texel = new THREE.Vector2(1 / rtW, 1 / rtH);
       surfaceQuad = new A.QuadMesh(new A.MeshBasicNodeMaterial());
       surfaceQuad.material.colorNode = Fn(() => {
-        const d = texture(depthRT.texture, screenUV).x;
-        const vis = d.mul(0.3);
-        return vec4(vis, vis, vis, 1);
+        const uv = screenUV;
+        const dC = texture(depthRT.texture, uv).x.toVar();
+        const outCol = vec3(0.02, 0.02, 0.025).toVar(); // 배경(임시)
+        If(dC.greaterThan(0.001), () => {
+          // uv+깊이 → view 위치
+          // biome-ignore lint/suspicious/noExplicitAny: TSL
+          const vp = (u: any, depth: any) => {
+            const ndc = u.mul(2).sub(1);
+            return vec3(
+              ndc.x.mul(depth).mul(tanF * aspect),
+              ndc.y.mul(depth).mul(tanF),
+              depth.negate(),
+            );
+          };
+          const dR = texture(depthRT.texture, uv.add(vec2(texel.x, 0))).x;
+          const dU = texture(depthRT.texture, uv.add(vec2(0, texel.y))).x;
+          const pC = vp(uv, dC);
+          const pR = vp(uv.add(vec2(texel.x, 0)), dR);
+          const pU = vp(uv.add(vec2(0, texel.y)), dU);
+          const normal = normalize(cross(pR.sub(pC), pU.sub(pC)));
+          const viewDir = normalize(pC.negate());
+          const fres = pow(
+            float(1).sub(normal.dot(viewDir).max(0.0)),
+            3.0,
+          );
+          const wine = vec3(0.35, 0.04, 0.1);
+          outCol.assign(wine.add(vec3(fres.mul(0.6))));
+        });
+        return vec4(outCol, 1);
       })();
 
       setupParticles();
