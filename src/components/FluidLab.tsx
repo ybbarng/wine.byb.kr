@@ -248,11 +248,11 @@ export default function FluidLab() {
     function setupUniforms() {
       gridSizeUniform = uniform(gridSize);
       particleCountUniform = uniform(params.particleCount, "uint");
-      stiffnessUniform = uniform(50);
+      stiffnessUniform = uniform(200);
       restDensityUniform = uniform(1.5);
       dynamicViscosityUniform = uniform(2.0);
       dtUniform = uniform(1 / 60);
-      gravityUniform = uniform(new THREE.Vector3(0, -9.81, 0)); // 진단: 정상 중력
+      gravityUniform = uniform(new THREE.Vector3(0, -(9.81 * 9.81), 0));
     }
 
     function setupComputeShaders() {
