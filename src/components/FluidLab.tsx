@@ -681,9 +681,9 @@ export default function FluidLab() {
       const rtW = Math.floor(container.clientWidth * dpr);
       const rtH = Math.floor(container.clientHeight * dpr);
       depthRT = new THREE.RenderTarget(rtW, rtH);
-      depthRT.texture.type = THREE.HalfFloatType;
+      depthRT.texture.type = THREE.FloatType;
       blurRT = new THREE.RenderTarget(rtW, rtH);
-      blurRT.texture.type = THREE.HalfFloatType;
+      blurRT.texture.type = THREE.FloatType;
       const texel = new THREE.Vector2(1 / rtW, 1 / rtH);
 
       // SSFR 2.5단계: 깊이 bilateral blur (개별 입자 요철 제거)
