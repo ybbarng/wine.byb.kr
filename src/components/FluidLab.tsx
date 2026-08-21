@@ -447,10 +447,15 @@ export default function FluidLab() {
     }
 
     function setupMesh() {
+      // 입자를 이웃 간격만큼 키워 서로 겹치게 하면 개별 알갱이 티가 줄어든다.
       const geometry = BufferGeometryUtils.mergeVertices(
-        new THREE.IcosahedronGeometry(0.008, 1).deleteAttribute("uv"),
+        new THREE.IcosahedronGeometry(0.03, 2).deleteAttribute("uv"),
       );
-      const material = new A.MeshStandardNodeMaterial({ color: "#8a0f2a" });
+      const material = new A.MeshStandardNodeMaterial({
+        color: "#5a0a1e",
+        roughness: 0.25,
+        metalness: 0,
+      });
       material.positionNode = Fn(() => {
         const pos = particleBuffer.element(instanceIndex).get("position");
         return attribute("position").add(pos);
