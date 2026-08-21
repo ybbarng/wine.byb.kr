@@ -135,7 +135,7 @@ export default function FluidLab() {
         [0.325, 2.92],
       ] as [number, number][],
       wallThickness: 0.025, // 프로파일 단위 유리 두께 (내벽 = 외벽 − 이 값)
-      bowlBottomY: 1.44, // 볼 안쪽 바닥 (유체 최저, 스템 제외)
+      bowlBottomY: 1.7, // 볼 안쪽 바닥 (넓어지는 부분부터 담아 옆샘 방지)
       bowlTopY: 2.7, // 유체 최대 높이 (입구 아래, 넘침 여유)
       worldScale: 0.42, // 프로파일 → 월드 스케일
       worldY: -0.06, // 프로파일 y=0 의 월드 y
@@ -472,17 +472,6 @@ export default function FluidLab() {
         If(z.lessThan(int(1)).or(z.greaterThan(int(gridSize.z).sub(int(2)))), () => {
           vz.assign(0);
         });
-        // 볼 밖 격자 셀은 속도를 0 으로 (유리벽). MLS-MPM 표준 벽 처리라
-        // 위치를 순간이동시키지 않아 튀지 않고, 유체가 벽을 못 넘어 위로만 찬다.
-        const cellCoord = vec3(float(x), float(y), float(z))
-          .add(0.5)
-          .div(gridSizeUniform);
-        const cellClamped = clampToBowl(cellCoord);
-        If(cellClamped.sub(cellCoord).length().greaterThan(0.0001), () => {
-          vx.assign(0);
-          vy.assign(0);
-          vz.assign(0);
-        });
         cellBufferFloat.element(instanceIndex).assign(vec4(vx, vy, vz, mass));
       })()
         .compute(cellCount)
@@ -560,7 +549,12 @@ export default function FluidLab() {
             vec3(gridSize).sub(1).div(gridSizeUniform),
           ),
         );
-        // 볼 경계는 updateGrid 의 grid 벽(볼 밖 셀 속도 0)이 처리한다.
+        // 볼 경계: 미래 위치가 볼을 벗어나는 만큼 속도를 되돌린다 (예제식).
+        const posNext = particlePosition
+          .add(particleVelocity.mul(dtUniform).mul(2.0))
+          .toConst("posNext");
+        const posNextClamped = clampToBowl(posNext);
+        particleVelocity.addAssign(posNextClamped.sub(posNext));
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
