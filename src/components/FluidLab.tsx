@@ -108,8 +108,8 @@ export default function FluidLab() {
     const SCORR_K = 0.00001; // 표면장력 (원래 3e-5 → 순환 완화·응집 유지 절충)
     const DELTA_Q2 = (0.2 * H) ** 2; // (0.2·H)² 기준 거리²
     const POLY6_DQ = POLY6 * (H2 - DELTA_Q2) ** 3; // poly6(ΔQ²)
-    // coord 스케일 중력. 낙하 자연화 위해 2배(3배는 정지 깨짐 — 압력 과다).
-    const GRAVITY = -(9.81 * 9.81 * 2) / 64;
+    // coord 스케일 중력 (실제 물리값 — 튜닝하지 않음).
+    const GRAVITY = -(9.81 * 9.81) / 64;
 
     // ── 잔 데이터 + 경계 SDF (MLS-MPM 에서 재활용) ────────────────────
     const glass = {
@@ -179,7 +179,7 @@ export default function FluidLab() {
 
     // ── 버퍼/유니폼/커널 핸들 ─────────────────────────────────────────
     // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let dtUniform: any, restDensityUniform: any, dampUniform: any;
+    let dtUniform: any, restDensityUniform: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let particleBuffer: any,
       lambdaBuffer: any,
@@ -238,9 +238,6 @@ export default function FluidLab() {
     function setupUniforms() {
       dtUniform = uniform(1 / 60);
       restDensityUniform = uniform(50000);
-      // 점성 감쇠(substep당). 잔이 멈춰 있을 때 무작위 지터를 잦아들게 한다.
-      // 와인의 점성 = 물리적으로 옳은 소산. 붓기는 중력이 재가속하니 회복.
-      dampUniform = uniform(0.995);
     }
 
     function setupComputeShaders() {
@@ -460,8 +457,6 @@ export default function FluidLab() {
           dv.addAssign(vj.sub(vi).mul(poly6(r2)));
         });
         vi.addAssign(dv.div(restDensityUniform).mul(C_XSPH));
-        // 점성 감쇠: 잔류 지터를 잦아들게 (결맞은 운동까지 잡음, XSPH 보완)
-        vi.mulAssign(dampUniform);
         p.get("velocity").assign(vi);
         p.get("position").assign(pred);
       })()
