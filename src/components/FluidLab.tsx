@@ -249,7 +249,7 @@ export default function FluidLab() {
       gridSizeUniform = uniform(gridSize);
       particleCountUniform = uniform(params.particleCount, "uint");
       stiffnessUniform = uniform(4);
-      restDensityUniform = uniform(3.8);
+      restDensityUniform = uniform(1.5);
       dynamicViscosityUniform = uniform(2.0);
       dtUniform = uniform(1 / 60);
       gravityUniform = uniform(new THREE.Vector3(0, -(9.81 * 9.81), 0));
@@ -414,7 +414,7 @@ export default function FluidLab() {
         const volume = float(1).div(density);
         const pressure = max(
           0.0,
-          pow(density.div(restDensityUniform), 5.0).sub(1).mul(stiffnessUniform),
+          pow(density.div(restDensityUniform), 2.0).sub(1).mul(stiffnessUniform),
         ).toConst("pressure");
         const stress = mat3(
           pressure.negate(),
