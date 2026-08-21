@@ -95,6 +95,10 @@ export default function FluidLab() {
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
     const EPS_RELAX = 100.0; // λ 분모 relaxation
     const C_XSPH = 2.0; // XSPH 점성 계수 (속도 감쇠)
+    // 표면장력(s_corr): 표면 입자를 응집시켜 요동 억제 + 벽 코팅.
+    const SCORR_K = 0.0001; // 표면장력 강도
+    const DELTA_Q2 = (0.2 * H) ** 2; // (0.2·H)² 기준 거리²
+    const POLY6_DQ = POLY6 * (H2 - DELTA_Q2) ** 3; // poly6(ΔQ²)
     // coord 스케일 중력 (MLS-MPM 과 동일 스케일: 9.81²/gridSize)
     const GRAVITY = -(9.81 * 9.81) / 64;
 
@@ -407,7 +411,11 @@ export default function FluidLab() {
           const r = r2.sqrt();
           const lambdaJ = lambdaBuffer.element(j).toConst();
           const grad = spikyGrad(rij, r);
-          dp.addAssign(grad.mul(lambdaI.add(lambdaJ)));
+          // 표면장력 s_corr = −k (W(r)/W(ΔQ))⁴ (Macklin&Müller 식 13)
+          const ratio = poly6(r2).div(POLY6_DQ).toVar();
+          const r2c = ratio.mul(ratio);
+          const scorr = float(-SCORR_K).mul(r2c).mul(r2c);
+          dp.addAssign(grad.mul(lambdaI.add(lambdaJ).add(scorr)));
         });
         dp.divAssign(restDensityUniform);
         pi.addAssign(dp);
