@@ -553,8 +553,12 @@ export default function FluidLab() {
       renderer.setRenderTarget(blurRT);
       renderer.clear();
       blurQuad.render(renderer);
+      // 배경 HDR + 유리잔 렌더 → 그 위에 유체 표면(알파) 합성
       renderer.setRenderTarget(null);
+      renderer.render(scene, camera);
+      renderer.autoClear = false; // 배경을 지우지 않고 그 위에 합성
       surfaceQuad.render(renderer);
+      renderer.autoClear = true;
 
       // 디버그 로그: 속도·밀도·대류·볼 밖 입자 (MLS-MPM 여정에서 만든 지표)
       frameCount++;
@@ -708,11 +712,15 @@ export default function FluidLab() {
             float(1).sub(normal.dot(viewDir).max(0.0)),
             3.0,
           );
-          const wine = vec3(0.35, 0.04, 0.1);
-          outCol.assign(wine.add(vec3(fres.mul(0.6))));
+          const wine = vec3(0.28, 0.014, 0.05); // 진한 버건디
+          // 프레넬 하이라이트 (표면 가장자리 밝게)
+          outCol.assign(wine.add(vec3(0.9, 0.55, 0.65).mul(fres.mul(0.35))));
         });
-        return vec4(outCol, 1);
+        // 유체 픽셀만 불투명, 배경은 투명 → scene(배경+유리잔) 위에 합성
+        const alpha = dC.greaterThan(0.001).select(float(1), float(0));
+        return vec4(outCol, alpha);
       })();
+      surfaceQuad.material.transparent = true;
 
       setupParticles();
 
