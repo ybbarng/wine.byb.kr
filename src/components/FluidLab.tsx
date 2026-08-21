@@ -83,13 +83,6 @@ export default function FluidLab() {
       g2pKernelWorkgroupBuffer: any;
     let particleMesh: THREE.Mesh;
 
-    const mouseCoord = new THREE.Vector3();
-    const prevMouseCoord = new THREE.Vector3();
-    // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let mouseRayOriginUniform: any,
-      mouseRayDirectionUniform: any,
-      mouseForceUniform: any;
-
     const params = { particleCount: 8192 * 4 };
 
     function setupBuffers() {
@@ -126,9 +119,6 @@ export default function FluidLab() {
       dynamicViscosityUniform = uniform(0.1);
       dtUniform = uniform(1 / 60);
       gravityUniform = uniform(new THREE.Vector3(0, -(9.81 * 9.81), 0));
-      mouseRayOriginUniform = uniform(new THREE.Vector3(0, 0, 0));
-      mouseRayDirectionUniform = uniform(new THREE.Vector3(0, 0, 0));
-      mouseForceUniform = uniform(new THREE.Vector3(0, 0, 0));
     }
 
     function setupComputeShaders() {
@@ -432,12 +422,6 @@ export default function FluidLab() {
         particleBuffer.element(instanceIndex).get("C").assign(B.mul(4));
         particleVelocity.addAssign(gravityUniform.mul(dtUniform));
         particleVelocity.divAssign(gridSizeUniform);
-        // mouse interaction (원본)
-        const d = mouseRayDirectionUniform
-          .cross(particlePosition.sub(mouseRayOriginUniform))
-          .length();
-        const force = d.mul(3.0).oneMinus().max(0.0).pow(2);
-        particleVelocity.addAssign(mouseForceUniform.mul(force));
         particlePosition.addAssign(particleVelocity.mul(dtUniform));
         particlePosition.assign(
           clamp(
@@ -493,30 +477,11 @@ export default function FluidLab() {
       scene.add(particleMesh);
     }
 
-    function setupMouse() {
-      const raycaster = new THREE.Raycaster();
-      const raycastPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0));
-      const onMove = (event: PointerEvent) => {
-        const pointer = new THREE.Vector2(
-          (event.clientX / window.innerWidth) * 2 - 1,
-          -(event.clientY / window.innerHeight) * 2 + 1,
-        );
-        raycaster.setFromCamera(pointer, camera);
-        raycaster.ray.origin.x += 0.5;
-        raycaster.ray.origin.z += 0.5;
-        mouseRayOriginUniform.value.copy(raycaster.ray.origin);
-        mouseRayDirectionUniform.value.copy(raycaster.ray.direction);
-        raycaster.ray.intersectPlane(raycastPlane, mouseCoord);
-      };
-      renderer.domElement.addEventListener("pointermove", onMove);
-    }
-
     function setupParticles() {
       setupBuffers();
       setupUniforms();
       setupComputeShaders();
       setupMesh();
-      setupMouse();
     }
 
     function onWindowResize() {
@@ -529,15 +494,6 @@ export default function FluidLab() {
       timer.update();
       const deltaTime = THREE.MathUtils.clamp(timer.getDelta(), 0.00001, 1 / 60);
       dtUniform.value = deltaTime;
-      mouseForceUniform.value
-        .copy(mouseCoord)
-        .sub(prevMouseCoord)
-        .multiplyScalar(2);
-      const mouseForceLength = mouseForceUniform.value.length();
-      if (mouseForceLength > 0.3) {
-        mouseForceUniform.value.multiplyScalar(0.3 / mouseForceLength);
-      }
-      prevMouseCoord.copy(mouseCoord);
       renderer.compute(workgroupKernel);
       renderer.compute(clearGridKernel);
       renderer.compute(p2g1Kernel, p2g1KernelWorkgroupBuffer);
