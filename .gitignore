@@ -53,5 +53,4 @@ next-env.d.ts
 .claude/settings.local.json
 
 # 로컬 캡처/디버그 스크립트
-/shot.mjs
-/shot-bowl.mjs
+/shot*.mjs
