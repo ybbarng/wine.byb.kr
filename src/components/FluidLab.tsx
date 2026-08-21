@@ -667,7 +667,7 @@ export default function FluidLab() {
       const deltaTime = THREE.MathUtils.clamp(timer.getDelta(), 0.00001, 1 / 60);
       // 물리 substep: 한 프레임을 여러 작은 스텝으로 나눠 CFL 조건을 만족한다.
       // (한 스텝 이동이 셀 크기보다 작아야 벽을 건너뛰지 않는다)
-      const SUBSTEPS = 3;
+      const SUBSTEPS = 5;
       dtUniform.value = deltaTime / SUBSTEPS;
       renderer.compute(workgroupKernel);
       for (let s = 0; s < SUBSTEPS; s++) {
