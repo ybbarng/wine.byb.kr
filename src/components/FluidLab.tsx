@@ -695,8 +695,8 @@ export default function FluidLab() {
         If(dCen.greaterThan(0.001), () => {
           const sum = dCen.toVar();
           const wsum = float(1).toVar();
-          const R = 6;
-          const sigR2 = 2 * 0.04 * 0.04; // 깊이 차(range) 분산
+          const R = 10;
+          const sigR2 = 2 * 0.06 * 0.06; // 깊이 차(range) 분산 (넓혀 더 매끈)
           for (let i = -R; i <= R; i++) {
             for (let j = -R; j <= R; j++) {
               if (i === 0 && j === 0) continue;
@@ -738,12 +738,21 @@ export default function FluidLab() {
               depth.negate(),
             );
           };
-          const dR = texture(blurRT.texture, uv.add(vec2(texel.x, 0))).x;
-          const dU = texture(blurRT.texture, uv.add(vec2(0, texel.y))).x;
+          // 법선을 넓은 중앙 차분(S픽셀)으로 재구성 — 1픽셀 차분은 알갱이
+          // 요철을 그대로 드러내 슬러시처럼 보인다. 넓게 뜨면 저역통과돼 매끈.
+          const S = 3;
+          const oX = vec2(S * texel.x, 0);
+          const oY = vec2(0, S * texel.y);
+          const dRr = texture(blurRT.texture, uv.add(oX)).x;
+          const dLl = texture(blurRT.texture, uv.sub(oX)).x;
+          const dUu = texture(blurRT.texture, uv.add(oY)).x;
+          const dDd = texture(blurRT.texture, uv.sub(oY)).x;
+          const pR = vp(uv.add(oX), dRr);
+          const pL = vp(uv.sub(oX), dLl);
+          const pU = vp(uv.add(oY), dUu);
+          const pD = vp(uv.sub(oY), dDd);
           const pC = vp(uv, dC);
-          const pR = vp(uv.add(vec2(texel.x, 0)), dR);
-          const pU = vp(uv.add(vec2(0, texel.y)), dU);
-          const normal = normalize(cross(pR.sub(pC), pU.sub(pC)));
+          const normal = normalize(cross(pR.sub(pL), pU.sub(pD)));
           const viewDir = normalize(pC.negate());
           const fres = pow(
             float(1).sub(normal.dot(viewDir).max(0.0)),
