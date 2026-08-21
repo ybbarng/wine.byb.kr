@@ -586,7 +586,7 @@ export default function FluidLab() {
           .add(particleVelocity.mul(dtUniform).mul(2.0))
           .toConst("posNext");
         const posNextClamped = clampToBowl(posNext);
-        particleVelocity.addAssign(posNextClamped.sub(posNext).mul(3.0));
+        particleVelocity.addAssign(posNextClamped.sub(posNext).mul(0.0)); // 진단: 되돌림 끔
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
