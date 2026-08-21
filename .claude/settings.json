@@ -14,7 +14,18 @@
       "Bash(ls *)",
       "Bash(cat *)",
       "Bash(rg *)",
-      "Bash(chmod *)"
+      "Bash(chmod *)",
+      "Bash(sleep *)",
+      "Bash(open *)",
+      "Bash(curl *)",
+      "Bash(sed *)",
+      "Bash(grep *)",
+      "Bash(echo *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(find *)",
+      "Bash(pkill *)",
+      "Bash(true)"
     ]
   }
 }
