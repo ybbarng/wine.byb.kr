@@ -569,9 +569,10 @@ export default function FluidLab() {
         const posNextClamped = clampToBowl(posNext);
         particleVelocity.addAssign(posNextClamped.sub(posNext).mul(3.0));
 
-        // 점성·마찰: 속도를 매 프레임 조금씩 줄여 유체가 점점 안정되게 한다.
-        // (실제 물도 점성으로 결국 정지한다. 에너지 보존이라 계속 튀던 문제 해결)
-        particleVelocity.mulAssign(0.99);
+        // 난류 에너지 소산 근사: 속도를 매 프레임 ×0.95 로 줄인다.
+        // 실제 물은 난류로 에너지가 열로 흩어져 1~2초에 멈춘다. MLS-MPM 엔
+        // 그 소산이 거의 없어, ×0.99 로는 계속 튀었다. ×0.95(τ≈0.3s)로 강화.
+        particleVelocity.mulAssign(0.95);
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
