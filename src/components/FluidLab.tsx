@@ -103,7 +103,7 @@ export default function FluidLab() {
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
     const EPS_RELAX = 500.0; // λ 분모 relaxation (고중력 안정 설정)
-    const C_XSPH = 2.0; // XSPH 점성 계수 (속도 감쇠)
+    const C_XSPH = 0.2; // XSPH 점성 (낮춰 생동감 복원 — 튐·흐름 살림)
     // 표면장력(s_corr): 표면 입자를 응집시켜 요동 억제 + 벽 코팅.
     const SCORR_K = 0.00001; // 표면장력 (원래 3e-5 → 순환 완화·응집 유지 절충)
     const DELTA_Q2 = (0.2 * H) ** 2; // (0.2·H)² 기준 거리²
@@ -259,7 +259,7 @@ export default function FluidLab() {
       // 점성(substep당 속도 유지율). 실제 유체의 점성 소산 — 출렁임(슬로싱)이
       // 잦아들게 한다. 0.99는 약해서 낙하 종단속도(1.25)가 관측 낙하(0.44)보다
       // 훨씬 높아 낙하를 안 늦춘다(과거 0.9는 종단 0.125로 낙하를 깎았음).
-      viscUniform = uniform(0.99);
+      viscUniform = uniform(1.0); // 점성 감쇠 끔(생동감) — 정지는 EPS가 담당
     }
 
     function setupComputeShaders() {
