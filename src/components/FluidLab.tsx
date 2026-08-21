@@ -1,8 +1,9 @@
 "use client";
 
-import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
-import { useMemo } from "react";
-import { bilateralBlur } from "three/examples/jsm/tsl/display/BilateralBlurNode.js";
+import { useEffect, useRef } from "react";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { UltraHDRLoader } from "three/examples/jsm/loaders/UltraHDRLoader.js";
+import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import * as THREE from "three/webgpu";
 import {
   Fn,
@@ -13,10 +14,8 @@ import {
   atomicAdd,
   atomicLoad,
   atomicStore,
+  attribute,
   clamp,
-  cross,
-  dFdx,
-  dFdy,
   float,
   instanceIndex,
   instancedArray,
@@ -24,443 +23,611 @@ import {
   ivec3,
   mat3,
   max,
-  mix,
-  pass,
   pow,
-  positionLocal,
-  screenUV,
   step,
+  storage,
   struct,
   uniform,
-  vec2,
   vec3,
   vec4,
-  viewportSharedTexture,
 } from "three/tsl";
 
-extend(THREE as unknown as Record<string, unknown>);
+// three.js 공식 webgpu_compute_particles_fluid (r185)를 그대로 이식.
+// 색만 와인으로 바꾸고, 물리/렌더 로직은 원본 그대로 유지한다.
+// biome-ignore lint: 예제 원본 구조 유지
+export default function FluidLab() {
+  const ref = useRef<HTMLDivElement>(null);
 
-// three.js 공식 webgpu_compute_particles_fluid (MLS-MPM) 이식
-const GRID = 64;
-const CELL_COUNT = GRID * GRID * GRID;
-const PARTICLE_COUNT = 8192 * 24;
-const FP = 1e7; // fixed-point 배율 (WebGPU는 int atomic만)
+  useEffect(() => {
+    const container = ref.current;
+    if (!container) return;
 
-function Fluid() {
-  const { gl } = useThree();
+    // biome-ignore lint/suspicious/noExplicitAny: 예제 vanilla 이식
+    const A = THREE as any;
 
-  const built = useMemo(() => {
-    // 입자: position/velocity/C(affine)
-    const particleStruct = struct({
-      position: { type: "vec3" },
-      velocity: { type: "vec3" },
-      C: { type: "mat3" },
-    });
-    const PSIZE = 20; // vec3=4, mat3=12 (webgpu 정렬)
-    const parr = new Float32Array(PARTICLE_COUNT * PSIZE);
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      parr[i * PSIZE] = Math.random() * 0.8 + 0.1;
-      parr[i * PSIZE + 1] = Math.random() * 0.8 + 0.1;
-      parr[i * PSIZE + 2] = Math.random() * 0.8 + 0.1;
+    let renderer: THREE.WebGPURenderer;
+    let scene: THREE.Scene;
+    let camera: THREE.PerspectiveCamera;
+    let controls: OrbitControls;
+    let disposed = false;
+
+    const timer = new THREE.Timer();
+    timer.connect(document);
+
+    const maxParticles = 8192 * 16;
+    const gridSize1d = 64;
+    const workgroupSize = 64;
+    const gridSize = new THREE.Vector3(gridSize1d, gridSize1d, gridSize1d);
+    const fixedPointMultiplier = 1e7;
+
+    // biome-ignore lint/suspicious/noExplicitAny: TSL 노드 타입 생략
+    let particleCountUniform: any,
+      stiffnessUniform: any,
+      restDensityUniform: any,
+      dynamicViscosityUniform: any,
+      dtUniform: any,
+      gravityUniform: any,
+      gridSizeUniform: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let particleBuffer: any, cellBuffer: any, cellBufferFloat: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let clearGridKernel: any,
+      p2g1Kernel: any,
+      p2g2Kernel: any,
+      updateGridKernel: any,
+      g2pKernel: any,
+      workgroupKernel: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let p2g1KernelWorkgroupBuffer: any,
+      p2g2KernelWorkgroupBuffer: any,
+      g2pKernelWorkgroupBuffer: any;
+    let particleMesh: THREE.Mesh;
+
+    const mouseCoord = new THREE.Vector3();
+    const prevMouseCoord = new THREE.Vector3();
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let mouseRayOriginUniform: any,
+      mouseRayDirectionUniform: any,
+      mouseForceUniform: any;
+
+    const params = { particleCount: 8192 * 4 };
+
+    function setupBuffers() {
+      const particleStruct = struct({
+        position: { type: "vec3" },
+        velocity: { type: "vec3" },
+        C: { type: "mat3" },
+      });
+      const particleStructSize = 20;
+      const particleArray = new Float32Array(maxParticles * particleStructSize);
+      for (let i = 0; i < maxParticles; i++) {
+        particleArray[i * particleStructSize] = Math.random() * 0.8 + 0.1;
+        particleArray[i * particleStructSize + 1] = Math.random() * 0.8 + 0.1;
+        particleArray[i * particleStructSize + 2] = Math.random() * 0.8 + 0.1;
+      }
+      particleBuffer = instancedArray(particleArray, particleStruct);
+
+      const cellCount = gridSize.x * gridSize.y * gridSize.z;
+      const cellStruct = struct({
+        x: { type: "int", atomic: true },
+        y: { type: "int", atomic: true },
+        z: { type: "int", atomic: true },
+        mass: { type: "int", atomic: true },
+      });
+      cellBuffer = instancedArray(cellCount, cellStruct);
+      cellBufferFloat = instancedArray(cellCount, "vec4");
     }
-    const particleBuffer = instancedArray(parr, particleStruct);
 
-    const cellStruct = struct({
-      x: { type: "int", atomic: true },
-      y: { type: "int", atomic: true },
-      z: { type: "int", atomic: true },
-      mass: { type: "int", atomic: true },
-    });
-    const cellBuffer = instancedArray(CELL_COUNT, cellStruct);
-    const cellFloat = instancedArray(CELL_COUNT, "vec4");
+    function setupUniforms() {
+      gridSizeUniform = uniform(gridSize);
+      particleCountUniform = uniform(params.particleCount, "uint");
+      stiffnessUniform = uniform(50);
+      restDensityUniform = uniform(1.5);
+      dynamicViscosityUniform = uniform(0.1);
+      dtUniform = uniform(1 / 60);
+      gravityUniform = uniform(new THREE.Vector3(0, -(9.81 * 9.81), 0));
+      mouseRayOriginUniform = uniform(new THREE.Vector3(0, 0, 0));
+      mouseRayDirectionUniform = uniform(new THREE.Vector3(0, 0, 0));
+      mouseForceUniform = uniform(new THREE.Vector3(0, 0, 0));
+    }
 
-    const gridSizeU = uniform(new THREE.Vector3(GRID, GRID, GRID));
-    const stiffnessU = uniform(50);
-    const restDensityU = uniform(1.5);
-    const viscosityU = uniform(0.1);
-    const dtU = uniform(1 / 60);
-    const gravityU = uniform(new THREE.Vector3(0, -9.81 * 9.81, 0));
+    function setupComputeShaders() {
+      // biome-ignore lint/suspicious/noExplicitAny: TSL
+      const encodeFixedPoint = (f32: any) => int(f32.mul(fixedPointMultiplier));
+      // biome-ignore lint/suspicious/noExplicitAny: TSL
+      const decodeFixedPoint = (i32: any) => float(i32).div(fixedPointMultiplier);
 
-    const enc = (f: ReturnType<typeof float>) => int(f.mul(FP));
-    const dec = (i: ReturnType<typeof int>) => float(i).div(FP);
+      const cellCount = gridSize.x * gridSize.y * gridSize.z;
 
-    // B-spline 가중치 (공통)
-    const weightsOf = (gridPosition: ReturnType<typeof vec3>) => {
-      const cellDiff = gridPosition.fract().sub(0.5);
-      const w0 = float(0.5)
-        .mul(float(0.5).sub(cellDiff))
-        .mul(float(0.5).sub(cellDiff));
-      const w1 = float(0.75).sub(cellDiff.mul(cellDiff));
-      const w2 = float(0.5)
-        .mul(float(0.5).add(cellDiff))
-        .mul(float(0.5).add(cellDiff));
-      return array([w0, w1, w2]);
+      clearGridKernel = Fn(() => {
+        atomicStore(cellBuffer.element(instanceIndex).get("x"), 0);
+        atomicStore(cellBuffer.element(instanceIndex).get("y"), 0);
+        atomicStore(cellBuffer.element(instanceIndex).get("z"), 0);
+        atomicStore(cellBuffer.element(instanceIndex).get("mass"), 0);
+      })()
+        .compute(cellCount)
+        .setName("clearGridKernel");
+
+      p2g1Kernel = Fn(() => {
+        const particlePosition = particleBuffer
+          .element(instanceIndex)
+          .get("position")
+          .toConst("particlePosition");
+        const particleVelocity = particleBuffer
+          .element(instanceIndex)
+          .get("velocity")
+          .toConst("particleVelocity");
+        const C = particleBuffer.element(instanceIndex).get("C").toConst("C");
+        const gridPosition = particlePosition.mul(gridSizeUniform).toVar();
+        const cellIndex = ivec3(gridPosition).sub(1).toConst("cellIndex");
+        const cellDiff = gridPosition.fract().sub(0.5).toConst("cellDiff");
+        const w0 = float(0.5)
+          .mul(float(0.5).sub(cellDiff))
+          .mul(float(0.5).sub(cellDiff));
+        const w1 = float(0.75).sub(cellDiff.mul(cellDiff));
+        const w2 = float(0.5)
+          .mul(float(0.5).add(cellDiff))
+          .mul(float(0.5).add(cellDiff));
+        const weights = array([w0, w1, w2]).toConst("weights");
+        Loop(
+          { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
+          // biome-ignore lint/suspicious/noExplicitAny: TSL
+          ({ gx }: any) => {
+            Loop(
+              { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
+              // biome-ignore lint/suspicious/noExplicitAny: TSL
+              ({ gy }: any) => {
+                Loop(
+                  { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
+                  // biome-ignore lint/suspicious/noExplicitAny: TSL
+                  ({ gz }: any) => {
+                    const weight = weights
+                      .element(gx)
+                      .x.mul(weights.element(gy).y)
+                      .mul(weights.element(gz).z);
+                    const cellX = cellIndex.add(ivec3(gx, gy, gz)).toConst();
+                    const cellDist = vec3(cellX)
+                      .add(0.5)
+                      .sub(gridPosition)
+                      .toConst("cellDist");
+                    const Q = C.mul(cellDist);
+                    const massContrib = weight;
+                    const velContrib = massContrib
+                      .mul(particleVelocity.add(Q))
+                      .toConst("velContrib");
+                    const cellPtr = cellX.x
+                      .mul(int(gridSize.y * gridSize.z))
+                      .add(cellX.y.mul(int(gridSize.z)))
+                      .add(cellX.z)
+                      .toConst();
+                    const cell = cellBuffer.element(cellPtr);
+                    atomicAdd(cell.get("x"), encodeFixedPoint(velContrib.x));
+                    atomicAdd(cell.get("y"), encodeFixedPoint(velContrib.y));
+                    atomicAdd(cell.get("z"), encodeFixedPoint(velContrib.z));
+                    atomicAdd(cell.get("mass"), encodeFixedPoint(massContrib));
+                  },
+                );
+              },
+            );
+          },
+        );
+      })()
+        .compute(params.particleCount, [workgroupSize, 1, 1])
+        .setName("p2g1Kernel");
+
+      p2g2Kernel = Fn(() => {
+        const particlePosition = particleBuffer
+          .element(instanceIndex)
+          .get("position")
+          .toConst("particlePosition");
+        const gridPosition = particlePosition.mul(gridSizeUniform).toVar();
+        const cellIndex = ivec3(gridPosition).sub(1).toConst("cellIndex");
+        const cellDiff = gridPosition.fract().sub(0.5).toConst("cellDiff");
+        const w0 = float(0.5)
+          .mul(float(0.5).sub(cellDiff))
+          .mul(float(0.5).sub(cellDiff));
+        const w1 = float(0.75).sub(cellDiff.mul(cellDiff));
+        const w2 = float(0.5)
+          .mul(float(0.5).add(cellDiff))
+          .mul(float(0.5).add(cellDiff));
+        const weights = array([w0, w1, w2]).toConst("weights");
+        const density = float(0).toVar("density");
+        Loop(
+          { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
+          // biome-ignore lint/suspicious/noExplicitAny: TSL
+          ({ gx }: any) => {
+            Loop(
+              { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
+              // biome-ignore lint/suspicious/noExplicitAny: TSL
+              ({ gy }: any) => {
+                Loop(
+                  { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
+                  // biome-ignore lint/suspicious/noExplicitAny: TSL
+                  ({ gz }: any) => {
+                    const weight = weights
+                      .element(gx)
+                      .x.mul(weights.element(gy).y)
+                      .mul(weights.element(gz).z);
+                    const cellX = cellIndex.add(ivec3(gx, gy, gz)).toConst();
+                    const cellPtr = cellX.x
+                      .mul(int(gridSize.y * gridSize.z))
+                      .add(cellX.y.mul(int(gridSize.z)))
+                      .add(cellX.z)
+                      .toConst();
+                    const cell = cellBuffer.element(cellPtr);
+                    const mass = decodeFixedPoint(atomicLoad(cell.get("mass")));
+                    density.addAssign(mass.mul(weight));
+                  },
+                );
+              },
+            );
+          },
+        );
+        const volume = float(1).div(density);
+        const pressure = max(
+          0.0,
+          pow(density.div(restDensityUniform), 5.0).sub(1).mul(stiffnessUniform),
+        ).toConst("pressure");
+        const stress = mat3(
+          pressure.negate(),
+          0,
+          0,
+          0,
+          pressure.negate(),
+          0,
+          0,
+          0,
+          pressure.negate(),
+        ).toVar("stress");
+        const dudv = particleBuffer.element(instanceIndex).get("C").toConst("C");
+        const strain = dudv.add(dudv.transpose());
+        stress.addAssign(strain.mul(dynamicViscosityUniform));
+        const eq16Term0 = volume.mul(-4).mul(stress).mul(dtUniform);
+        Loop(
+          { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
+          // biome-ignore lint/suspicious/noExplicitAny: TSL
+          ({ gx }: any) => {
+            Loop(
+              { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
+              // biome-ignore lint/suspicious/noExplicitAny: TSL
+              ({ gy }: any) => {
+                Loop(
+                  { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
+                  // biome-ignore lint/suspicious/noExplicitAny: TSL
+                  ({ gz }: any) => {
+                    const weight = weights
+                      .element(gx)
+                      .x.mul(weights.element(gy).y)
+                      .mul(weights.element(gz).z);
+                    const cellX = cellIndex.add(ivec3(gx, gy, gz)).toConst();
+                    const cellDist = vec3(cellX)
+                      .add(0.5)
+                      .sub(gridPosition)
+                      .toConst("cellDist");
+                    const momentum = eq16Term0
+                      .mul(weight)
+                      .mul(cellDist)
+                      .toConst("momentum");
+                    const cellPtr = cellX.x
+                      .mul(int(gridSize.y * gridSize.z))
+                      .add(cellX.y.mul(int(gridSize.z)))
+                      .add(cellX.z)
+                      .toConst();
+                    const cell = cellBuffer.element(cellPtr);
+                    atomicAdd(cell.get("x"), encodeFixedPoint(momentum.x));
+                    atomicAdd(cell.get("y"), encodeFixedPoint(momentum.y));
+                    atomicAdd(cell.get("z"), encodeFixedPoint(momentum.z));
+                  },
+                );
+              },
+            );
+          },
+        );
+      })()
+        .compute(params.particleCount, [workgroupSize, 1, 1])
+        .setName("p2g2Kernel");
+
+      updateGridKernel = Fn(() => {
+        const cell = cellBuffer.element(instanceIndex);
+        const mass = decodeFixedPoint(atomicLoad(cell.get("mass"))).toConst();
+        If(mass.lessThanEqual(0), () => {
+          Return();
+        });
+        const vx = decodeFixedPoint(atomicLoad(cell.get("x"))).div(mass).toVar();
+        const vy = decodeFixedPoint(atomicLoad(cell.get("y"))).div(mass).toVar();
+        const vz = decodeFixedPoint(atomicLoad(cell.get("z"))).div(mass).toVar();
+        const x = int(instanceIndex).div(int(gridSize.z * gridSize.y));
+        const y = int(instanceIndex).div(int(gridSize.z)).mod(int(gridSize.y));
+        const z = int(instanceIndex).mod(int(gridSize.z));
+        If(x.lessThan(int(1)).or(x.greaterThan(int(gridSize.x).sub(int(2)))), () => {
+          vx.assign(0);
+        });
+        If(y.lessThan(int(1)).or(y.greaterThan(int(gridSize.y).sub(int(2)))), () => {
+          vy.assign(0);
+        });
+        If(z.lessThan(int(1)).or(z.greaterThan(int(gridSize.z).sub(int(2)))), () => {
+          vz.assign(0);
+        });
+        cellBufferFloat.element(instanceIndex).assign(vec4(vx, vy, vz, mass));
+      })()
+        .compute(cellCount)
+        .setName("updateGridKernel");
+
+      // biome-ignore lint/suspicious/noExplicitAny: TSL
+      const clampToRoundedBox = (pos: any, box: any, radius: any) => {
+        const result = pos.sub(0.5).toVar();
+        const pp = step(box, result.abs()).mul(
+          result.add(box.negate().mul(result.sign())),
+        );
+        const ppLen = pp.length().toVar();
+        const dist = ppLen.sub(radius);
+        If(dist.greaterThan(0.0), () => {
+          result.subAssign(pp.normalize().mul(dist).mul(1.3));
+        });
+        result.addAssign(0.5);
+        return result;
+      };
+
+      g2pKernel = Fn(() => {
+        const particlePosition = particleBuffer
+          .element(instanceIndex)
+          .get("position")
+          .toVar("particlePosition");
+        const gridPosition = particlePosition.mul(gridSizeUniform).toVar();
+        const particleVelocity = vec3(0).toVar();
+        const cellIndex = ivec3(gridPosition).sub(1).toConst("cellIndex");
+        const cellDiff = gridPosition.fract().sub(0.5).toConst("cellDiff");
+        const w0 = float(0.5)
+          .mul(float(0.5).sub(cellDiff))
+          .mul(float(0.5).sub(cellDiff));
+        const w1 = float(0.75).sub(cellDiff.mul(cellDiff));
+        const w2 = float(0.5)
+          .mul(float(0.5).add(cellDiff))
+          .mul(float(0.5).add(cellDiff));
+        const weights = array([w0, w1, w2]).toConst("weights");
+        const B = mat3(0).toVar("B");
+        Loop(
+          { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
+          // biome-ignore lint/suspicious/noExplicitAny: TSL
+          ({ gx }: any) => {
+            Loop(
+              { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
+              // biome-ignore lint/suspicious/noExplicitAny: TSL
+              ({ gy }: any) => {
+                Loop(
+                  { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
+                  // biome-ignore lint/suspicious/noExplicitAny: TSL
+                  ({ gz }: any) => {
+                    const weight = weights
+                      .element(gx)
+                      .x.mul(weights.element(gy).y)
+                      .mul(weights.element(gz).z);
+                    const cellX = cellIndex.add(ivec3(gx, gy, gz)).toConst();
+                    const cellDist = vec3(cellX)
+                      .add(0.5)
+                      .sub(gridPosition)
+                      .toConst("cellDist");
+                    const cellPtr = cellX.x
+                      .mul(int(gridSize.y * gridSize.z))
+                      .add(cellX.y.mul(int(gridSize.z)))
+                      .add(cellX.z)
+                      .toConst();
+                    const weightedVelocity = cellBufferFloat
+                      .element(cellPtr)
+                      .xyz.mul(weight)
+                      .toConst("weightedVelocity");
+                    const term = mat3(
+                      weightedVelocity.mul(cellDist.x),
+                      weightedVelocity.mul(cellDist.y),
+                      weightedVelocity.mul(cellDist.z),
+                    );
+                    B.addAssign(term);
+                    particleVelocity.addAssign(weightedVelocity);
+                  },
+                );
+              },
+            );
+          },
+        );
+        particleBuffer.element(instanceIndex).get("C").assign(B.mul(4));
+        particleVelocity.addAssign(gravityUniform.mul(dtUniform));
+        particleVelocity.divAssign(gridSizeUniform);
+        // mouse interaction (원본)
+        const d = mouseRayDirectionUniform
+          .cross(particlePosition.sub(mouseRayOriginUniform))
+          .length();
+        const force = d.mul(3.0).oneMinus().max(0.0).pow(2);
+        particleVelocity.addAssign(mouseForceUniform.mul(force));
+        particlePosition.addAssign(particleVelocity.mul(dtUniform));
+        particlePosition.assign(
+          clamp(
+            particlePosition,
+            vec3(1).div(gridSizeUniform),
+            vec3(gridSize).sub(1).div(gridSizeUniform),
+          ),
+        );
+        // add force for particles to stay within rounded box
+        const innerBox = gridSizeUniform
+          .mul(0.5)
+          .sub(9.0)
+          .div(gridSizeUniform)
+          .toVar();
+        const innerRadius = float(6.0).div(gridSizeUniform.x);
+        const posNext = particlePosition
+          .add(particleVelocity.mul(dtUniform).mul(2.0))
+          .toConst("posNext");
+        const posNextClamped = clampToRoundedBox(posNext, innerBox, innerRadius);
+        particleVelocity.addAssign(posNextClamped.sub(posNext));
+
+        // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
+        particleVelocity.mulAssign(gridSizeUniform);
+        particleBuffer
+          .element(instanceIndex)
+          .get("position")
+          .assign(particlePosition);
+        particleBuffer
+          .element(instanceIndex)
+          .get("velocity")
+          .assign(particleVelocity);
+      })()
+        .compute(params.particleCount, [workgroupSize, 1, 1])
+        .setName("g2pKernel");
+    }
+
+    function setupMesh() {
+      const geometry = BufferGeometryUtils.mergeVertices(
+        new THREE.IcosahedronGeometry(0.008, 1).deleteAttribute("uv"),
+      );
+      const material = new A.MeshStandardNodeMaterial({ color: "#8a0f2a" });
+      material.positionNode = Fn(() => {
+        const particlePosition = particleBuffer
+          .element(instanceIndex)
+          .get("position");
+        return attribute("position").add(particlePosition);
+      })();
+      particleMesh = new THREE.Mesh(geometry, material);
+      // biome-ignore lint/suspicious/noExplicitAny: mesh.count
+      (particleMesh as any).count = params.particleCount;
+      particleMesh.position.set(-0.5, 0, -0.5);
+      particleMesh.frustumCulled = false;
+      scene.add(particleMesh);
+    }
+
+    function setupMouse() {
+      const raycaster = new THREE.Raycaster();
+      const raycastPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0));
+      const onMove = (event: PointerEvent) => {
+        const pointer = new THREE.Vector2(
+          (event.clientX / window.innerWidth) * 2 - 1,
+          -(event.clientY / window.innerHeight) * 2 + 1,
+        );
+        raycaster.setFromCamera(pointer, camera);
+        raycaster.ray.origin.x += 0.5;
+        raycaster.ray.origin.z += 0.5;
+        mouseRayOriginUniform.value.copy(raycaster.ray.origin);
+        mouseRayDirectionUniform.value.copy(raycaster.ray.direction);
+        raycaster.ray.intersectPlane(raycastPlane, mouseCoord);
+      };
+      renderer.domElement.addEventListener("pointermove", onMove);
+    }
+
+    function setupParticles() {
+      setupBuffers();
+      setupUniforms();
+      setupComputeShaders();
+      setupMesh();
+      setupMouse();
+    }
+
+    function onWindowResize() {
+      camera.aspect = container!.clientWidth / container!.clientHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(container!.clientWidth, container!.clientHeight);
+    }
+
+    async function render() {
+      timer.update();
+      const deltaTime = THREE.MathUtils.clamp(timer.getDelta(), 0.00001, 1 / 60);
+      dtUniform.value = deltaTime;
+      mouseForceUniform.value
+        .copy(mouseCoord)
+        .sub(prevMouseCoord)
+        .multiplyScalar(2);
+      const mouseForceLength = mouseForceUniform.value.length();
+      if (mouseForceLength > 0.3) {
+        mouseForceUniform.value.multiplyScalar(0.3 / mouseForceLength);
+      }
+      prevMouseCoord.copy(mouseCoord);
+      renderer.compute(workgroupKernel);
+      renderer.compute(clearGridKernel);
+      renderer.compute(p2g1Kernel, p2g1KernelWorkgroupBuffer);
+      renderer.compute(p2g2Kernel, p2g2KernelWorkgroupBuffer);
+      renderer.compute(updateGridKernel);
+      renderer.compute(g2pKernel, g2pKernelWorkgroupBuffer);
+      renderer.render(scene, camera);
+    }
+
+    async function init() {
+      renderer = new THREE.WebGPURenderer({
+        antialias: true,
+        requiredLimits: { maxStorageBuffersInVertexStage: 1 },
+      });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.35;
+      container.appendChild(renderer.domElement);
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(
+        40,
+        container.clientWidth / container.clientHeight,
+        0.01,
+        10,
+      );
+      camera.position.set(-1.3, 1.3, -1.3);
+
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.minDistance = 1;
+      controls.maxDistance = 3;
+      controls.maxPolarAngle = Math.PI * 0.35;
+
+      const hdrLoader = new UltraHDRLoader().setPath(
+        "/textures/equirectangular/",
+      );
+      const hdrTexture = await hdrLoader.loadAsync("royal_esplanade_2k.hdr.jpg");
+      hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+      scene.background = hdrTexture;
+      scene.backgroundBlurriness = 0.5;
+      scene.environment = hdrTexture;
+
+      setupParticles();
+
+      const numWorkgroups = Math.ceil(params.particleCount / workgroupSize);
+      p2g1KernelWorkgroupBuffer = new A.IndirectStorageBufferAttribute(
+        new Uint32Array([numWorkgroups, 1, 1]),
+        1,
+      );
+      p2g2KernelWorkgroupBuffer = new A.IndirectStorageBufferAttribute(
+        new Uint32Array([numWorkgroups, 1, 1]),
+        1,
+      );
+      g2pKernelWorkgroupBuffer = new A.IndirectStorageBufferAttribute(
+        new Uint32Array([numWorkgroups, 1, 1]),
+        1,
+      );
+      const p2g1WorkgroupStorage = storage(p2g1KernelWorkgroupBuffer, "uint", 3);
+      const p2g2WorkgroupStorage = storage(p2g2KernelWorkgroupBuffer, "uint", 3);
+      const g2pWorkgroupStorage = storage(g2pKernelWorkgroupBuffer, "uint", 3);
+      workgroupKernel = Fn(() => {
+        const workgroupsToDispatch = particleCountUniform
+          .sub(1)
+          .div(workgroupSize)
+          .add(1);
+        p2g1WorkgroupStorage.element(0).assign(workgroupsToDispatch);
+        p2g2WorkgroupStorage.element(0).assign(workgroupsToDispatch);
+        g2pWorkgroupStorage.element(0).assign(workgroupsToDispatch);
+      })().compute(1);
+
+      window.addEventListener("resize", onWindowResize);
+      controls.update();
+      if (!disposed) renderer.setAnimationLoop(render);
+    }
+
+    init();
+
+    return () => {
+      disposed = true;
+      window.removeEventListener("resize", onWindowResize);
+      if (renderer) {
+        renderer.setAnimationLoop(null);
+        renderer.dispose();
+        if (renderer.domElement.parentNode) {
+          renderer.domElement.parentNode.removeChild(renderer.domElement);
+        }
+      }
     };
-
-    const clearK = Fn(() => {
-      atomicStore(cellBuffer.element(instanceIndex).get("x"), 0);
-      atomicStore(cellBuffer.element(instanceIndex).get("y"), 0);
-      atomicStore(cellBuffer.element(instanceIndex).get("z"), 0);
-      atomicStore(cellBuffer.element(instanceIndex).get("mass"), 0);
-    })().compute(CELL_COUNT);
-
-    const p2g1K = Fn(() => {
-      const pos = particleBuffer.element(instanceIndex).get("position");
-      const vel = particleBuffer.element(instanceIndex).get("velocity");
-      const C = particleBuffer.element(instanceIndex).get("C");
-      const gridPosition = pos.mul(gridSizeU).toVar();
-      const cellIndex = ivec3(gridPosition).sub(1).toConst();
-      const weights = weightsOf(gridPosition).toConst();
-
-      Loop(
-        { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
-        ({ gx }: { gx: unknown }) => {
-          Loop(
-            { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
-            ({ gy }: { gy: unknown }) => {
-              Loop(
-                { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
-                ({ gz }: { gz: unknown }) => {
-                  const weight = weights
-                    .element(gx as never)
-                    .x.mul(weights.element(gy as never).y)
-                    .mul(weights.element(gz as never).z);
-                  const cellX = cellIndex
-                    .add(ivec3(gx as never, gy as never, gz as never))
-                    .toConst();
-                  const cellDist = vec3(cellX)
-                    .add(0.5)
-                    .sub(gridPosition)
-                    .toConst();
-                  const Q = C.mul(cellDist);
-                  const velContrib = weight.mul(vel.add(Q)).toConst();
-                  const cellPtr = cellX.x
-                    .mul(int(GRID * GRID))
-                    .add(cellX.y.mul(int(GRID)))
-                    .add(cellX.z)
-                    .toConst();
-                  const cell = cellBuffer.element(cellPtr);
-                  atomicAdd(cell.get("x"), enc(velContrib.x));
-                  atomicAdd(cell.get("y"), enc(velContrib.y));
-                  atomicAdd(cell.get("z"), enc(velContrib.z));
-                  atomicAdd(cell.get("mass"), enc(weight));
-                },
-              );
-            },
-          );
-        },
-      );
-    })().compute(PARTICLE_COUNT);
-
-    const p2g2K = Fn(() => {
-      const pos = particleBuffer.element(instanceIndex).get("position");
-      const gridPosition = pos.mul(gridSizeU).toVar();
-      const cellIndex = ivec3(gridPosition).sub(1).toConst();
-      const weights = weightsOf(gridPosition).toConst();
-
-      const density = float(0).toVar();
-      Loop(
-        { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
-        ({ gx }: { gx: unknown }) => {
-          Loop(
-            { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
-            ({ gy }: { gy: unknown }) => {
-              Loop(
-                { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
-                ({ gz }: { gz: unknown }) => {
-                  const weight = weights
-                    .element(gx as never)
-                    .x.mul(weights.element(gy as never).y)
-                    .mul(weights.element(gz as never).z);
-                  const cellX = cellIndex
-                    .add(ivec3(gx as never, gy as never, gz as never))
-                    .toConst();
-                  const cellPtr = cellX.x
-                    .mul(int(GRID * GRID))
-                    .add(cellX.y.mul(int(GRID)))
-                    .add(cellX.z)
-                    .toConst();
-                  const mass = dec(
-                    atomicLoad(cellBuffer.element(cellPtr).get("mass")),
-                  );
-                  density.addAssign(mass.mul(weight));
-                },
-              );
-            },
-          );
-        },
-      );
-
-      const volume = float(1).div(density);
-      const pressure = max(
-        0.0,
-        pow(density.div(restDensityU), 5.0).sub(1).mul(stiffnessU),
-      ).toConst();
-      const stress = mat3(
-        pressure.negate(),
-        0,
-        0,
-        0,
-        pressure.negate(),
-        0,
-        0,
-        0,
-        pressure.negate(),
-      ).toVar();
-      const C = particleBuffer.element(instanceIndex).get("C");
-      const strain = C.add(C.transpose());
-      stress.addAssign(strain.mul(viscosityU));
-      const eq16 = volume.mul(-4).mul(stress).mul(dtU);
-
-      Loop(
-        { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
-        ({ gx }: { gx: unknown }) => {
-          Loop(
-            { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
-            ({ gy }: { gy: unknown }) => {
-              Loop(
-                { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
-                ({ gz }: { gz: unknown }) => {
-                  const weight = weights
-                    .element(gx as never)
-                    .x.mul(weights.element(gy as never).y)
-                    .mul(weights.element(gz as never).z);
-                  const cellX = cellIndex
-                    .add(ivec3(gx as never, gy as never, gz as never))
-                    .toConst();
-                  const cellDist = vec3(cellX)
-                    .add(0.5)
-                    .sub(gridPosition)
-                    .toConst();
-                  const momentum = eq16.mul(weight).mul(cellDist).toConst();
-                  const cellPtr = cellX.x
-                    .mul(int(GRID * GRID))
-                    .add(cellX.y.mul(int(GRID)))
-                    .add(cellX.z)
-                    .toConst();
-                  const cell = cellBuffer.element(cellPtr);
-                  atomicAdd(cell.get("x"), enc(momentum.x));
-                  atomicAdd(cell.get("y"), enc(momentum.y));
-                  atomicAdd(cell.get("z"), enc(momentum.z));
-                },
-              );
-            },
-          );
-        },
-      );
-    })().compute(PARTICLE_COUNT);
-
-    const updateGridK = Fn(() => {
-      const cell = cellBuffer.element(instanceIndex);
-      const mass = dec(atomicLoad(cell.get("mass"))).toConst();
-      If(mass.lessThanEqual(0), () => {
-        Return();
-      });
-      const vx = dec(atomicLoad(cell.get("x"))).div(mass).toVar();
-      const vy = dec(atomicLoad(cell.get("y"))).div(mass).toVar();
-      const vz = dec(atomicLoad(cell.get("z"))).div(mass).toVar();
-      const x = int(instanceIndex).div(int(GRID * GRID));
-      const y = int(instanceIndex).div(int(GRID)).mod(int(GRID));
-      const z = int(instanceIndex).mod(int(GRID));
-      If(x.lessThan(int(1)).or(x.greaterThan(int(GRID - 2))), () => {
-        vx.assign(0);
-      });
-      If(y.lessThan(int(1)).or(y.greaterThan(int(GRID - 2))), () => {
-        vy.assign(0);
-      });
-      If(z.lessThan(int(1)).or(z.greaterThan(int(GRID - 2))), () => {
-        vz.assign(0);
-      });
-      cellFloat.element(instanceIndex).assign(vec4(vx, vy, vz, mass));
-    })().compute(CELL_COUNT);
-
-    const clampToRoundedBox = (
-      pos: ReturnType<typeof vec3>,
-      box: ReturnType<typeof vec3>,
-      radius: ReturnType<typeof float>,
-    ) => {
-      const result = pos.sub(0.5).toVar();
-      const pp = step(box, result.abs()).mul(
-        result.add(box.negate().mul(result.sign())),
-      );
-      const ppLen = pp.length().toVar();
-      const dist = ppLen.sub(radius);
-      If(dist.greaterThan(0.0), () => {
-        result.subAssign(pp.normalize().mul(dist).mul(1.3));
-      });
-      result.addAssign(0.5);
-      return result;
-    };
-
-    const g2pK = Fn(() => {
-      const pos = particleBuffer
-        .element(instanceIndex)
-        .get("position")
-        .toVar();
-      const gridPosition = pos.mul(gridSizeU).toVar();
-      const vel = vec3(0).toVar();
-      const cellIndex = ivec3(gridPosition).sub(1).toConst();
-      const weights = weightsOf(gridPosition).toConst();
-
-      const B = mat3(0).toVar();
-      Loop(
-        { start: 0, end: 3, type: "int", name: "gx", condition: "<" },
-        ({ gx }: { gx: unknown }) => {
-          Loop(
-            { start: 0, end: 3, type: "int", name: "gy", condition: "<" },
-            ({ gy }: { gy: unknown }) => {
-              Loop(
-                { start: 0, end: 3, type: "int", name: "gz", condition: "<" },
-                ({ gz }: { gz: unknown }) => {
-                  const weight = weights
-                    .element(gx as never)
-                    .x.mul(weights.element(gy as never).y)
-                    .mul(weights.element(gz as never).z);
-                  const cellX = cellIndex
-                    .add(ivec3(gx as never, gy as never, gz as never))
-                    .toConst();
-                  const cellDist = vec3(cellX)
-                    .add(0.5)
-                    .sub(gridPosition)
-                    .toConst();
-                  const cellPtr = cellX.x
-                    .mul(int(GRID * GRID))
-                    .add(cellX.y.mul(int(GRID)))
-                    .add(cellX.z)
-                    .toConst();
-                  const wv = cellFloat.element(cellPtr).xyz.mul(weight).toConst();
-                  const term = mat3(
-                    wv.mul(cellDist.x),
-                    wv.mul(cellDist.y),
-                    wv.mul(cellDist.z),
-                  );
-                  B.addAssign(term);
-                  vel.addAssign(wv);
-                },
-              );
-            },
-          );
-        },
-      );
-
-      particleBuffer.element(instanceIndex).get("C").assign(B.mul(4));
-      vel.addAssign(gravityU.mul(dtU));
-      vel.divAssign(gridSizeU);
-      pos.addAssign(vel.mul(dtU));
-      pos.assign(
-        clamp(
-          pos,
-          vec3(1).div(gridSizeU),
-          vec3(GRID, GRID, GRID).sub(1).div(gridSizeU),
-        ),
-      );
-      // 원통(잔 대용) 경계: 중심축 y, 반지름 0.4, 바닥 0.08
-      const cxz = pos.xz.sub(0.5).toVar();
-      const rr = cxz.length().toVar();
-      If(rr.greaterThan(0.4), () => {
-        const nn = cxz.div(rr).mul(0.4);
-        pos.x.assign(nn.x.add(0.5));
-        pos.z.assign(nn.y.add(0.5));
-      });
-      If(pos.y.lessThan(0.08), () => {
-        pos.y.assign(0.08);
-      });
-
-      // 예제 g2p 의 마지막: 속도를 grid 스케일로 되돌려 저장 (이식에서 빠뜨렸던 핵심)
-      vel.mulAssign(gridSizeU);
-      particleBuffer.element(instanceIndex).get("position").assign(pos);
-      particleBuffer.element(instanceIndex).get("velocity").assign(vel);
-    })().compute(PARTICLE_COUNT);
-
-    // 렌더: 아주 작은 구 인스턴스
-    const geo = new THREE.IcosahedronGeometry(0.006, 1);
-    const material = new THREE.MeshStandardNodeMaterial();
-    material.colorNode = vec3(0.55, 0.06, 0.16);
-    material.roughness = 0.3;
-    material.metalness = 0.0;
-    material.positionNode = positionLocal.add(
-      particleBuffer.element(instanceIndex).get("position"),
-    );
-    const mesh = new THREE.InstancedMesh(geo, material, PARTICLE_COUNT);
-    mesh.frustumCulled = false;
-
-    return { mesh, clearK, p2g1K, p2g2K, updateGridK, g2pK, dtU };
   }, []);
 
-  useFrame(() => {
-    // 예제와 동일하게 dt 고정(1/60) — 물리 거동을 그대로 유지
-    built.dtU.value = 1 / 60;
-    gl.compute(built.clearK);
-    gl.compute(built.p2g1K);
-    gl.compute(built.p2g2K);
-    gl.compute(built.updateGridK);
-    gl.compute(built.g2pK);
-  });
-
-  return <primitive object={built.mesh} />;
-}
-
-// SSFR: 입자 깊이 → 블러 → 법선 재구성 → 셰이딩 (개별 입자를 매끈한 표면으로)
-function PostFX() {
-  const { gl, scene, camera } = useThree();
-  const post = useMemo(() => {
-    const p = new THREE.PostProcessing(gl as unknown as THREE.WebGPURenderer);
-    const scenePass = pass(scene, camera);
-    // Bilateral 2패스(가로→세로): 개별 입자를 녹이되 실루엣은 지킨다
-    const ld = scenePass.getLinearDepthNode();
-    const bH = bilateralBlur(ld, vec2(1, 0), 16, 0.5);
-    const depth = bilateralBlur(bH, vec2(0, 1), 16, 0.5).x;
-
-    const dx = dFdx(depth);
-    const dy = dFdy(depth);
-    // 가장자리에서 깊이 기울기가 폭발하면 하이라이트가 세로선으로 튄다.
-    // 기울기를 clamp 해 법선을 완만하게 유지한다.
-    const gx = dx.mul(-40.0).clamp(-1.0, 1.0);
-    const gy = dy.mul(-40.0).clamp(-1.0, 1.0);
-    const normal = vec3(gx, gy, float(1.0)).normalize();
-
-    const lightDir = vec3(0.4, 0.85, 0.5).normalize();
-    const diff = normal.dot(lightDir).max(0.0).mul(0.5).add(0.55);
-    const halfV = lightDir.add(vec3(0.0, 0.0, 1.0)).normalize();
-    // 가장자리(정면을 안 보는 곳)에서는 하이라이트를 억제(normal.z 로 마스크)
-    const edgeMask = normal.z.clamp(0.0, 1.0).pow(6.0);
-    const spec = normal.dot(halfV).max(0.0).pow(80.0).mul(0.4).mul(edgeMask);
-
-    const wine = vec3(0.46, 0.06, 0.14);
-    // 굴절: 법선만큼 배경을 왜곡해 샘플 → 뒤가 비치는 투명한 와인
-    const refr = viewportSharedTexture(screenUV.add(normal.xy.mul(0.06))).rgb;
-    const body = mix(refr.mul(1.1), wine.mul(diff), 0.55).add(spec);
-
-    const bg = vec3(0.1, 0.02, 0.06);
-    p.outputNode = mix(bg, body, step(depth, 0.985));
-    return p;
-  }, [gl, scene, camera]);
-
-  useFrame(() => {
-    (post as unknown as { render: () => void }).render();
-  }, 1);
-
-  return null;
-}
-
-export default function FluidLab() {
-  return (
-    <Canvas
-      camera={{ position: [1.6, 1.1, 1.6], fov: 40 }}
-      gl={async (props) => {
-        const renderer = new THREE.WebGPURenderer({
-          ...(props as object),
-          requiredLimits: { maxStorageBuffersInVertexStage: 1 },
-        } as unknown as ConstructorParameters<typeof THREE.WebGPURenderer>[0]);
-        await renderer.init();
-        return renderer;
-      }}
-      onCreated={({ camera }) => camera.lookAt(0.5, 0.4, 0.5)}
-    >
-      <color attach="background" args={["#1a0510"]} />
-      <ambientLight intensity={0.6} />
-      <directionalLight position={[2, 4, 2]} intensity={2.5} />
-      <Fluid />
-    </Canvas>
-  );
+  return <div ref={ref} style={{ width: "100vw", height: "100vh" }} />;
 }
