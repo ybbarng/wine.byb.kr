@@ -240,6 +240,29 @@ export default function FluidLab() {
 
       const cellCount = gridSize.x * gridSize.y * gridSize.z;
 
+      // 잔 볼 내벽 안에 좌표를 가두는 헬퍼 (여러 커널에서 공용).
+      // coord y 로 볼 내벽 반경 다항식(잔 데이터에서 fit)을 Horner 로 평가하고,
+      // 그 반경을 넘는 (x,z) 초과분을 안으로 되돌린 좌표를 반환한다.
+      // biome-ignore lint/suspicious/noExplicitAny: TSL
+      const clampToBowl = (p: any) => {
+        const result = p.toVar();
+        const dx = p.x.sub(0.5).toVar();
+        const dz = p.z.sub(0.5).toVar();
+        const r = dx.mul(dx).add(dz.mul(dz)).sqrt().max(1e-5).toVar();
+        const cy = clamp(p.y, 0.0, 1.0).toVar();
+        const coordRMax = bowlCoefU[POLY_DEG].toVar();
+        for (let k = POLY_DEG - 1; k >= 0; k--) {
+          coordRMax.assign(coordRMax.mul(cy).add(bowlCoefU[k]));
+        }
+        coordRMax.assign(coordRMax.max(0.002));
+        const over = r.sub(coordRMax).max(0.0).toVar();
+        If(over.greaterThan(0.0), () => {
+          const inv = over.div(r);
+          result.assign(vec3(p.x.sub(dx.mul(inv)), p.y, p.z.sub(dz.mul(inv))));
+        });
+        return result;
+      };
+
       clearGridKernel = Fn(() => {
         atomicStore(cellBuffer.element(instanceIndex).get("x"), 0);
         atomicStore(cellBuffer.element(instanceIndex).get("y"), 0);
@@ -449,37 +472,21 @@ export default function FluidLab() {
         If(z.lessThan(int(1)).or(z.greaterThan(int(gridSize.z).sub(int(2)))), () => {
           vz.assign(0);
         });
+        // 볼 밖 격자 셀은 속도를 0 으로 (유리벽). MLS-MPM 표준 벽 처리라
+        // 위치를 순간이동시키지 않아 튀지 않고, 유체가 벽을 못 넘어 위로만 찬다.
+        const cellCoord = vec3(float(x), float(y), float(z))
+          .add(0.5)
+          .div(gridSizeUniform);
+        const cellClamped = clampToBowl(cellCoord);
+        If(cellClamped.sub(cellCoord).length().greaterThan(0.0001), () => {
+          vx.assign(0);
+          vy.assign(0);
+          vz.assign(0);
+        });
         cellBufferFloat.element(instanceIndex).assign(vec4(vx, vy, vz, mass));
       })()
         .compute(cellCount)
         .setName("updateGridKernel");
-
-      // 잔 볼 내벽 안에 유체를 가둔다.
-      // 유체 coord y(0~1)로 내벽 반경 LUT(잔 데이터에서 파생)를 직접 조회하고,
-      // 그 반경을 넘는 (x,z) 초과분만 예제처럼 '부드럽게' 안으로 되돌린다.
-      // LUT 가 곧 실제 잔 내벽이므로 유리 형태와 물리 경계가 항상 일치한다.
-      // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const clampToBowl = (p: any) => {
-        const result = p.toVar();
-        const dx = p.x.sub(0.5).toVar();
-        const dz = p.z.sub(0.5).toVar();
-        const r = dx.mul(dx).add(dz.mul(dz)).sqrt().max(1e-5).toVar();
-        // coord y 로 볼 내벽 반경 다항식을 Horner 로 평가 (개별 uniform 사용)
-        const cy = clamp(p.y, 0.0, 1.0).toVar();
-        const coordRMax = bowlCoefU[POLY_DEG].toVar();
-        for (let k = POLY_DEG - 1; k >= 0; k--) {
-          coordRMax.assign(coordRMax.mul(cy).add(bowlCoefU[k]));
-        }
-        coordRMax.assign(coordRMax.max(0.002));
-        // 초과분을 경계보다 약간 안쪽(×1.6)까지 되돌려, 좁은 볼 바닥에서
-        // 유체가 옆으로 새지 않고 위로 쌓이게 한다. (예제의 rounded box 는 ×1.3)
-        const over = r.sub(coordRMax).max(0.0).toVar();
-        If(over.greaterThan(0.0), () => {
-          const inv = over.mul(1.6).div(r);
-          result.assign(vec3(p.x.sub(dx.mul(inv)), p.y, p.z.sub(dz.mul(inv))));
-        });
-        return result;
-      };
 
       g2pKernel = Fn(() => {
         const particlePosition = particleBuffer
@@ -553,8 +560,7 @@ export default function FluidLab() {
             vec3(gridSize).sub(1).div(gridSizeUniform),
           ),
         );
-        // 위치 hard clamp: 실제 유리벽처럼 입자를 볼 안에 확실히 가둔다.
-        particlePosition.assign(clampToBowl(particlePosition));
+        // 볼 경계는 updateGrid 의 grid 벽(볼 밖 셀 속도 0)이 처리한다.
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
