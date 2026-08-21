@@ -2,6 +2,7 @@
 
 import { Canvas, extend, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo } from "react";
+import { gaussianBlur } from "three/examples/jsm/tsl/display/GaussianBlurNode.js";
 import * as THREE from "three/webgpu";
 import {
   Fn,
@@ -23,13 +24,12 @@ import {
 
 extend(THREE as unknown as Record<string, unknown>);
 
-const COUNT = 4000;
+const COUNT = 3200;
 const RADIUS = 1.0;
 const FLOOR = 0.0;
-// 물리 파라미터 (프로토타입 — 캡처로 튜닝)
-const H = 0.2; // 상호작용 반경
-const STIFF = 45.0; // 반발 강도
-const VISC = 1.2; // 점성(속도 정렬)
+const H = 0.15;
+const STIFF = 45.0;
+const VISC = 1.2;
 const GRAV = 3.0;
 
 function Particles() {
@@ -53,22 +53,24 @@ function Particles() {
     );
     const uDelta = uniform(0.016);
 
+    // 초기화: 좁은 세로 기둥 → 중력으로 순차 낙하 → 한 줄기 스트림
     const initNode = Fn(() => {
       const pos = positions.element(instanceIndex);
       const vel = velocities.element(instanceIndex);
       const fi = float(instanceIndex);
-      const rx = hash(fi.mul(0.1731).add(11)).sub(0.5);
-      const ry = hash(fi.mul(0.3719).add(37));
-      const rz = hash(fi.mul(0.9137).add(91)).sub(0.5);
-      pos.assign(vec3(rx.mul(1.4), ry.mul(1.6).add(1.8), rz.mul(1.4)));
-      vel.assign(vec3(0.0));
+      const t = fi.div(COUNT);
+      const ang = hash(fi.mul(0.7).add(3)).mul(6.2832);
+      const rad = hash(fi.mul(1.3).add(9)).mul(0.09);
+      pos.assign(
+        vec3(ang.cos().mul(rad), t.mul(7.0).add(2.6), ang.sin().mul(rad)),
+      );
+      vel.assign(vec3(0.0, -1.5, 0.0));
     })().compute(COUNT);
 
-    // 1패스: 힘 계산(반발 + 점성 + 중력). 모든 위치를 읽기만 하므로 race 없음.
     const forceNode = Fn(() => {
       const posI = positions.element(instanceIndex);
       const velI = velocities.element(instanceIndex);
-      const force = vec3(0.0, GRAV.valueOf() * -1, 0.0).toVar();
+      const force = vec3(0.0, GRAV * -1, 0.0).toVar();
       Loop(COUNT, ({ i }: { i: unknown }) => {
         If(instanceIndex.notEqual(i as never), () => {
           const posJ = positions.element(i as never);
@@ -86,7 +88,6 @@ function Particles() {
       forces.element(instanceIndex).assign(force);
     })().compute(COUNT);
 
-    // 2패스: 적분 + 경계
     const stepNode = Fn(() => {
       const p = positions.element(instanceIndex);
       const v = velocities.element(instanceIndex);
@@ -109,16 +110,11 @@ function Particles() {
       p.assign(np);
     })().compute(COUNT);
 
-    // 각 입자를 작은 구(球)로 인스턴싱 — 물/와인 굴절 재질
-    const sphereGeo = new THREE.SphereGeometry(0.08, 10, 8);
-    const material = new THREE.MeshPhysicalNodeMaterial();
+    // 입자는 깊이만 기여 — 색/광택은 후처리에서 (가벼운 재질)
+    const sphereGeo = new THREE.SphereGeometry(0.1, 8, 6);
+    const material = new THREE.MeshBasicNodeMaterial();
+    material.colorNode = vec3(0.4, 0.06, 0.13);
     material.positionNode = positionLocal.add(positions.element(instanceIndex));
-    material.colorNode = vec3(0.5, 0.08, 0.16);
-    material.roughness = 0.12;
-    material.metalness = 0.0;
-    material.transmission = 0.9;
-    material.ior = 1.34;
-    material.thickness = 0.4;
 
     const points = new THREE.InstancedMesh(sphereGeo, material, COUNT);
     points.frustumCulled = false;
@@ -139,33 +135,34 @@ function Particles() {
   return <primitive object={points} />;
 }
 
-// 스크린스페이스 후처리 파이프라인 (1차: 입자 씬의 깊이를 화면에 시각화)
+// 스크린스페이스 유체 표면: 깊이 블러 → 법선 → 라이팅·스펙큘러
 function PostFX() {
   const { gl, scene, camera } = useThree();
   const post = useMemo(() => {
-    const p = new THREE.PostProcessing(
-      gl as unknown as THREE.WebGPURenderer,
-    );
+    const p = new THREE.PostProcessing(gl as unknown as THREE.WebGPURenderer);
     const scenePass = pass(scene, camera);
-    const depth = scenePass.getLinearDepthNode();
 
-    // 깊이 기울기로 표면 법선 재구성
+    // 깊이를 강하게 블러 → 입자 요철이 녹아 매끈한 표면
+    const depth = gaussianBlur(scenePass.getLinearDepthNode(), null, 14).x;
+
+    // 블러된 깊이 기울기로 법선 재구성
     const dx = dFdx(depth);
     const dy = dFdy(depth);
-    const normal = vec3(dx.mul(-8.0), dy.mul(-8.0), float(1.0)).normalize();
+    const normal = vec3(dx.mul(-60.0), dy.mul(-60.0), float(1.0)).normalize();
 
-    // 라이팅 + 프레넬(가장자리 밝게)
-    const lightDir = vec3(0.4, 0.8, 0.6).normalize();
-    const diff = normal.dot(lightDir).max(0.0);
-    const wine = vec3(0.5, 0.08, 0.16);
-    const fres = float(1.0).sub(normal.z.clamp(0.0, 1.0)).pow(3.0);
-    const surf = wine
-      .mul(diff.mul(0.7).add(0.28))
-      .add(fres.mul(vec3(0.7, 0.35, 0.4)));
+    // 라이팅 + 스펙큘러(젖은 광택)
+    const lightDir = vec3(0.4, 0.85, 0.5).normalize();
+    const diff = normal.dot(lightDir).max(0.0).mul(0.7).add(0.35);
+    const halfV = lightDir.add(vec3(0.0, 0.0, 1.0)).normalize();
+    const spec = normal.dot(halfV).max(0.0).pow(60.0).mul(0.9);
+    const fres = float(1.0).sub(normal.z.clamp(0.0, 1.0)).pow(3.0).mul(0.4);
 
-    // 입자가 없는(먼) 픽셀은 배경
+    const wine = vec3(0.42, 0.05, 0.12);
+    const surf = wine.mul(diff).add(spec).add(fres.mul(vec3(0.6, 0.2, 0.3)));
+
+    // 입자 있는 픽셀만 (블러된 깊이로 마스크)
     const bg = vec3(0.1, 0.02, 0.06);
-    p.outputNode = mix(surf, bg, step(0.985, depth));
+    p.outputNode = mix(bg, surf, step(depth, 0.985));
     return p;
   }, [gl, scene, camera]);
 
@@ -179,7 +176,7 @@ function PostFX() {
 export default function FluidLab() {
   return (
     <Canvas
-      camera={{ position: [0, 1.3, 4.5], fov: 45 }}
+      camera={{ position: [0, 0.7, 6], fov: 42 }}
       gl={async (props) => {
         const renderer = new THREE.WebGPURenderer(
           props as unknown as ConstructorParameters<
@@ -189,16 +186,10 @@ export default function FluidLab() {
         await renderer.init();
         return renderer;
       }}
-      onCreated={({ camera }) => camera.lookAt(0, 1, 0)}
+      onCreated={({ camera }) => camera.lookAt(0, 0.6, 0)}
     >
-      <color attach="background" args={["#1a0510"]} />
       <ambientLight intensity={0.5} />
       <directionalLight position={[3, 6, 4]} intensity={2.5} />
-      <directionalLight position={[-3, 2, -2]} intensity={0.8} color="#e8b4be" />
-      <mesh position={[0, 1.5, 0]}>
-        <cylinderGeometry args={[RADIUS, RADIUS, 3, 48, 1, true]} />
-        <meshBasicMaterial color="#e8b4be" wireframe transparent opacity={0.15} />
-      </mesh>
       <Particles />
       <PostFX />
     </Canvas>
