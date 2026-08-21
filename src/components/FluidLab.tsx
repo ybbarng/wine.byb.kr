@@ -98,11 +98,11 @@ export default function FluidLab() {
     const H2 = H * H;
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도
     const CELL_COUNT = GRID_RES ** 3;
-    const MAX_PER_CELL = 64; // 셀당 최대 입자
-    const SOLVER_ITER = 6; // PBF solver 반복 (small-steps: substep 많이·iter 적게)
+    const MAX_PER_CELL = 24; // 셀당 최대 입자 (평균 1.35 → 24로 충분·이웃탐색 경량화)
+    const SOLVER_ITER = 12; // PBF solver 반복 (실제 중력 안정 임계)
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
-    const EPS_RELAX = 50.0; // λ 분모 relaxation (고중력: ↓ 뻣뻣하게 → 빠른 수렴)
+    const EPS_RELAX = 500.0; // λ 분모 relaxation (고중력 안정 설정)
     const C_XSPH = 2.0; // XSPH 점성 계수 (속도 감쇠)
     // 표면장력(s_corr): 표면 입자를 응집시켜 요동 억제 + 벽 코팅.
     const SCORR_K = 0.00001; // 표면장력 (원래 3e-5 → 순환 완화·응집 유지 절충)
