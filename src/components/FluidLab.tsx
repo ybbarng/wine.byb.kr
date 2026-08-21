@@ -104,13 +104,16 @@ function Particles() {
       p.assign(np);
     })().compute(COUNT);
 
-    // 각 입자를 작은 구(球)로 인스턴싱 — WebGPU 표준 입자 렌더
-    const sphereGeo = new THREE.SphereGeometry(0.06, 8, 6);
-    const material = new THREE.MeshStandardNodeMaterial();
+    // 각 입자를 작은 구(球)로 인스턴싱 — 물/와인 굴절 재질
+    const sphereGeo = new THREE.SphereGeometry(0.08, 10, 8);
+    const material = new THREE.MeshPhysicalNodeMaterial();
     material.positionNode = positionLocal.add(positions.element(instanceIndex));
-    material.colorNode = vec3(0.62, 0.12, 0.24);
-    material.roughness = 0.25;
+    material.colorNode = vec3(0.5, 0.08, 0.16);
+    material.roughness = 0.12;
     material.metalness = 0.0;
+    material.transmission = 0.9;
+    material.ior = 1.34;
+    material.thickness = 0.4;
 
     const points = new THREE.InstancedMesh(sphereGeo, material, COUNT);
     points.frustumCulled = false;
