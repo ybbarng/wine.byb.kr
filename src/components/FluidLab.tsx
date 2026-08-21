@@ -570,8 +570,8 @@ export default function FluidLab() {
 
       // 디버그 로그: 속도·밀도·대류·볼 밖 입자 (MLS-MPM 여정에서 만든 지표)
       frameCount++;
-      if (frameCount % 20 === 0) {
-        const t = (frameCount / 60).toFixed(1);
+      if (frameCount % 60 === 0) {
+        const t = (frameCount / 60).toFixed(0);
         Promise.all([
           renderer.getArrayBufferAsync(particleBuffer.value),
           renderer.getArrayBufferAsync(densityBuffer.value),
