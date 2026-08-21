@@ -90,7 +90,7 @@ export default function FluidLab() {
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도
     const CELL_COUNT = GRID_RES ** 3;
     const MAX_PER_CELL = 64; // 셀당 최대 입자
-    const SOLVER_ITER = 4; // PBF solver 반복
+    const SOLVER_ITER = 8; // PBF solver 반복
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
     const EPS_RELAX = 100.0; // λ 분모 relaxation
@@ -215,8 +215,7 @@ export default function FluidLab() {
 
     function setupUniforms() {
       dtUniform = uniform(1 / 60);
-      // restDensity 를 실제 정착 밀도(로그 ~50700)에 맞춰 잔류 압력을 없앤다.
-      restDensityUniform = uniform(50700);
+      restDensityUniform = uniform(50000);
     }
 
     function setupComputeShaders() {
