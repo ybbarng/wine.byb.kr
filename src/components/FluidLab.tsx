@@ -608,6 +608,13 @@ export default function FluidLab() {
           particleVelocity.mulAssign(0.5);
         });
 
+        // 정지 마찰: 느린 입자(정착 중)만 추가 감쇠해 완전히 멈추게 한다.
+        // 실제 물도 느린 잔류 운동은 정지 마찰·표면장력으로 멈춘다. 낙하 중
+        // 빠른 입자는 임계를 넘어 감쇠되지 않으므로 낙하는 그대로다.
+        If(particleVelocity.length().lessThan(0.1), () => {
+          particleVelocity.mulAssign(0.8);
+        });
+
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
         particleBuffer
