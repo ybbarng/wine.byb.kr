@@ -31,6 +31,42 @@ import {
   vec4,
 } from "three/tsl";
 
+// 최소자승 다항식 피팅 (deg 차). 정규방정식 + 가우스 소거.
+// 볼 내벽 반경 곡선을 다항식 계수로 압축해 셰이더에 넘기기 위한 헬퍼.
+function polyfit(xs: number[], ys: number[], deg: number): number[] {
+  const n = deg + 1;
+  const A: number[][] = [];
+  const b: number[] = [];
+  for (let j = 0; j < n; j++) {
+    const row = new Array(n).fill(0);
+    for (let k = 0; k < n; k++) {
+      let s = 0;
+      for (let i = 0; i < xs.length; i++) s += xs[i] ** (j + k);
+      row[k] = s;
+    }
+    A.push(row);
+    let sb = 0;
+    for (let i = 0; i < xs.length; i++) sb += ys[i] * xs[i] ** j;
+    b.push(sb);
+  }
+  for (let c = 0; c < n; c++) {
+    let piv = c;
+    for (let r = c + 1; r < n; r++) {
+      if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+    }
+    [A[c], A[piv]] = [A[piv], A[c]];
+    [b[c], b[piv]] = [b[piv], b[c]];
+    for (let r = 0; r < n; r++) {
+      if (r !== c) {
+        const f = A[r][c] / A[c][c];
+        for (let k = c; k < n; k++) A[r][k] -= f * A[c][k];
+        b[r] -= f * b[c];
+      }
+    }
+  }
+  return b.map((v, i) => v / A[i][i]);
+}
+
 // three.js 공식 webgpu_compute_particles_fluid (r185)를 그대로 이식.
 // 색만 와인으로 바꾸고, 물리/렌더 로직은 원본 그대로 유지한다.
 // biome-ignore lint: 예제 원본 구조 유지
@@ -83,6 +119,82 @@ export default function FluidLab() {
     let particleMesh: THREE.Mesh;
 
     const params = { particleCount: 8192 * 4 };
+
+    // ── 잔 하나의 데이터 ────────────────────────────────────────────
+    // 외벽 프로파일 + 벽 두께 + 볼(유체가 담기는) y 범위 + 월드 배치.
+    // 유리 메쉬와 유체 물리 경계를 '모두' 이 데이터에서 파생한다.
+    // 다른 잔은 이 객체만 바꾸면 유리와 물리가 자동으로 일치한다.
+    const glass = {
+      // 외벽 프로파일 (r, y). LatheGeometry 와 내벽 계산의 공통 원천.
+      profile: [
+        [0.0, 0.0], [0.55, 0.0], [0.55, 0.018], [0.42, 0.04],
+        [0.12, 0.09], [0.05, 0.16], [0.042, 0.7], [0.042, 1.25],
+        [0.05, 1.36], [0.1, 1.44], [0.17, 1.53], [0.26, 1.65],
+        [0.34, 1.79], [0.4, 1.94], [0.44, 2.1], [0.46, 2.26],
+        [0.455, 2.42], [0.43, 2.57], [0.4, 2.7], [0.36, 2.82],
+        [0.325, 2.92],
+      ] as [number, number][],
+      wallThickness: 0.025, // 프로파일 단위 유리 두께 (내벽 = 외벽 − 이 값)
+      bowlBottomY: 1.44, // 볼 안쪽 바닥 (유체 최저, 스템 제외)
+      bowlTopY: 2.5, // 유체 최대 높이 (입구 아래)
+      worldScale: 0.42, // 프로파일 → 월드 스케일
+      worldY: -0.06, // 프로파일 y=0 의 월드 y
+    };
+
+    // 프로파일에서 높이 py 의 외벽/내벽 반경(프로파일 단위)을 선형 보간.
+    const outerRadiusAt = (py: number): number => {
+      const p = glass.profile;
+      if (py <= p[0][1]) return p[0][0];
+      for (let i = 1; i < p.length; i++) {
+        if (py <= p[i][1]) {
+          const [r0, y0] = p[i - 1];
+          const [r1, y1] = p[i];
+          const t = (py - y0) / (y1 - y0 || 1);
+          return r0 + (r1 - r0) * t;
+        }
+      }
+      return p[p.length - 1][0];
+    };
+    const innerRadiusAt = (py: number): number =>
+      Math.max(outerRadiusAt(py) - glass.wallThickness, 0);
+
+    // 유체 coord 큐브(0~1)가 볼을 감싸도록 스케일·위치를 자동 계산.
+    // (물리는 0~1 정규화 격자를 쓰므로 월드 변환이 필요하다)
+    let bowlRmax = 0;
+    for (let py = glass.bowlBottomY; py <= glass.bowlTopY; py += 0.01) {
+      bowlRmax = Math.max(bowlRmax, innerRadiusAt(py));
+    }
+    const cubeSpanProfile = Math.max(
+      glass.bowlTopY - glass.bowlBottomY,
+      bowlRmax * 2,
+    );
+    const FLUID_SCALE = cubeSpanProfile * glass.worldScale;
+    const FLUID_Y = glass.bowlBottomY * glass.worldScale + glass.worldY;
+
+    // 내벽 반경 LUT: 유체 coord y(0~1) → 그 높이의 볼 내벽 coord 반경.
+    // 셰이더가 이 표를 직접 조회하므로, 물리 경계 = 실제 잔 내벽.
+    // 내벽 반경 곡선(coord y → coord 반경)을 다항식으로 fit → 계수만 셰이더로.
+    // 컴퓨트 셰이더에서 배열 '동적 인덱스' 조회가 막혀(uniformArray 는 고정 인덱스만,
+    // CPU 초기값 storage 는 업로드 생략), 조회 없는 산술 평가로 우회한다.
+    // 계수는 uniformArray 에 담아 '고정 인덱스'로만 접근하므로 안전하다.
+    const POLY_DEG = 5;
+    const lutXs: number[] = [];
+    const lutYs: number[] = [];
+    for (let i = 0; i < 64; i++) {
+      const coordY = i / 63;
+      const worldY = FLUID_Y + coordY * FLUID_SCALE;
+      const py = (worldY - glass.worldY) / glass.worldScale;
+      let coordR = 0.002;
+      if (py >= glass.bowlBottomY && py <= glass.bowlTopY) {
+        coordR = (innerRadiusAt(py) * glass.worldScale) / FLUID_SCALE;
+      }
+      lutXs.push(coordY);
+      lutYs.push(Math.max(coordR, 0.002));
+    }
+    const bowlCoef = polyfit(lutXs, lutYs, POLY_DEG);
+    // 계수를 개별 스칼라 uniform 으로 넘긴다 (배열/조회 없음 → 가장 확실).
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    const bowlCoefU: any[] = bowlCoef.map((v) => uniform(v));
 
     function setupBuffers() {
       const particleStruct = struct({
@@ -342,26 +454,23 @@ export default function FluidLab() {
         .compute(cellCount)
         .setName("updateGridKernel");
 
-      // 잔 볼 프로파일 R(y) 안에 유체를 가둔다.
-      // 유체 좌표(0~1) → 월드 y → profile y 로 변환해, 그 높이의 볼 내벽
-      // 반경을 넘는 (x,z) 초과분만 예제처럼 '부드럽게' 안으로 되돌린다.
-      // 볼 바닥은 profile 반경이 자연히 좁아지므로 별도 바닥 clamp 없이 좁게 고인다.
+      // 잔 볼 내벽 안에 유체를 가둔다.
+      // 유체 coord y(0~1)로 내벽 반경 LUT(잔 데이터에서 파생)를 직접 조회하고,
+      // 그 반경을 넘는 (x,z) 초과분만 예제처럼 '부드럽게' 안으로 되돌린다.
+      // LUT 가 곧 실제 잔 내벽이므로 유리 형태와 물리 경계가 항상 일치한다.
       // biome-ignore lint/suspicious/noExplicitAny: TSL
       const clampToBowl = (p: any) => {
         const result = p.toVar();
         const dx = p.x.sub(0.5).toVar();
         const dz = p.z.sub(0.5).toVar();
         const r = dx.mul(dx).add(dz.mul(dz)).sqrt().max(1e-5).toVar();
-        // 유체 coord y → 월드 y → profile y (볼 목=1.36 기준 d)
-        const worldY = p.y.mul(FLUID_SCALE).add(FLUID_Y);
-        const py = worldY.sub(GLASS_Y).div(GLASS_SCALE);
-        const d = clamp(py.sub(1.36), 0.0, 1.0).toVar();
-        // 볼 내벽 반경(profile 2차근사) → coord 반경
-        const rProfile = d.mul(d).mul(-0.5).add(d.mul(0.908)).add(0.042);
-        const coordRMax = rProfile
-          .mul(GLASS_SCALE / FLUID_SCALE)
-          .max(0.01)
-          .toVar();
+        // coord y 로 볼 내벽 반경 다항식을 Horner 로 평가 (개별 uniform 사용)
+        const cy = clamp(p.y, 0.0, 1.0).toVar();
+        const coordRMax = bowlCoefU[POLY_DEG].toVar();
+        for (let k = POLY_DEG - 1; k >= 0; k--) {
+          coordRMax.assign(coordRMax.mul(cy).add(bowlCoefU[k]));
+        }
+        coordRMax.assign(coordRMax.max(0.002));
         const over = r.sub(coordRMax).max(0.0).toVar();
         If(over.greaterThan(0.0), () => {
           const inv = over.div(r);
@@ -490,46 +599,9 @@ export default function FluidLab() {
       scene.add(particleMesh);
     }
 
-    // 보르도 잔 프로파일 (WineGlass.tsx 에서 옮겨옴).
-    // Catmull-Rom 으로 부드럽게 이어 LatheGeometry 회전체를 만든다.
-    const GLASS_KEY: [number, number][] = [
-      [0.0, 0.0],
-      [0.55, 0.0],
-      [0.55, 0.018],
-      [0.42, 0.04],
-      [0.12, 0.09],
-      [0.05, 0.16],
-      [0.042, 0.7],
-      [0.042, 1.25],
-      [0.05, 1.36],
-      [0.1, 1.44],
-      [0.17, 1.53],
-      [0.26, 1.65],
-      [0.34, 1.79],
-      [0.4, 1.94],
-      [0.44, 2.1],
-      [0.46, 2.26],
-      [0.455, 2.42],
-      [0.43, 2.57],
-      [0.4, 2.7],
-      [0.36, 2.82],
-      [0.325, 2.92],
-    ];
-
-    // 유체 큐브(x,z∈[-0.5,0.5], y∈[0,1])에 유리잔을 맞추기 위한 변환.
-    // 잔 원본은 높이 2.92 → 축소해서 유체 큐브 영역에 얹는다. 캡처로 조정.
-    const GLASS_SCALE = 0.42;
-    const GLASS_Y = -0.06;
-
-    // 유체 렌더를 잔 볼 안으로 축소·이동하는 값 (캡처로 조정).
-    // FLUID_Y + coord*FLUID_SCALE = 월드 y. 프로파일 경계가 이 값으로 볼과 정렬한다.
-    // FLUID_Y 를 볼 바닥(월드 ~0.5)에 맞춰 유체 coord 0 이 볼 바닥에 오게 한다.
-    const FLUID_SCALE = 0.4;
-    const FLUID_Y = 0.57;
-
     function setupGlass() {
       const curve = new THREE.CatmullRomCurve3(
-        GLASS_KEY.map(([r, y]) => new THREE.Vector3(r, y, 0)),
+        glass.profile.map(([r, y]) => new THREE.Vector3(r, y, 0)),
         false,
         "centripetal",
         0.5,
@@ -558,11 +630,11 @@ export default function FluidLab() {
       });
       material.envMapIntensity = 1.0;
 
-      const glass = new THREE.Mesh(geometry, material);
-      glass.scale.setScalar(GLASS_SCALE);
-      glass.position.set(0, GLASS_Y, 0);
-      glass.frustumCulled = false;
-      scene.add(glass);
+      const glassMesh = new THREE.Mesh(geometry, material);
+      glassMesh.scale.setScalar(glass.worldScale);
+      glassMesh.position.set(0, glass.worldY, 0);
+      glassMesh.frustumCulled = false;
+      scene.add(glassMesh);
     }
 
     function setupParticles() {
