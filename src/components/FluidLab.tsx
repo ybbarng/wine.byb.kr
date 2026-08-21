@@ -586,7 +586,17 @@ export default function FluidLab() {
           .add(particleVelocity.mul(dtUniform).mul(2.0))
           .toConst("posNext");
         const posNextClamped = clampToBowl(posNext);
-        particleVelocity.addAssign(posNextClamped.sub(posNext).mul(0.0)); // 진단: 되돌림 끔
+        // 흡수형 경계: 벽 밖으로 향하는 속도(법선 성분)만 제거한다. 안으로
+        // 밀지 않으므로 유체를 압축하지 않는다(되돌림 방식은 과밀집을 유발했다).
+        const outward = posNext.sub(posNextClamped).toVar();
+        const outLen = outward.length().toVar();
+        If(outLen.greaterThan(1e-6), () => {
+          const n = outward.div(outLen);
+          const vn = particleVelocity.dot(n).toVar();
+          If(vn.greaterThan(0.0), () => {
+            particleVelocity.subAssign(n.mul(vn));
+          });
+        });
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
