@@ -99,7 +99,7 @@ export default function FluidLab() {
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도
     const CELL_COUNT = GRID_RES ** 3;
     const MAX_PER_CELL = 64; // 셀당 최대 입자
-    const SOLVER_ITER = 8; // PBF solver 반복
+    const SOLVER_ITER = 12; // PBF solver 반복 (수렴↑ → 감쇠 없이 정지 유지)
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
     const EPS_RELAX = 500.0; // λ 분모 relaxation (진단: ↑ 부드러운 보정 → 지터↓?)
@@ -240,7 +240,7 @@ export default function FluidLab() {
       restDensityUniform = uniform(50000);
       // 점성 감쇠(substep당). 잔이 멈춰 있을 때 무작위 지터를 잦아들게 한다.
       // 와인의 점성 = 물리적으로 옳은 소산. 붓기는 중력이 재가속하니 회복.
-      dampUniform = uniform(0.92);
+      dampUniform = uniform(0.995);
     }
 
     function setupComputeShaders() {
