@@ -19,9 +19,13 @@ import {
   instancedArray,
   int,
   ivec3,
+  positionView,
+  screenUV,
   struct,
+  texture,
   uniform,
   vec3,
+  vec4,
 } from "three/tsl";
 
 // 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
@@ -185,6 +189,11 @@ export default function FluidLab() {
       deltaPKernel: any,
       velocityKernel: any;
     let particleMesh: THREE.Mesh;
+    let fluidScene: THREE.Scene;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL RenderTarget/QuadMesh
+    let depthRT: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL
+    let surfaceQuad: any;
 
     const STRIDE = 12; // vec3 position, velocity, predicted (각 16바이트 정렬 → 4 float)
 
@@ -447,26 +456,24 @@ export default function FluidLab() {
     }
 
     function setupMesh() {
-      // 입자를 이웃 간격만큼 키워 서로 겹치게 하면 개별 알갱이 티가 줄어든다.
+      // SSFR 1단계: 입자를 sphere 로 렌더해 '뷰 공간 깊이'를 depthRT 에 쓴다.
       const geometry = BufferGeometryUtils.mergeVertices(
         new THREE.IcosahedronGeometry(0.03, 2).deleteAttribute("uv"),
       );
-      const material = new A.MeshStandardNodeMaterial({
-        color: "#5a0a1e",
-        roughness: 0.25,
-        metalness: 0,
-      });
+      const material = new A.MeshBasicNodeMaterial();
       material.positionNode = Fn(() => {
         const pos = particleBuffer.element(instanceIndex).get("position");
         return attribute("position").add(pos);
       })();
+      // 뷰 공간 선형 깊이(카메라 앞이 양수). R 채널에 저장.
+      material.colorNode = Fn(() => vec4(positionView.z.negate(), 0, 0, 1))();
       particleMesh = new THREE.Mesh(geometry, material);
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
       (particleMesh as any).count = N;
       particleMesh.scale.setScalar(FLUID_SCALE);
       particleMesh.position.set(-FLUID_SCALE * 0.5, FLUID_Y, -FLUID_SCALE * 0.5);
       particleMesh.frustumCulled = false;
-      scene.add(particleMesh);
+      fluidScene.add(particleMesh);
     }
 
     function setupGlass() {
@@ -528,7 +535,13 @@ export default function FluidLab() {
         renderer.compute(deltaPKernel);
       }
       renderer.compute(velocityKernel);
-      renderer.render(scene, camera);
+      // SSFR 1단계: 입자 깊이를 depthRT 에 렌더 → grayscale 로 화면 확인
+      renderer.setRenderTarget(depthRT);
+      renderer.setClearColor(0x000000, 1);
+      renderer.clear();
+      renderer.render(fluidScene, camera);
+      renderer.setRenderTarget(null);
+      surfaceQuad.render(renderer);
 
       // 디버그 로그: 속도·밀도·대류·볼 밖 입자 (MLS-MPM 여정에서 만든 지표)
       frameCount++;
@@ -607,6 +620,22 @@ export default function FluidLab() {
       scene.background = hdrTexture;
       scene.backgroundBlurriness = 0.5;
       scene.environment = hdrTexture;
+
+      // SSFR: 유체 입자만 담는 씬 + 깊이 RenderTarget + 화면 표면 quad
+      fluidScene = new THREE.Scene();
+      const dpr = renderer.getPixelRatio();
+      depthRT = new THREE.RenderTarget(
+        Math.floor(container.clientWidth * dpr),
+        Math.floor(container.clientHeight * dpr),
+      );
+      depthRT.texture.type = THREE.HalfFloatType;
+      // 1단계 검증용: depthRT 를 grayscale 로 화면에 표시
+      surfaceQuad = new A.QuadMesh(new A.MeshBasicNodeMaterial());
+      surfaceQuad.material.colorNode = Fn(() => {
+        const d = texture(depthRT.texture, screenUV).x;
+        const vis = d.mul(0.3);
+        return vec4(vis, vis, vis, 1);
+      })();
 
       setupParticles();
 
