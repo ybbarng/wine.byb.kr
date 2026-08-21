@@ -250,7 +250,7 @@ export default function FluidLab() {
       particleCountUniform = uniform(params.particleCount, "uint");
       stiffnessUniform = uniform(50);
       restDensityUniform = uniform(1.5);
-      dynamicViscosityUniform = uniform(2.0);
+      dynamicViscosityUniform = uniform(4.0);
       dtUniform = uniform(1 / 60);
       gravityUniform = uniform(new THREE.Vector3(0, -(9.81 * 9.81), 0));
     }
@@ -736,7 +736,10 @@ export default function FluidLab() {
             let maxD = 0;
             let sumD = 0;
             let outGlass = 0; // 유리 외벽 밖으로 나간 입자 수
-            // 유리 외벽 = 내벽(다항식) + 벽 두께 (coord 단위)
+            let vWallSum = 0;
+            let nWall = 0; // 벽 근처(반경 85%+) 입자 속도
+            let vInSum = 0;
+            let nIn = 0; // 내부(반경 50% 미만) 입자 속도
             const wallCoord =
               (glass.wallThickness * glass.worldScale) / FLUID_SCALE;
             for (let i = 0; i < N; i++) {
@@ -749,17 +752,24 @@ export default function FluidLab() {
               const d = den[i];
               if (d > maxD) maxD = d;
               sumD += d;
-              // 볼 밖 판정: (x,z) 반경이 그 높이 유리 외벽 반경을 넘으면 밖
               const px = arr[i * 20];
               const py = arr[i * 20 + 1];
               const pz = arr[i * 20 + 2];
               const cy = Math.max(0, Math.min(1, py));
-              const rMax = bowlRadiusAtCoordY(cy) + wallCoord;
+              const rInner = bowlRadiusAtCoordY(cy);
               const rr = Math.hypot(px - 0.5, pz - 0.5);
-              if (rr > rMax) outGlass++;
+              if (rr > rInner + wallCoord) outGlass++;
+              // 벽 근처 vs 내부 속도 분리 (진동원 규명용)
+              if (rr > rInner * 0.85) {
+                vWallSum += v;
+                nWall++;
+              } else if (rr < rInner * 0.5) {
+                vInSum += v;
+                nIn++;
+              }
             }
             console.log(
-              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(4)} | dAvg=${(sumD / N).toFixed(3)} | out=${outGlass}`,
+              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} | vWall=${(vWallSum / Math.max(nWall, 1)).toFixed(4)} vIn=${(vInSum / Math.max(nIn, 1)).toFixed(4)} | dAvg=${(sumD / N).toFixed(3)} | out=${outGlass}`,
             );
           })
           .catch(() => {});
