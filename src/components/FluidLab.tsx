@@ -28,11 +28,13 @@ import {
   pass,
   pow,
   positionLocal,
+  screenUV,
   step,
   struct,
   uniform,
   vec3,
   vec4,
+  viewportSharedTexture,
 } from "three/tsl";
 
 extend(THREE as unknown as Record<string, unknown>);
@@ -40,7 +42,7 @@ extend(THREE as unknown as Record<string, unknown>);
 // three.js 공식 webgpu_compute_particles_fluid (MLS-MPM) 이식
 const GRID = 64;
 const CELL_COUNT = GRID * GRID * GRID;
-const PARTICLE_COUNT = 8192 * 4;
+const PARTICLE_COUNT = 8192 * 16;
 const FP = 1e7; // fixed-point 배율 (WebGPU는 int atomic만)
 
 function Fluid() {
@@ -369,7 +371,7 @@ function Fluid() {
     })().compute(PARTICLE_COUNT);
 
     // 렌더: 아주 작은 구 인스턴스
-    const geo = new THREE.IcosahedronGeometry(0.008, 1);
+    const geo = new THREE.IcosahedronGeometry(0.006, 1);
     const material = new THREE.MeshStandardNodeMaterial();
     material.colorNode = vec3(0.55, 0.06, 0.16);
     material.roughness = 0.3;
@@ -383,7 +385,9 @@ function Fluid() {
     return { mesh, clearK, p2g1K, p2g2K, updateGridK, g2pK, dtU };
   }, []);
 
-  useFrame(() => {
+  useFrame((_, dt) => {
+    // 실제 프레임 시간을 반영(clamp) → fps 가 낮아도 슬로모션이 되지 않음
+    built.dtU.value = Math.min(dt, 1 / 45);
     gl.compute(built.clearK);
     gl.compute(built.p2g1K);
     gl.compute(built.p2g2K);
@@ -413,10 +417,12 @@ function PostFX() {
     const spec = normal.dot(halfV).max(0.0).pow(60.0).mul(0.9);
 
     const wine = vec3(0.46, 0.06, 0.14);
-    const surf = wine.mul(diff).add(spec);
+    // 굴절: 법선만큼 배경을 왜곡해 샘플 → 뒤가 비치는 투명한 와인
+    const refr = viewportSharedTexture(screenUV.add(normal.xy.mul(0.06))).rgb;
+    const body = mix(refr.mul(1.1), wine.mul(diff), 0.55).add(spec);
 
     const bg = vec3(0.1, 0.02, 0.06);
-    p.outputNode = mix(bg, surf, step(depth, 0.985));
+    p.outputNode = mix(bg, body, step(depth, 0.985));
     return p;
   }, [gl, scene, camera]);
 
