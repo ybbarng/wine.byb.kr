@@ -111,6 +111,8 @@ export default function FluidLab() {
       gridSizeUniform: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let particleBuffer: any, cellBuffer: any, cellBufferFloat: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL (디버그: 입자 밀도 로그용)
+    let densityBuffer: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let clearGridKernel: any,
       p2g1Kernel: any,
@@ -229,6 +231,8 @@ export default function FluidLab() {
       }
       particleBuffer = instancedArray(particleArray, particleStruct);
       particleBuffer.setPBO(true); // 속도 로그용 CPU readback 활성화
+      densityBuffer = instancedArray(maxParticles, "float");
+      densityBuffer.setPBO(true); // 밀도 로그용
 
       const cellCount = gridSize.x * gridSize.y * gridSize.z;
       const cellStruct = struct({
@@ -245,7 +249,7 @@ export default function FluidLab() {
       gridSizeUniform = uniform(gridSize);
       particleCountUniform = uniform(params.particleCount, "uint");
       stiffnessUniform = uniform(4);
-      restDensityUniform = uniform(1.5);
+      restDensityUniform = uniform(3.8);
       dynamicViscosityUniform = uniform(2.0);
       dtUniform = uniform(1 / 60);
       gravityUniform = uniform(new THREE.Vector3(0, -(9.81 * 9.81), 0));
@@ -406,6 +410,7 @@ export default function FluidLab() {
             );
           },
         );
+        densityBuffer.element(instanceIndex).assign(density); // 디버그: 밀도 로그
         const volume = float(1).div(density);
         const pressure = max(
           0.0,
@@ -697,13 +702,19 @@ export default function FluidLab() {
       // velocity 는 gridSize 스케일이라 /gridSize 하면 coord/s 단위가 된다.
       frameCount++;
       if (frameCount % 60 === 0) {
-        renderer
-          .getArrayBufferAsync(particleBuffer.value)
-          .then((buf: ArrayBuffer) => {
-            const arr = new Float32Array(buf);
-            const N = params.particleCount;
+        const t = (frameCount / 60).toFixed(0);
+        const N = params.particleCount;
+        Promise.all([
+          renderer.getArrayBufferAsync(particleBuffer.value),
+          renderer.getArrayBufferAsync(densityBuffer.value),
+        ])
+          .then(([pbuf, dbuf]: ArrayBuffer[]) => {
+            const arr = new Float32Array(pbuf);
+            const den = new Float32Array(dbuf);
             let maxV = 0;
             let sumV = 0;
+            let maxD = 0;
+            let sumD = 0;
             for (let i = 0; i < N; i++) {
               const vx = arr[i * 20 + 4];
               const vy = arr[i * 20 + 5];
@@ -711,9 +722,12 @@ export default function FluidLab() {
               const v = Math.sqrt(vx * vx + vy * vy + vz * vz) / gridSize1d;
               if (v > maxV) maxV = v;
               sumV += v;
+              const d = den[i];
+              if (d > maxD) maxD = d;
+              sumD += d;
             }
             console.log(
-              `[speed] t=${(frameCount / 60).toFixed(0)}s avg=${(sumV / N).toFixed(4)} max=${maxV.toFixed(4)} (coord/s)`,
+              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(4)} | dAvg=${(sumD / N).toFixed(3)} dMax=${maxD.toFixed(3)} (rest=${restDensityUniform.value.toFixed(1)})`,
             );
           })
           .catch(() => {});
