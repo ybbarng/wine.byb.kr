@@ -215,8 +215,8 @@ export default function FluidLab() {
 
     function setupUniforms() {
       dtUniform = uniform(1 / 60);
-      // restDensity 는 초기 밀도 로그를 보고 맞춘다(placeholder).
-      restDensityUniform = uniform(50000);
+      // restDensity 를 실제 정착 밀도(로그 ~50700)에 맞춰 잔류 압력을 없앤다.
+      restDensityUniform = uniform(50700);
     }
 
     function setupComputeShaders() {
