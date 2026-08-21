@@ -64,9 +64,9 @@ MLS-MPM(약압축)으로 시작. 잔 경계에서 **"대류↔샘 딜레마"**: 
 
 **핵심 교훈**: PBF 미동의 주범은 압력 진동이 아니라 **과도하게 뻣뻣한 제약**. EPS_RELAX(constraint softening)로 부드럽게 하면 비압축(밀도 ratio 1.006 유지)은 지키면서 지터만 급감.
 
-**낙하 속도 튜닝**(사용자 지적 "초기 낙하 느림"): 원인 = 임의 중력 스케일 + 감쇠. 진동이 EPS로 잡혀 중력을 올릴 여유 생김. 단 **중력↑ ∝ λ↑ ∝ 지터↑** 상충 — 3배는 정지 깨짐(vMax 4·밀도 50848). **중력 2배 + 감쇠 0.92**로 절충: 낙하 빨라지고(t≈2.8s 안착) 정지 유지(vAvg 0.015·vMax 0.023·out 0). 캡처 `pbf-09-vibration-fixed.png`.
+**감쇠(damp)는 hack이라 최종 제거**(사용자 지적 "느리게 떨어져" + "중력 실제값 바꾸지 마"): 중간에 속도 감쇠로 진동을 눌렀지만 감쇠는 에너지를 인위로 빼는 **비물리 항** → 낙하를 늦추고 진동도 가릴 뿐. 중력을 올려 보상하려 했으나 중력↑ ∝ λ↑ ∝ 지터↑ 상충 + 중력은 실제 물리값이라 튜닝 금지. → **감쇠·속도상한 전부 제거, 중력 실제값 복귀.** 진동은 정당한 수치 방법만으로: **EPS_RELAX 500 + SOLVER_ITER 8→12**(수렴↑). 감쇠 없이 t=2s부터 vAvg 0.003·vMax 0.006(정지), 밀도 50280(1.006 비압축), out 0. 낙하는 감쇠 없어 물리 그대로(t=1s vMax 0.44). **두 문제(느린 낙하·진동)의 원인이 같은 감쇠였다.** 캡처 `pbf-10-vibration-fixed-clean.png`.
 
-**현재 파라미터**: SCORR_K 1e-5, EPS_RELAX 500, GRAVITY −9.81²·2/64, damp 0.92, substep 2, SOLVER_ITER 8.
+**현재 파라미터**: SCORR_K 1e-5, EPS_RELAX 500, GRAVITY −9.81²/64(실제값), **감쇠 없음**, substep 2, SOLVER_ITER 12.
 
 ## 다음 계획 (우선순위 순)
 1. **슬러시 → 반투명 와인**: SSFR surfaceQuad를 반투명으로. 배경을 `sceneRT`에 렌더 → 굴절(screenUV를 법선으로 offset해 sceneRT 샘플) + 깊이 기반 색 흡수(Beer-Lambert). **주의**: surfaceQuad를 fullscreen opaque로 바꾸고(배경 sceneRT 샘플 포함) render에서 `scene→sceneRT`, `surfaceQuad→화면`. (한 번 착수했다 진동 우선으로 되돌림.)
