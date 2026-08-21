@@ -108,8 +108,8 @@ export default function FluidLab() {
     const SCORR_K = 0.00001; // 표면장력 (원래 3e-5 → 순환 완화·응집 유지 절충)
     const DELTA_Q2 = (0.2 * H) ** 2; // (0.2·H)² 기준 거리²
     const POLY6_DQ = POLY6 * (H2 - DELTA_Q2) ** 3; // poly6(ΔQ²)
-    // coord 스케일 중력. 낙하가 자연스럽도록 3배로(정지는 EPS_RELAX가 담당).
-    const GRAVITY = -(9.81 * 9.81 * 3) / 64;
+    // coord 스케일 중력. 낙하 자연화 위해 2배(3배는 정지 깨짐 — 압력 과다).
+    const GRAVITY = -(9.81 * 9.81 * 2) / 64;
 
     // ── 잔 데이터 + 경계 SDF (MLS-MPM 에서 재활용) ────────────────────
     const glass = {
@@ -240,7 +240,7 @@ export default function FluidLab() {
       restDensityUniform = uniform(50000);
       // 점성 감쇠(substep당). 잔이 멈춰 있을 때 무작위 지터를 잦아들게 한다.
       // 와인의 점성 = 물리적으로 옳은 소산. 붓기는 중력이 재가속하니 회복.
-      dampUniform = uniform(0.98);
+      dampUniform = uniform(0.92);
     }
 
     function setupComputeShaders() {
