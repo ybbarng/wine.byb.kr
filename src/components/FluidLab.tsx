@@ -598,6 +598,12 @@ export default function FluidLab() {
             particleVelocity.subAssign(n.mul(vn));
           });
         });
+        // 흡수가 미리 감속해도 넘어버린 소수 입자만 부드럽게(20%) 되돌린다.
+        // 넘는 입자가 적으니 위치 이동에 의한 진동도 작다.
+        const posClamped = clampToBowl(particlePosition);
+        particlePosition.assign(
+          particlePosition.add(posClamped.sub(particlePosition).mul(0.2)),
+        );
 
         // scale from (1, 1, 1) back to (gridSize.x, gridSize.y, gridSize.z)
         particleVelocity.mulAssign(gridSizeUniform);
