@@ -553,6 +553,13 @@ export default function FluidLab() {
         particleBuffer.element(instanceIndex).get("C").assign(B.mul(4));
         particleVelocity.addAssign(gravityUniform.mul(dtUniform));
         particleVelocity.divAssign(gridSizeUniform);
+        // 최고 속도 제한(CFL): 한 스텝에 벽을 건너뛸 만큼 빠르지 않게 한다.
+        // 특히 바닥 충돌 순간 속도가 급증해 튀어나가는 걸 막는다.
+        const speed = particleVelocity.length().toVar();
+        const maxSpeed = float(3.0);
+        If(speed.greaterThan(maxSpeed), () => {
+          particleVelocity.mulAssign(maxSpeed.div(speed));
+        });
         particlePosition.addAssign(particleVelocity.mul(dtUniform));
         particlePosition.assign(
           clamp(
