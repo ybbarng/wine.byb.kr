@@ -257,7 +257,7 @@ export default function FluidLab() {
         coordRMax.assign(coordRMax.max(0.002));
         const over = r.sub(coordRMax).max(0.0).toVar();
         If(over.greaterThan(0.0), () => {
-          const inv = over.div(r);
+          const inv = over.mul(4.0).div(r);
           result.assign(vec3(p.x.sub(dx.mul(inv)), p.y, p.z.sub(dz.mul(inv))));
         });
         return result;
