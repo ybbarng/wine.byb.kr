@@ -19,34 +19,31 @@ function smoothProfile(key: [number, number][], samples: number) {
     .map((p) => new THREE.Vector2(Math.max(p.x, 0.0006), p.y));
 }
 
-/**
- * 보르도 잔 — 촘촘한 단조 좌표로 매끄러운 난형 볼을 만든다(물결 방지).
- * 넓은 받침 · 얇고 긴 스템 · 아래로 둥근 난형 볼 · 좁아지는 rim.
- */
+/** 보르도 잔 — 매끄러운 난형 볼. */
 function useGlassGeometry() {
   return useMemo(() => {
     const key: [number, number][] = [
       [0.0, 0.0],
-      [0.55, 0.0], // 받침
+      [0.55, 0.0],
       [0.55, 0.018],
       [0.42, 0.04],
       [0.12, 0.09],
       [0.05, 0.16],
       [0.042, 0.7],
-      [0.042, 1.25], // 얇고 긴 스템
-      [0.05, 1.36], // 볼 목
+      [0.042, 1.25],
+      [0.05, 1.36],
       [0.1, 1.44],
       [0.17, 1.53],
       [0.26, 1.65],
       [0.34, 1.79],
       [0.4, 1.94],
       [0.44, 2.1],
-      [0.46, 2.26], // 볼 최대폭
+      [0.46, 2.26],
       [0.455, 2.42],
       [0.43, 2.57],
       [0.4, 2.7],
       [0.36, 2.82],
-      [0.325, 2.92], // rim
+      [0.325, 2.92],
     ];
     const geo = new THREE.LatheGeometry(smoothProfile(key, 260), 240);
     geo.computeVertexNormals();
@@ -54,52 +51,62 @@ function useGlassGeometry() {
   }, []);
 }
 
-/** 볼 안을 채우는 액체(윗부분은 clipping plane 이 잘라낸다). */
-function useWineBodyGeometry() {
-  return useMemo(() => {
-    const key: [number, number][] = [
-      [0.0, 1.4],
-      [0.09, 1.44],
-      [0.18, 1.54],
-      [0.28, 1.68],
-      [0.36, 1.84],
-      [0.42, 2.02],
-      [0.44, 2.2], // 볼 형태를 따라가다
-      [0.44, 2.95], // 표면 위까지 원통으로 넉넉히 (clip 여유)
-      [0.0, 2.95],
-    ];
-    const geo = new THREE.LatheGeometry(smoothProfile(key, 180), 240);
-    geo.computeVertexNormals();
-    return geo;
-  }, []);
-}
-
-// 잔 세로 중심을 원점 근처로: group.position.y = -1.46, 표면 로컬 ≈ 2.28
+// 액체: 잔 내벽을 따라 채운 볼륨 + 평평한 표면(덮개 아님, 볼륨의 윗면).
+// 프로파일 뒷부분(SURFACE_START 이후)이 표면 정점 — 흔들면 이 y 들을 동적으로 변형한다.
+const LIQ_PROFILE: [number, number][] = [
+  [0.0, 1.4], // 바닥 중심
+  [0.09, 1.44],
+  [0.18, 1.54],
+  [0.28, 1.68],
+  [0.36, 1.84],
+  [0.42, 2.0],
+  [0.435, 2.16], // 표면 가장자리(잔 내벽 근처)
+  [0.435, 2.2], // ── 여기부터 표면 ──
+  [0.36, 2.2],
+  [0.28, 2.2],
+  [0.2, 2.2],
+  [0.12, 2.2],
+  [0.05, 2.2],
+  [0.0, 2.2], // 표면 중심
+];
+const LIQ_POINTS = LIQ_PROFILE.length; // 14
+const SURFACE_START = 7; // 이 index 이상이 표면 정점
+const SURFACE_Y_LOCAL = 2.2;
+const LATHE_SEG = 120;
 const GROUP_Y = -1.46;
-const SURFACE_Y = 2.28 + GROUP_Y;
 
 function Scene() {
   const glassGeo = useGlassGeometry();
-  const bodyGeo = useWineBodyGeometry();
-  const surfacePlane = useMemo(
-    () => new THREE.Plane(new THREE.Vector3(0, -1, 0), SURFACE_Y),
-    [],
-  );
+  const liquidGeo = useMemo(() => {
+    const pts = LIQ_PROFILE.map(([r, y]) => new THREE.Vector2(r, y));
+    const g = new THREE.LatheGeometry(pts, LATHE_SEG);
+    g.computeVertexNormals();
+    return g;
+  }, []);
+
+  // 표면 정점의 기준 위치(x,z)를 미리 뽑아둔다
+  const surfaceVerts = useMemo(() => {
+    const list: { idx: number; x: number; z: number }[] = [];
+    const pos = liquidGeo.attributes.position;
+    for (let i = 0; i <= LATHE_SEG; i++) {
+      for (let j = SURFACE_START; j < LIQ_POINTS; j++) {
+        const idx = i * LIQ_POINTS + j;
+        list.push({ idx, x: pos.getX(idx), z: pos.getZ(idx) });
+      }
+    }
+    return list;
+  }, [liquidGeo]);
 
   const group = useRef<THREE.Group>(null!);
-  const surface = useRef<THREE.Mesh>(null!);
 
   const target = useRef({ x: 0, z: 0 });
   const cur = useRef({ x: 0, z: 0 });
-  const liq = useRef({ x: 0, z: 0, vx: 0, vz: 0 });
+  // 표면 기울기(월드 수평을 유지하려는 액체) — 관성 스프링으로 잔 기울기를 추종
+  const tilt = useRef({ a: 0, b: 0, va: 0, vb: 0 });
   const dragging = useRef(false);
 
-  const tmpNormal = useMemo(() => new THREE.Vector3(), []);
-  const tmpPoint = useMemo(() => new THREE.Vector3(0, SURFACE_Y, 0), []);
-  const tmpEuler = useMemo(() => new THREE.Euler(), []);
-
   useFrame((_, dtRaw) => {
-    if (!group.current || !surface.current) return;
+    if (!group.current) return;
     const dt = Math.min(dtRaw, 1 / 30);
 
     if (!dragging.current) {
@@ -112,22 +119,30 @@ function Scene() {
     cur.current.z += (target.current.z - cur.current.z) * ease;
     group.current.rotation.x = cur.current.x;
     group.current.rotation.z = cur.current.z;
+    group.current.updateMatrix();
 
-    const k = 55;
+    // 관성: 표면의 실제 수평 높이(h)가 목표를 스프링으로 지연 추종 → 출렁.
+    const t = tilt.current;
+    const k = 60;
     const damp = 5.5;
-    for (const axis of ["x", "z"] as const) {
-      const v = axis === "x" ? "vx" : "vz";
-      liq.current[v] += (cur.current[axis] - liq.current[axis]) * k * dt;
-      liq.current[v] -= liq.current[v] * damp * dt;
-      liq.current[axis] += liq.current[v] * dt;
+    t.va += (0 - t.a) * k * dt; // 목표는 수평(0). 흔들면 관성으로 넘실
+    t.va -= t.va * damp * dt;
+    t.a += t.va * dt;
+
+    // 잔 회전 행렬의 y행(R10,R11,R12)으로 각 표면 정점의 로컬 y를 역산해
+    // 월드에서 완벽히 수평인 표면을 만든다. (관성 h 로 위아래 넘실댐)
+    const e = group.current.matrix.elements;
+    const R10 = e[1];
+    const R11 = e[5];
+    const R12 = e[9];
+    const h = SURFACE_Y_LOCAL + t.a;
+    const pos = liquidGeo.attributes.position;
+    for (const v of surfaceVerts) {
+      const ly = (h - R10 * v.x - R12 * v.z) / (R11 || 1);
+      pos.setY(v.idx, ly);
     }
-
-    const sx = (cur.current.x - liq.current.x) * 1.3;
-    const sz = (cur.current.z - liq.current.z) * 1.3;
-
-    tmpNormal.set(0, -1, 0).applyEuler(tmpEuler.set(sx, 0, sz));
-    surfacePlane.setFromNormalAndCoplanarPoint(tmpNormal, tmpPoint);
-    surface.current.rotation.set(-Math.PI / 2 + sx, 0, sz);
+    pos.needsUpdate = true;
+    liquidGeo.computeVertexNormals();
   });
 
   useEffect(() => {
@@ -158,57 +173,45 @@ function Scene() {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointermove", onMove);
     };
-  }, []);
+  }, [liquidGeo, surfaceVerts]);
 
   return (
-    <>
-      {/* 액체 표면 원판 */}
-      <mesh ref={surface} position={[0, SURFACE_Y, 0]}>
-        <circleGeometry args={[0.415, 96]} />
+    <group ref={group} position={[0, GROUP_Y, 0]}>
+      {/* 액체 — 잔 내벽을 따라 채운 단일 볼륨(원판·clip 없음) */}
+      <mesh geometry={liquidGeo} renderOrder={0}>
         <meshPhysicalMaterial
-          color="#5a0d20"
-          roughness={0.15}
+          color="#4e0c1f"
+          roughness={0.18}
           metalness={0}
-          clearcoat={0.35}
-          clearcoatRoughness={0.2}
+          transmission={0.25}
+          thickness={1.5}
+          ior={1.35}
+          attenuationColor="#360712"
+          attenuationDistance={0.5}
           envMapIntensity={1.0}
           side={THREE.DoubleSide}
         />
       </mesh>
 
-      <group ref={group} position={[0, GROUP_Y, 0]}>
-        {/* 액체 덩어리 — 표면 원판과 색·밝기를 통일해 이음새를 줄인다 */}
-        <mesh geometry={bodyGeo} renderOrder={0}>
-          <meshPhysicalMaterial
-            color="#5a0d20"
-            roughness={0.2}
-            metalness={0}
-            envMapIntensity={1.0}
-            clippingPlanes={[surfacePlane]}
-            side={THREE.DoubleSide}
-          />
-        </mesh>
-
-        {/* 유리 — clearcoat 없이 순수 굴절 유리(플라스틱감 제거) */}
-        <mesh geometry={glassGeo} renderOrder={1}>
-          <MeshTransmissionMaterial
-            samples={8}
-            resolution={1024}
-            transmission={1}
-            roughness={0.02}
-            thickness={0.7}
-            ior={1.5}
-            chromaticAberration={0.02}
-            anisotropy={0}
-            distortion={0.0}
-            distortionScale={0.1}
-            temporalDistortion={0.0}
-            attenuationColor="#ffffff"
-            color="#ffffff"
-          />
-        </mesh>
-      </group>
-    </>
+      {/* 유리 */}
+      <mesh geometry={glassGeo} renderOrder={1}>
+        <MeshTransmissionMaterial
+          samples={8}
+          resolution={1024}
+          transmission={1}
+          roughness={0.02}
+          thickness={0.7}
+          ior={1.5}
+          chromaticAberration={0.02}
+          anisotropy={0}
+          distortion={0.0}
+          distortionScale={0.1}
+          temporalDistortion={0.0}
+          attenuationColor="#ffffff"
+          color="#ffffff"
+        />
+      </mesh>
+    </group>
   );
 }
 
@@ -225,7 +228,6 @@ export default function WineGlass() {
         toneMappingExposure: 1.0,
       }}
       onCreated={({ gl }) => {
-        gl.localClippingEnabled = true;
         gl.domElement.addEventListener(
           "webglcontextlost",
           (e) => e.preventDefault(),
