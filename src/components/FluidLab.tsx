@@ -155,11 +155,12 @@ export default function FluidLab() {
     const FLUID_Y = glass.bowlBottomY * glass.worldScale + glass.worldY;
 
     // ── 실제 중력을 좌표 공간으로 매핑 ────────────────────────────────
-    // coord 1.0 = cubeSpanProfile profile 단위. 볼 세로(bowlBottomY~bowlTopY)가
-    // 실제 BOWL_HEIGHT_M(≈10cm)이므로 1 coord = 실제 몇 m 인지 유도한다.
-    const BOWL_HEIGHT_M = 0.1; // 실제 와인잔 볼 높이 ~10cm
-    const metersPerProfile =
-      BOWL_HEIGHT_M / (glass.bowlTopY - glass.bowlBottomY);
+    // 검증 가능한 실제 값(잔 전체 높이)에 앵커한다. 프로파일 y=0(바닥)~림이
+    // 실제 GLASS_HEIGHT_M 이므로 1 profile 단위 = 실제 몇 m 인지 유도.
+    const GLASS_HEIGHT_M = 0.24; // 실제 와인잔 총 높이 ~24cm (리델 21~27.5cm 중간)
+    const profileMaxY = Math.max(...glass.profile.map((p) => p[1])); // 림(2.92)
+    const metersPerProfile = GLASS_HEIGHT_M / profileMaxY;
+    // coord 1.0 = cubeSpanProfile profile 단위 → 실제 몇 m 인지.
     const metersPerCoord = cubeSpanProfile * metersPerProfile;
     // 실제 g = 9.81 m/s² 를 coord/s² 로. (예전 −9.81²/64 는 임의 스케일이었음)
     const GRAVITY = -9.81 / metersPerCoord;
