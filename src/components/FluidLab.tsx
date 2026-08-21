@@ -533,17 +533,19 @@ export default function FluidLab() {
     async function render() {
       timer.update();
       const deltaTime = THREE.MathUtils.clamp(timer.getDelta(), 0.00001, 1 / 60);
-      dtUniform.value = deltaTime;
-
-      // PBF 스텝: 예측 → 이웃(해시 그리드) → solver(λ, Δp) 반복 → 속도
-      renderer.compute(predictKernel);
-      renderer.compute(clearCellKernel);
-      renderer.compute(buildGridKernel);
-      for (let it = 0; it < SOLVER_ITER; it++) {
-        renderer.compute(lambdaKernel);
-        renderer.compute(deltaPKernel);
+      // PBF substep: 한 프레임을 작은 스텝으로 나눠 위치 보정을 작게 → 튐↓
+      const PBF_SUBSTEPS = 2;
+      dtUniform.value = deltaTime / PBF_SUBSTEPS;
+      for (let s = 0; s < PBF_SUBSTEPS; s++) {
+        renderer.compute(predictKernel);
+        renderer.compute(clearCellKernel);
+        renderer.compute(buildGridKernel);
+        for (let it = 0; it < SOLVER_ITER; it++) {
+          renderer.compute(lambdaKernel);
+          renderer.compute(deltaPKernel);
+        }
+        renderer.compute(velocityKernel);
       }
-      renderer.compute(velocityKernel);
       // SSFR 1단계: 입자 깊이를 depthRT 에 렌더 → grayscale 로 화면 확인
       renderer.setRenderTarget(depthRT);
       renderer.setClearColor(0x000000, 1);
