@@ -94,7 +94,7 @@ export default function FluidLab() {
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
     const EPS_RELAX = 100.0; // λ 분모 relaxation
-    const C_XSPH = 1.0; // XSPH 점성 계수 (속도 감쇠)
+    const C_XSPH = 2.0; // XSPH 점성 계수 (속도 감쇠)
     // coord 스케일 중력 (MLS-MPM 과 동일 스케일: 9.81²/gridSize)
     const GRAVITY = -(9.81 * 9.81) / 64;
 
