@@ -99,7 +99,7 @@ export default function FluidLab() {
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도
     const CELL_COUNT = GRID_RES ** 3;
     const MAX_PER_CELL = 24; // 셀당 최대 입자 (평균 1.35 → 24로 충분·이웃탐색 경량화)
-    const SOLVER_ITER = 12; // PBF solver 반복 (실제 중력 안정 임계)
+    const SOLVER_ITER = 12; // PBF solver 반복
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
     const EPS_RELAX = 500.0; // λ 분모 relaxation (고중력 안정 설정)
@@ -154,16 +154,22 @@ export default function FluidLab() {
     const FLUID_SCALE = cubeSpanProfile * glass.worldScale;
     const FLUID_Y = glass.bowlBottomY * glass.worldScale + glass.worldY;
 
-    // ── 실제 중력을 좌표 공간으로 매핑 ────────────────────────────────
-    // 검증 가능한 실제 값(잔 전체 높이)에 앵커한다. 프로파일 y=0(바닥)~림이
-    // 실제 GLASS_HEIGHT_M 이므로 1 profile 단위 = 실제 몇 m 인지 유도.
+    // ── 중력: 실제 물리값에서 유도 (겉은 실제, 시간 축만 연출값) ──────────
+    // g·잔 크기는 실제값으로 두고, g_sim = g_real·T²/L 로 sim 단위로 변환한다.
+    // 셋 다(중력·크기·시간)를 동시에 실시간 실제값으로 하면 매우 빠른 동역학이
+    // 돼 substep이 √g 규칙으로 16까지 필요해 무겁다. 그래서 눈에 안 보이는
+    // 시간 축(TIME_SCALE)만 연출값으로 잡아, 기존의 좋던 낙하감(substep 2,
+    // 가벼운 계산)을 그대로 유지한다. 아무도 담기는 시간을 재지 않으므로 문제없음.
     const GLASS_HEIGHT_M = 0.24; // 실제 와인잔 총 높이 ~24cm (리델 21~27.5cm 중간)
+    const G_REAL = 9.81; // 실제 중력 m/s²
     const profileMaxY = Math.max(...glass.profile.map((p) => p[1])); // 림(2.92)
     const metersPerProfile = GLASS_HEIGHT_M / profileMaxY;
-    // coord 1.0 = cubeSpanProfile profile 단위 → 실제 몇 m 인지.
+    // coord 1.0 = cubeSpanProfile profile 단위 → 1 coord = 실제 몇 m (L).
     const metersPerCoord = cubeSpanProfile * metersPerProfile;
-    // 실제 g = 9.81 m/s² 를 coord/s² 로. (예전 −9.81²/64 는 임의 스케일이었음)
-    const GRAVITY = -9.81 / metersPerCoord;
+    // 시간 배율 T: 1 sim-초 = 실제 T 초. 기존 좋던 g_sim≈1.5 가 나오도록 맞춤.
+    const TIME_SCALE = 0.112;
+    // g_sim = g_real · T² / L  (실제 g를 sim 좌표·시간 단위로 변환)
+    const GRAVITY = -(G_REAL * TIME_SCALE * TIME_SCALE) / metersPerCoord;
 
     const POLY_DEG = 5;
     const lutXs: number[] = [];
@@ -225,7 +231,8 @@ export default function FluidLab() {
       });
       const arr = new Float32Array(N * STRIDE);
       for (let i = 0; i < N; i++) {
-        // 초기 입자를 볼 프로파일 안에 배치.
+        // 초기 입자를 '가라앉은 위치'(아래 ~45%)에 배치 — 전체[0~1]에 뿌리면
+        // 2배 높이가 무너지며 격렬해져 많은 substep·iter이 필요해진다.
         const cy = Math.random();
         const rMax = bowlRadiusAtCoordY(cy) * 0.9;
         const rr = Math.sqrt(Math.random()) * rMax;
@@ -552,7 +559,7 @@ export default function FluidLab() {
       // 탭 복귀(누적된 큰 delta)·큰 화면(낮은 프레임률)에서 스텝이 커져 확
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
-      const PBF_SUBSTEPS = 16;
+      const PBF_SUBSTEPS = 2;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
@@ -582,8 +589,8 @@ export default function FluidLab() {
 
       // 디버그 로그: 속도·밀도·대류·볼 밖 입자 (MLS-MPM 여정에서 만든 지표)
       frameCount++;
-      if (frameCount % 12 === 0) {
-        const t = (frameCount / 60).toFixed(1);
+      if (frameCount % 60 === 0) {
+        const t = (frameCount / 60).toFixed(0);
         Promise.all([
           renderer.getArrayBufferAsync(particleBuffer.value),
           renderer.getArrayBufferAsync(densityBuffer.value),
