@@ -179,7 +179,7 @@ export default function FluidLab() {
 
     // ── 버퍼/유니폼/커널 핸들 ─────────────────────────────────────────
     // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let dtUniform: any, restDensityUniform: any;
+    let dtUniform: any, restDensityUniform: any, dampUniform: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let particleBuffer: any,
       lambdaBuffer: any,
@@ -238,6 +238,9 @@ export default function FluidLab() {
     function setupUniforms() {
       dtUniform = uniform(1 / 60);
       restDensityUniform = uniform(50000);
+      // 점성 감쇠(substep당). 잔이 멈춰 있을 때 무작위 지터를 잦아들게 한다.
+      // 와인의 점성 = 물리적으로 옳은 소산. 붓기는 중력이 재가속하니 회복.
+      dampUniform = uniform(0.9);
     }
 
     function setupComputeShaders() {
@@ -457,6 +460,8 @@ export default function FluidLab() {
           dv.addAssign(vj.sub(vi).mul(poly6(r2)));
         });
         vi.addAssign(dv.div(restDensityUniform).mul(C_XSPH));
+        // 점성 감쇠: 잔류 지터를 잦아들게 (결맞은 운동까지 잡음, XSPH 보완)
+        vi.mulAssign(dampUniform);
         p.get("velocity").assign(vi);
         p.get("position").assign(pred);
       })()
