@@ -105,7 +105,7 @@ export default function FluidLab() {
     const EPS_RELAX = 100.0; // λ 분모 relaxation
     const C_XSPH = 2.0; // XSPH 점성 계수 (속도 감쇠)
     // 표면장력(s_corr): 표면 입자를 응집시켜 요동 억제 + 벽 코팅.
-    const SCORR_K = 0.00003; // 표면장력 강도
+    const SCORR_K = 0.0; // 표면장력 강도 (진단: 0으로 꺼서 지터 원인 확인)
     const DELTA_Q2 = (0.2 * H) ** 2; // (0.2·H)² 기준 거리²
     const POLY6_DQ = POLY6 * (H2 - DELTA_Q2) ** 3; // poly6(ΔQ²)
     // coord 스케일 중력 (MLS-MPM 과 동일 스케일: 9.81²/gridSize)
