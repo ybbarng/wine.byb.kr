@@ -97,7 +97,7 @@ export default function FluidLab() {
     // 붓기: 세워진 병 안에 와인(입자)을 채우고, 병을 기울여 입구로 쏟는다.
     const FLUID_ON = true;
     const SIMULATE = true; // false 면 물리 건너뛰고 채운 상태만 렌더(정적 확인용)
-    const N = 4096; // 입자 수 (반쯤 채운 병 — 우선 가볍게, 이후 늘림)
+    const N_TARGET = 8192; // 목표 입자 수(전체 채움 검증) — 실제 N 은 채움 후 확정
     const WINE_FILL_TOP = 0.72; // (구) 정적 와인 메쉬용 — FLUID_ON 이면 미사용
 
     // PBF 이산화(H·격자·rest density·완화)는 아래 병 규격 뒤에서 채움 간격 d
@@ -131,9 +131,22 @@ export default function FluidLab() {
     // ── 자기일관 SPH 이산화 — 채움 간격 d 를 정하면 H·격자·rest density·완화를
     // 모두 그로부터 유도한다. 잔에서 검증된 안정 영역(H/d≈1.8, EPS∝1/H²)을
     // 입자 수와 무관하게 유지 → 어떤 N 에서도 같은 물리, 지터 없이 정지에 도달.
-    const rFill = BODY_R * 0.9; // 채움 반경(몸통 안쪽 살짝)
-    const fillH = BODY_TOP * 0.55; // 몸통 바닥부터 절반쯤
-    const d = Math.cbrt((fillH * Math.PI * rFill * rFill) / N); // 격자 간격
+    // 병 내부 반경(바닥 기준 높이 h) — shader 의 rAt 과 동일식(채움·검증 공용).
+    const radiusAtJS = (hh: number): number => {
+      const t2 = Math.max(0, Math.min(1, (hh - BODY_TOP) / (NECK_TOP - BODY_TOP)));
+      return BODY_R * (1 - t2) + NECK_R * t2;
+    };
+    // 전체 내부 부피(원판 적분)에서 목표 입자 수 → 격자 간격 d 산출(자기일관).
+    let volFull = 0;
+    {
+      const S = 240;
+      for (let i = 0; i < S; i++) {
+        const hh = ((i + 0.5) / S) * NECK_TOP;
+        volFull += Math.PI * radiusAtJS(hh) ** 2 * (NECK_TOP / S);
+      }
+    }
+    const d = Math.cbrt(volFull / N_TARGET); // 격자 간격
+    const PARTICLE_R = d; // 렌더 입자 반경 = 간격 → SSFR 표면이 병 벽을 안 넘음
     const H = 1.8 * d; // 커널 반경 = 간격의 1.8배 (안정 이웃 수 ~ 잔과 동일)
     const H2 = H * H;
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도 (x,z: [0,1])
@@ -161,21 +174,25 @@ export default function FluidLab() {
     const restDensityValue = restDensityFor(d);
     // λ 완화(CFM): 잔 세트(H=0.045, EPS=500)에서 Σ|∇C|²∝1/H² 이므로 1/H² 로 스케일.
     const EPS_RELAX = 500.0 * (0.045 / H) ** 2;
-    // 세운 병 몸통에 격자로 N개 채움(바닥부터 절반쯤).
+    // ── 채움: 병 내부를 SDF 형상 따라 가득. 각 높이서 반경 (radiusAt−PARTICLE_R)
+    // 안쪽에만 두어, 렌더 표면(±PARTICLE_R)이 병 벽을 안 넘게 한다. ──
     const wineFill: number[][] = [];
     {
-      const nx = Math.ceil(rFill / d);
-      const pts: number[][] = [];
-      for (let iy = 0; pts.length < N && iy < 100000; iy++) {
-        const y = BOTTLE_BOTTOM + d * 0.5 + iy * d;
+      const topH = NECK_TOP * 0.98;
+      for (let iy = 0; ; iy++) {
+        const h = d * 0.5 + iy * d; // 바닥 기준 높이
+        if (h > topH) break;
+        const rMax = Math.max(radiusAtJS(h) - PARTICLE_R, 0);
+        const nx = Math.ceil(rMax / d);
+        const y = BOTTLE_BOTTOM + h;
         for (let ix = -nx; ix <= nx; ix++)
           for (let iz = -nx; iz <= nx; iz++) {
-            if (Math.hypot(ix * d, iz * d) <= rFill)
-              pts.push([BOTTLE_AXIS[0] + ix * d, y, BOTTLE_AXIS[1] + iz * d]);
+            if (Math.hypot(ix * d, iz * d) <= rMax)
+              wineFill.push([BOTTLE_AXIS[0] + ix * d, y, BOTTLE_AXIS[1] + iz * d]);
           }
       }
-      for (let i = 0; i < N; i++) wineFill.push(pts[i]);
     }
+    const N = wineFill.length; // 실제 입자 수(채운 결과)
     const C_XSPH = 0.2; // XSPH 점성 (낮춰 생동감 복원 — 튐·흐름 살림)
     // 표면장력(s_corr): 표면 입자를 응집시켜 요동 억제 + 벽 코팅.
     const SCORR_K = 0.00001; // 표면장력 (원래 3e-5 → 순환 완화·응집 유지 절충)
@@ -617,7 +634,7 @@ export default function FluidLab() {
     function setupMesh() {
       // SSFR 1단계: 입자를 sphere 로 렌더해 '뷰 공간 깊이'를 depthRT 에 쓴다.
       const geometry = BufferGeometryUtils.mergeVertices(
-        new THREE.IcosahedronGeometry(0.03, 2).deleteAttribute("uv"),
+        new THREE.IcosahedronGeometry(PARTICLE_R, 2).deleteAttribute("uv"),
       );
       const material = new A.MeshBasicNodeMaterial();
       material.positionNode = Fn(() => {
@@ -869,12 +886,7 @@ export default function FluidLab() {
             let sumD = 0;
             let leaked = 0; // 병 밖으로 샌 입자 수
             let comY = 0; // 무게중심 높이(coord) — 안정되면 일정
-            // 병 SDF(tilt=0 기준) 내부 판정용 반경 함수(shader 와 동일)
-            const radiusAtJS = (hh: number): number => {
-              const t2 = Math.max(0, Math.min(1, (hh - BODY_TOP) / (NECK_TOP - BODY_TOP)));
-              return BODY_R * (1 - t2) + NECK_R * t2;
-            };
-            const eps = 0.012;
+            const eps = 0.012; // 병 SDF 판정 여유(입자 반경 정도)
             for (let i = 0; i < N; i++) {
               const vx = arr[i * STRIDE + 4];
               const vy = arr[i * STRIDE + 5];
