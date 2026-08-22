@@ -38,7 +38,7 @@ export default function PathTraceShowcase() {
       renderer.setPixelRatio(1);
       renderer.setSize(mount!.clientWidth, mount!.clientHeight);
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.0;
+      renderer.toneMappingExposure = 1.15;
       mount!.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
@@ -57,8 +57,8 @@ export default function PathTraceShowcase() {
       );
       const hdr = await hdrLoader.loadAsync("royal_esplanade_2k.hdr.jpg");
       hdr.mapping = THREE.EquirectangularReflectionMapping;
-      scene.environment = hdr;
-      scene.background = hdr;
+      scene.environment = hdr; // 조명·반사는 HDR 유지
+      scene.background = new THREE.Color(0xece7dd); // 배경은 맑은 중립(제품샷)
 
       // ── 유리잔 (맑은 유리, 완전 투과) ──────────────────────────
       const gCurve = new THREE.CatmullRomCurve3(
@@ -108,12 +108,12 @@ export default function PathTraceShowcase() {
       const bottleMat = new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         metalness: 0,
-        roughness: 0.06,
+        roughness: 0.04,
         transmission: 1,
         ior: 1.5,
-        thickness: 0.06 * m,
-        attenuationColor: new THREE.Color(0x0d3d1e), // 짙은 병유리 초록
-        attenuationDistance: 0.05 * m,
+        thickness: 0.05 * m,
+        attenuationColor: new THREE.Color(0x2f7d45), // 병유리 초록(속 비치게 밝게)
+        attenuationDistance: 0.16 * m,
         side: THREE.DoubleSide,
       });
       const bottleMesh = new THREE.Mesh(bottleGeo, bottleMat);
@@ -133,8 +133,8 @@ export default function PathTraceShowcase() {
         transmission: 1,
         ior: 1.37,
         thickness: Rw * 2,
-        attenuationColor: new THREE.Color(0x4a0510), // 깊은 레드와인
-        attenuationDistance: Rw * 0.5,
+        attenuationColor: new THREE.Color(0x6e0c1a), // 깊은 레드와인(비치게 밝게)
+        attenuationDistance: Rw * 0.9,
         side: THREE.DoubleSide,
       });
       const wineMesh = new THREE.Mesh(wineGeo, wineMat);
