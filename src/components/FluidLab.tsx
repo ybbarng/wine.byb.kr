@@ -576,18 +576,21 @@ export default function FluidLab() {
       renderer.setClearColor(0x000000, 1);
       renderer.clear();
       renderer.render(fluidScene, camera);
-      // 깊이 평활화를 여러 번 반복(ping-pong)해 강하게 평평화 → 뭉게구름 제거
+      // 깊이 평활화(분리형 1D 가로+세로)를 여러 번 반복해 강하게 평평화 → 뭉게구름 제거
+      renderer.setRenderTarget(blurRT2);
+      renderer.clear();
+      blurFromDepth.render(renderer); // 가로: depthRT → blurRT2
       renderer.setRenderTarget(blurRT);
       renderer.clear();
-      blurFromDepth.render(renderer); // depthRT → blurRT
-      const SMOOTH_ITER = 3; // 추가 반복 횟수 (blurRT↔blurRT2)
+      blurPong.render(renderer); // 세로: blurRT2 → blurRT
+      const SMOOTH_ITER = 3; // 추가 2D 반복 (가로+세로)
       for (let s = 0; s < SMOOTH_ITER; s++) {
         renderer.setRenderTarget(blurRT2);
         renderer.clear();
-        blurPing.render(renderer); // blurRT → blurRT2
+        blurPing.render(renderer); // 가로: blurRT → blurRT2
         renderer.setRenderTarget(blurRT);
         renderer.clear();
-        blurPong.render(renderer); // blurRT2 → blurRT
+        blurPong.render(renderer); // 세로: blurRT2 → blurRT
       }
       // 배경 HDR + 유리잔 렌더 → 그 위에 유체 표면(알파) 합성
       renderer.setRenderTarget(null);
@@ -697,11 +700,11 @@ export default function FluidLab() {
       blurRT2.texture.type = THREE.FloatType;
       const texel = new THREE.Vector2(1 / rtW, 1 / rtH);
 
-      // SSFR 2.5단계: 깊이 bilateral blur (개별 입자 요철 제거)를 여러 번 반복
-      // (ping-pong)해 강하게 평평화한다 — 1패스로는 둥근 블롭이 흐려지기만 하고
-      // 안 없어져 '뭉게구름'처럼 보인다. 아래 factory 로 입력 텍스처만 바꿔 재사용.
+      // SSFR 2.5단계: 깊이 bilateral blur (둥근 블롭·뭉게구름 제거)를 강하게 하되
+      // 싸게 — 2D 커널(N²) 대신 분리형(separable) 1D(가로+세로, 2N)로 쪼개 반복.
+      // dux/duy 로 방향 지정. factory 로 입력 텍스처만 바꿔 ping-pong 재사용.
       // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const makeBlur = (srcTex: any) => {
+      const makeBlur1D = (srcTex: any, dux: number, duy: number) => {
         const q = new A.QuadMesh(new A.MeshBasicNodeMaterial());
         q.material.colorNode = Fn(() => {
           const uv = screenUV;
@@ -710,24 +713,20 @@ export default function FluidLab() {
           If(dCen.greaterThan(0.001), () => {
             const sum = dCen.toVar();
             const wsum = float(1).toVar();
-            const R = 8;
+            const R = 6;
             const sigR2 = 2 * 0.06 * 0.06; // 깊이 차(range) 분산
             for (let i = -R; i <= R; i++) {
-              for (let j = -R; j <= R; j++) {
-                if (i === 0 && j === 0) continue;
-                const du = texture(
-                  srcTex,
-                  uv.add(vec2(i * texel.x, j * texel.y)),
-                ).x.toVar();
-                const dd = du.sub(dCen);
-                const wr = exp(dd.mul(dd).div(-sigR2));
-                const ws = Math.exp(-(i * i + j * j) / (2 * (R * 0.5) ** 2));
-                const w = du
-                  .greaterThan(0.001)
-                  .select(float(ws).mul(wr), float(0));
-                sum.addAssign(du.mul(w));
-                wsum.addAssign(w);
-              }
+              if (i === 0) continue;
+              const off = vec2(i * dux * texel.x, i * duy * texel.y);
+              const du = texture(srcTex, uv.add(off)).x.toVar();
+              const dd = du.sub(dCen);
+              const wr = exp(dd.mul(dd).div(-sigR2));
+              const ws = Math.exp(-(i * i) / (2 * (R * 0.5) ** 2));
+              const w = du
+                .greaterThan(0.001)
+                .select(float(ws).mul(wr), float(0));
+              sum.addAssign(du.mul(w));
+              wsum.addAssign(w);
             }
             out.assign(sum.div(wsum));
           });
@@ -735,9 +734,11 @@ export default function FluidLab() {
         })();
         return q;
       };
-      blurFromDepth = makeBlur(depthRT.texture); // depthRT → blurRT (1패스)
-      blurPing = makeBlur(blurRT.texture); //  blurRT  → blurRT2
-      blurPong = makeBlur(blurRT2.texture); // blurRT2 → blurRT
+      // 가로: depthRT→blurRT2, 세로: blurRT2→blurRT (1 full 2D 패스)
+      // 반복: 가로 blurRT→blurRT2, 세로 blurRT2→blurRT
+      blurFromDepth = makeBlur1D(depthRT.texture, 1, 0); // 가로(첫 입력=depth)
+      blurPing = makeBlur1D(blurRT.texture, 1, 0); // 가로(입력=blurRT)
+      blurPong = makeBlur1D(blurRT2.texture, 0, 1); // 세로(입력=blurRT2)
 
       // SSFR 2단계: 깊이에서 view 위치→법선 재구성 + 와인 셰이딩(색+프레넬)
       const tanF = Math.tan(((40 * Math.PI) / 180) / 2); // fov 40°
