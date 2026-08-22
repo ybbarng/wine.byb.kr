@@ -93,6 +93,9 @@ export default function FluidLab() {
     const params = { particleCount: 8192 * 2 }; // 16384
     const N = params.particleCount;
 
+    // 유체(와인) 시뮬 on/off. 지금은 병/잔 배치 단계라 끔.
+    const FLUID_ON = false;
+
     // ── PBF 파라미터 (물리는 coord 0~1 공간) ──────────────────────────
     const H = 0.045; // smoothing radius (커널 반경)
     const H2 = H * H;
@@ -630,49 +633,53 @@ export default function FluidLab() {
       scene.add(glassMesh);
     }
 
-    // 보이는 와인병 메쉬 — SDF(NECK/AXIS/…)와 같은 위치·기울기로 렌더.
+    // 실제 750ml 와인병 — 잔 옆에 세워서(반투명) 렌더. 잔 크기 대비 정확한 비율.
     function setupBottle() {
-      const FS = FLUID_SCALE;
-      const c2w = (c: number[]) =>
-        new THREE.Vector3(
-          c[0] * FS - FS * 0.5,
-          c[1] * FS + FLUID_Y,
-          c[2] * FS - FS * 0.5,
-        );
-      const neckW = c2w(NECK);
-      const Rw = BOTTLE_R * FS;
-      const Sw = SPOUT_R * FS;
-      const Lw = BOTTLE_LEN * FS;
-      const NLw = NECK_LEN * FS;
-      // 프로파일(반경, 축거리): 입구(주둥이)→어깨→몸통→바닥
+      // 잔 높이(프로파일 2.92 × worldScale) = 실제 24cm. → world/m 배율.
+      const worldPerM = (profileMaxY * glass.worldScale) / GLASS_HEIGHT_M;
+      // 750ml 보르도 병: 높이 30cm, 몸통 지름 7.5cm, 목 지름 2.5cm.
+      const H = 0.3 * worldPerM; // 병 높이
+      const bR = 0.0375 * worldPerM; // 몸통 반경
+      const nR = 0.0125 * worldPerM; // 목 반경
+      // 프로파일(반경, 높이): 바닥→몸통→어깨→목→주둥이
       const pts = [
-        new THREE.Vector2(Sw, 0),
-        new THREE.Vector2(Sw, NLw * 0.55),
-        new THREE.Vector2(Rw, NLw),
-        new THREE.Vector2(Rw, Lw),
-        new THREE.Vector2(0.001, Lw),
+        new THREE.Vector2(0.001, 0),
+        new THREE.Vector2(bR * 0.9, 0.004 * H),
+        new THREE.Vector2(bR, 0.03 * H),
+        new THREE.Vector2(bR, 0.6 * H), // 원통 몸통
+        new THREE.Vector2(bR * 0.88, 0.66 * H),
+        new THREE.Vector2(nR, 0.77 * H), // 어깨→목
+        new THREE.Vector2(nR, 0.96 * H), // 목
+        new THREE.Vector2(nR * 1.25, 0.985 * H),
+        new THREE.Vector2(nR * 1.25, 1.0 * H), // 주둥이 립
+        new THREE.Vector2(nR * 0.7, 1.0 * H), // 입구(속 비침)
       ];
-      const geometry = new THREE.LatheGeometry(pts, 48);
+      const geometry = new THREE.LatheGeometry(pts, 56);
       geometry.computeVertexNormals();
       const material = new A.MeshPhysicalNodeMaterial({
-        color: 0x0b2e18, // 짙은 초록 병유리 (불투명 — 속 와인 안 비침)
+        color: 0x2f6a45, // 초록 병유리 (반투명 — 속이 보이게)
         metalness: 0,
-        roughness: 0.15,
+        roughness: 0.08,
+        transmission: 0.78,
+        ior: 1.5,
+        thickness: 0.2,
         side: THREE.DoubleSide,
       });
       material.envMapIntensity = 1.0;
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.copy(neckW);
-      mesh.rotation.z = -Math.atan2(AXIS[0], AXIS[1]); // 로컬 +y → AXIS
+      // 잔 옆(오른쪽), 같은 바닥(테이블)에 세워 둠.
+      mesh.position.set(0.42, glass.worldY, 0.0);
       mesh.frustumCulled = false;
       scene.add(mesh);
     }
 
     function setupParticles() {
-      setupBuffers();
-      setupUniforms();
-      setupComputeShaders();
-      setupMesh();
+      if (FLUID_ON) {
+        setupBuffers();
+        setupUniforms();
+        setupComputeShaders();
+        setupMesh();
+      }
       setupGlass();
       setupBottle();
     }
@@ -688,6 +695,12 @@ export default function FluidLab() {
       // 탭 복귀(누적된 큰 delta)·큰 화면(낮은 프레임률)에서 스텝이 커져 확
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
+      if (!FLUID_ON) {
+        // 유체 끔 — 배경+잔+병만 렌더
+        renderer.setRenderTarget(null);
+        renderer.render(scene, camera);
+        return;
+      }
       const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
       // 중력 ease-in: 처음 ~1.3s 동안 0→GRAVITY. 병 속 와인이 한꺼번에 입구로
@@ -809,13 +822,14 @@ export default function FluidLab() {
         0.01,
         10,
       );
-      camera.position.set(-1.3, 1.3, -1.3);
+      // 병(큰 편)이 옆에 있으니 줌아웃 + 잔·병 사이를 타깃으로.
+      camera.position.set(-1.9, 1.7, -1.9);
 
       controls = new OrbitControls(camera, renderer.domElement);
       controls.minDistance = 1;
-      controls.maxDistance = 3;
+      controls.maxDistance = 5;
       controls.maxPolarAngle = Math.PI * 0.5;
-      controls.target.set(0, 0.7, 0);
+      controls.target.set(0.25, 0.55, 0);
 
       const hdrLoader = new UltraHDRLoader().setPath("/textures/equirectangular/");
       const hdrTexture = await hdrLoader.loadAsync("royal_esplanade_2k.hdr.jpg");
