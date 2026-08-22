@@ -600,12 +600,12 @@ export default function FluidLab() {
       const material = new A.MeshBasicNodeMaterial();
       material.colorNode = Fn(() => {
         const nv = normalView; // 뷰 공간 법선
-        const off = nv.xy.mul(0.02); // 화면 굴절 오프셋(법선 tilt만큼)
+        const off = nv.xy.mul(0.035); // 화면 굴절 오프셋(법선 tilt만큼)
         const bg = texture(sceneRT.texture, screenUV.add(off)).rgb.toVar();
         const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
-        // 굴절 배경 + 프레넬 하이라이트(가장자리 밝게 = 유리 반사/윤곽)
-        return vec4(bg.add(vec3(0.8, 0.88, 0.95).mul(fres.mul(0.55))), 1.0);
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.5);
+        // 굴절된 배경(유리 너머) + 아주 옅은 프레넬 윤곽/하이라이트
+        return vec4(bg.add(vec3(0.85, 0.9, 1.0).mul(fres.mul(0.18))), 1.0);
       })();
       material.side = THREE.FrontSide;
       glassMesh = new THREE.Mesh(geometry, material);
