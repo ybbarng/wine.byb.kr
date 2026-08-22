@@ -197,6 +197,8 @@ export default function FluidLab() {
     // ── 버퍼/유니폼/커널 핸들 ─────────────────────────────────────────
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let dtUniform: any, restDensityUniform: any, viscUniform: any, gravUniform: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL — 따르기(pour): 활성 입자 수
+    let pourCountUniform: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let particleBuffer: any,
       lambdaBuffer: any,
@@ -230,16 +232,19 @@ export default function FluidLab() {
         predicted: { type: "vec3" },
       });
       const arr = new Float32Array(N * STRIDE);
+      // 따르기(pour): 모든 입자를 잔 위쪽 '스폰 물줄기 원반'에 대기시킨다.
+      // render()가 pourCount를 늘리면 index 순으로 풀려 중력으로 떨어진다.
+      // 대기 입자는 렌더·물리에서 제외돼 안 보이고 간섭 안 함.
+      const SPAWN_Y = 0.95; // 스폰 높이(잔 위쪽)
+      const SPAWN_R = 0.03; // 물줄기 반경
       for (let i = 0; i < N; i++) {
-        // 처음부터 '성기게'(밀도 낮게) 아래쪽에 배치 — 조밀하게 겹쳐 놓으면
-        // 밀도 제약이 밀어내며 위로 폭발(첫 빅 점프). 성기면 부드럽게 압축·안착.
-        const cy = Math.random() * 0.72;
-        const rMax = bowlRadiusAtCoordY(cy) * 0.98;
-        const rr = Math.sqrt(Math.random()) * rMax;
+        const rr = Math.sqrt(Math.random()) * SPAWN_R;
         const ang = Math.random() * Math.PI * 2;
         arr[i * STRIDE] = 0.5 + rr * Math.cos(ang);
-        arr[i * STRIDE + 1] = cy;
+        arr[i * STRIDE + 1] = SPAWN_Y;
         arr[i * STRIDE + 2] = 0.5 + rr * Math.sin(ang);
+        // 아래로 붓는 초기 속도 (풀리면 이 속도로 떨어지기 시작)
+        arr[i * STRIDE + 5] = -2.5;
       }
       particleBuffer = instancedArray(arr, pStruct);
       particleBuffer.setPBO(true);
@@ -260,7 +265,8 @@ export default function FluidLab() {
       // 잦아들게 한다. 0.99는 약해서 낙하 종단속도(1.25)가 관측 낙하(0.44)보다
       // 훨씬 높아 낙하를 안 늦춘다(과거 0.9는 종단 0.125로 낙하를 깎았음).
       viscUniform = uniform(1.0); // 점성 감쇠 끔(생동감) — 정지는 EPS가 담당
-      gravUniform = uniform(GRAVITY); // render()에서 처음 0→GRAVITY로 ease-in
+      gravUniform = uniform(GRAVITY);
+      pourCountUniform = uniform(0, "int"); // 따르기: 활성 입자 수(render에서 증가)
     }
 
     function setupComputeShaders() {
@@ -321,29 +327,35 @@ export default function FluidLab() {
 
       // 2) 예측: v += g·dt, predicted = x + v·dt
       predictKernel = Fn(() => {
-        const p = particleBuffer.element(instanceIndex);
-        const v = p.get("velocity").toVar();
-        v.y.addAssign(gravUniform.mul(dtUniform));
-        const pred = p.get("position").add(v.mul(dtUniform)).toVar();
-        pred.assign(clamp(pred, vec3(0.001), vec3(0.999)));
-        p.get("velocity").assign(v);
-        p.get("predicted").assign(pred);
+        // 대기(parked) 입자는 건너뜀 — 풀린(활성) 입자만 물리 적용.
+        If(int(instanceIndex).lessThan(pourCountUniform), () => {
+          const p = particleBuffer.element(instanceIndex);
+          const v = p.get("velocity").toVar();
+          v.y.addAssign(gravUniform.mul(dtUniform));
+          const pred = p.get("position").add(v.mul(dtUniform)).toVar();
+          pred.assign(clamp(pred, vec3(0.001), vec3(0.999)));
+          p.get("velocity").assign(v);
+          p.get("predicted").assign(pred);
+        });
       })()
         .compute(N)
         .setName("predict");
 
       // 3) 해시 그리드 빌드 (predicted 기준)
       buildGridKernel = Fn(() => {
-        const pred = particleBuffer.element(instanceIndex).get("predicted");
-        const cid = cellId(cellOf(pred)).toVar();
-        const idx = atomicAdd(
-          cellCountBuffer.element(cid).get("count"),
-          int(1),
-        ).toVar();
-        If(idx.lessThan(int(MAX_PER_CELL)), () => {
-          cellIdsBuffer
-            .element(cid.mul(MAX_PER_CELL).add(idx))
-            .assign(int(instanceIndex));
+        // 대기 입자는 그리드에 안 넣음 — 활성 입자만 이웃으로 잡힘.
+        If(int(instanceIndex).lessThan(pourCountUniform), () => {
+          const pred = particleBuffer.element(instanceIndex).get("predicted");
+          const cid = cellId(cellOf(pred)).toVar();
+          const idx = atomicAdd(
+            cellCountBuffer.element(cid).get("count"),
+            int(1),
+          ).toVar();
+          If(idx.lessThan(int(MAX_PER_CELL)), () => {
+            cellIdsBuffer
+              .element(cid.mul(MAX_PER_CELL).add(idx))
+              .assign(int(instanceIndex));
+          });
         });
       })()
         .compute(N)
@@ -418,72 +430,81 @@ export default function FluidLab() {
 
       // 4) λ 계산: 밀도 제약 C_i = ρ_i/ρ0 − 1, λ_i = −C_i/(Σ|∇C|²+ε)
       lambdaKernel = Fn(() => {
-        const pi = particleBuffer
-          .element(instanceIndex)
-          .get("predicted")
-          .toConst();
-        const rho = float(0).toVar();
-        const gradCi = vec3(0).toVar(); // Σ∇W (·1/ρ0 로 ∇C_ii)
-        const sumGrad2 = float(0).toVar(); // Σ_{j} |∇C_ij|²
-        rho.addAssign(poly6(float(0))); // self (r=0)
-        forEachNeighbor(pi, ({ rij, r2 }) => {
-          const r = r2.sqrt();
-          rho.addAssign(poly6(r2));
-          const grad = spikyGrad(rij, r).div(restDensityUniform);
-          gradCi.addAssign(grad);
-          sumGrad2.addAssign(grad.dot(grad));
+        If(int(instanceIndex).lessThan(pourCountUniform), () => {
+          const pi = particleBuffer
+            .element(instanceIndex)
+            .get("predicted")
+            .toConst();
+          const rho = float(0).toVar();
+          const gradCi = vec3(0).toVar(); // Σ∇W (·1/ρ0 로 ∇C_ii)
+          const sumGrad2 = float(0).toVar(); // Σ_{j} |∇C_ij|²
+          rho.addAssign(poly6(float(0))); // self (r=0)
+          forEachNeighbor(pi, ({ rij, r2 }) => {
+            const r = r2.sqrt();
+            rho.addAssign(poly6(r2));
+            const grad = spikyGrad(rij, r).div(restDensityUniform);
+            gradCi.addAssign(grad);
+            sumGrad2.addAssign(grad.dot(grad));
+          });
+          densityBuffer.element(instanceIndex).assign(rho);
+          const c = rho.div(restDensityUniform).sub(1.0);
+          sumGrad2.addAssign(gradCi.dot(gradCi));
+          const lambda = c.negate().div(sumGrad2.add(EPS_RELAX));
+          lambdaBuffer.element(instanceIndex).assign(lambda);
         });
-        densityBuffer.element(instanceIndex).assign(rho);
-        const c = rho.div(restDensityUniform).sub(1.0);
-        sumGrad2.addAssign(gradCi.dot(gradCi));
-        const lambda = c.negate().div(sumGrad2.add(EPS_RELAX));
-        lambdaBuffer.element(instanceIndex).assign(lambda);
       })()
         .compute(N)
         .setName("lambda");
 
       // 5) 위치 보정 Δp_i = (1/ρ0) Σ (λ_i+λ_j) ∇W, predicted += Δp, 경계
       deltaPKernel = Fn(() => {
-        const p = particleBuffer.element(instanceIndex);
-        const pi = p.get("predicted").toVar();
-        const lambdaI = lambdaBuffer.element(instanceIndex).toConst();
-        const dp = vec3(0).toVar();
-        forEachNeighbor(pi, ({ j, rij, r2 }) => {
-          const r = r2.sqrt();
-          const lambdaJ = lambdaBuffer.element(j).toConst();
-          const grad = spikyGrad(rij, r);
-          // 표면장력 s_corr = −k (W(r)/W(ΔQ))⁴ (Macklin&Müller 식 13)
-          const ratio = poly6(r2).div(POLY6_DQ).toVar();
-          const r2c = ratio.mul(ratio);
-          const scorr = float(-SCORR_K).mul(r2c).mul(r2c);
-          dp.addAssign(grad.mul(lambdaI.add(lambdaJ).add(scorr)));
+        If(int(instanceIndex).lessThan(pourCountUniform), () => {
+          const p = particleBuffer.element(instanceIndex);
+          const pi = p.get("predicted").toVar();
+          const lambdaI = lambdaBuffer.element(instanceIndex).toConst();
+          const dp = vec3(0).toVar();
+          forEachNeighbor(pi, ({ j, rij, r2 }) => {
+            const r = r2.sqrt();
+            const lambdaJ = lambdaBuffer.element(j).toConst();
+            const grad = spikyGrad(rij, r);
+            // 표면장력 s_corr = −k (W(r)/W(ΔQ))⁴ (Macklin&Müller 식 13)
+            const ratio = poly6(r2).div(POLY6_DQ).toVar();
+            const r2c = ratio.mul(ratio);
+            const scorr = float(-SCORR_K).mul(r2c).mul(r2c);
+            dp.addAssign(grad.mul(lambdaI.add(lambdaJ).add(scorr)));
+          });
+          dp.divAssign(restDensityUniform);
+          pi.addAssign(dp);
+          pi.assign(clampToBowl(pi));
+          p.get("predicted").assign(pi);
         });
-        dp.divAssign(restDensityUniform);
-        pi.addAssign(dp);
-        pi.assign(clampToBowl(pi));
-        p.get("predicted").assign(pi);
       })()
         .compute(N)
         .setName("deltaP");
 
       // 6) 속도 갱신: v = (predicted − x)/dt, x = predicted
       velocityKernel = Fn(() => {
-        const p = particleBuffer.element(instanceIndex);
-        const pos = p.get("position").toConst();
-        const pred = p.get("predicted").toConst();
-        const vi = pred.sub(pos).div(dtUniform).toVar();
-        // XSPH 점성: 이웃과의 속도 차를 줄여 유체가 매끄럽게 잦아든다.
-        const dv = vec3(0).toVar();
-        forEachNeighbor(pred, ({ j, r2 }) => {
-          const pj = particleBuffer.element(j);
-          const vj = pj.get("predicted").sub(pj.get("position")).div(dtUniform);
-          dv.addAssign(vj.sub(vi).mul(poly6(r2)));
+        If(int(instanceIndex).lessThan(pourCountUniform), () => {
+          const p = particleBuffer.element(instanceIndex);
+          const pos = p.get("position").toConst();
+          const pred = p.get("predicted").toConst();
+          const vi = pred.sub(pos).div(dtUniform).toVar();
+          // XSPH 점성: 이웃과의 속도 차를 줄여 유체가 매끄럽게 잦아든다.
+          const dv = vec3(0).toVar();
+          forEachNeighbor(pred, ({ j, r2 }) => {
+            const pj = particleBuffer.element(j);
+            const vj = pj
+              .get("predicted")
+              .sub(pj.get("position"))
+              .div(dtUniform);
+            dv.addAssign(vj.sub(vi).mul(poly6(r2)));
+          });
+          vi.addAssign(dv.div(restDensityUniform).mul(C_XSPH));
+          // 점성 소산: 출렁임(슬로싱)을 잦아들게 (약하게 — 낙하는 안 늦춤)
+          vi.mulAssign(viscUniform);
+          p.get("velocity").assign(vi);
+          p.get("position").assign(pred);
         });
-        vi.addAssign(dv.div(restDensityUniform).mul(C_XSPH));
-        // 점성 소산: 출렁임(슬로싱)을 잦아들게 (약하게 — 낙하는 안 늦춤)
-        vi.mulAssign(viscUniform);
-        p.get("velocity").assign(vi);
-        p.get("position").assign(pred);
       })()
         .compute(N)
         .setName("velocity");
@@ -562,11 +583,13 @@ export default function FluidLab() {
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
-      // 중력 ease-in: 처음 48프레임(~0.8s) 동안 0→GRAVITY 로 부드럽게 올려
-      // 초기 안착 충격(살짝 남던 첫 점프)을 없앤다.
-      const RAMP = 48;
-      gravUniform.value =
-        GRAVITY * Math.min(1, (frameCount + 1) / RAMP);
+      gravUniform.value = GRAVITY; // 따르기 땐 처음부터 실중력(입자가 시간차로 들어옴)
+      // 따르기(pour): 매 프레임 pourRate 만큼 입자를 풀어 위에서 떨어뜨린다.
+      const POUR_RATE = 40; // 프레임당 방출 입자 수 (전체 채우는 데 ~7s)
+      const released = Math.min(N, Math.floor((frameCount + 1) * POUR_RATE));
+      pourCountUniform.value = released;
+      // biome-ignore lint/suspicious/noExplicitAny: mesh.count
+      (particleMesh as any).count = released; // 풀린 입자만 렌더
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
         renderer.compute(clearCellKernel);
