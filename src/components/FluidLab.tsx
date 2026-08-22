@@ -109,8 +109,8 @@ export default function FluidLab() {
     const AXIS = [_ax[0] / _am, _ax[1] / _am, _ax[2] / _am]; // 정규화
     const BOTTLE_LEN = 1.25; // 입구→바닥 길이
     const BOTTLE_R = 0.15; // 몸통 반경
-    const SPOUT_R = 0.05; // 입구 반경(물줄기 굵기)
-    const NECK_LEN = 0.4; // 입구 근처에서 SPOUT_R→BOTTLE_R 로 넓어지는 구간
+    const SPOUT_R = 0.08; // 입구 반경(병목 넓혀 몰림 폭발 완화)
+    const NECK_LEN = 0.55; // 입구 근처에서 SPOUT_R→BOTTLE_R 로 넓어지는 구간
     const MAX_PER_CELL = 24; // 셀당 최대 입자 (평균 1.35 → 24로 충분·이웃탐색 경량화)
     const SOLVER_ITER = 4; // 비압축 강화(점프·표면진동 완화)
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
@@ -648,7 +648,7 @@ export default function FluidLab() {
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
       // 중력 ease-in: 처음 ~1.3s 동안 0→GRAVITY. 병 속 와인이 한꺼번에 입구로
       // 폭발적으로 쏟아지는(잔보다 넓게 뿜는) 초기 분출을 없앤다.
-      const RAMP = 80;
+      const RAMP = 150; // 더 천천히(2.5s) 중력 올려 초기 몰림 폭발 완화
       gravUniform.value = GRAVITY * Math.min(1, (frameCount + 1) / RAMP);
       // 모든 입자 활성(병에 담겨 있다가 중력으로 입구로 흘러나옴)
       pourCountUniform.value = N;
