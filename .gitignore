@@ -54,3 +54,6 @@ next-env.d.ts
 
 # 로컬 캡처/디버그 스크립트
 /shot*.mjs
+
+# 사용자 워크트리(다른 작업용)
+.claude/worktrees/
