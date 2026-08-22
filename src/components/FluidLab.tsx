@@ -235,16 +235,18 @@ export default function FluidLab() {
       // 따르기(pour): 모든 입자를 잔 위쪽 '스폰 물줄기 원반'에 대기시킨다.
       // render()가 pourCount를 늘리면 index 순으로 풀려 중력으로 떨어진다.
       // 대기 입자는 렌더·물리에서 제외돼 안 보이고 간섭 안 함.
-      const SPAWN_Y = 0.95; // 스폰 높이(잔 위쪽)
-      const SPAWN_R = 0.03; // 물줄기 반경
+      const SPAWN_Y = 0.95; // 스폰 높이(잔 위쪽·가운데)
+      const SPAWN_R = 0.014; // 가는 물줄기 반경
+      const SEG = 20; // 한 프레임 배치를 세로로 분산해 물줄기가 끊기지 않게
+      const SEG_LEN = 0.08;
       for (let i = 0; i < N; i++) {
         const rr = Math.sqrt(Math.random()) * SPAWN_R;
         const ang = Math.random() * Math.PI * 2;
         arr[i * STRIDE] = 0.5 + rr * Math.cos(ang);
-        arr[i * STRIDE + 1] = SPAWN_Y;
+        // 배치 내에서 세로로 미리 늘려 놓음(연속 물줄기)
+        arr[i * STRIDE + 1] = SPAWN_Y - ((i % SEG) / SEG) * SEG_LEN;
         arr[i * STRIDE + 2] = 0.5 + rr * Math.sin(ang);
-        // 아래로 붓는 초기 속도 (풀리면 이 속도로 떨어지기 시작)
-        arr[i * STRIDE + 5] = -2.5;
+        arr[i * STRIDE + 5] = -3.5; // 아래로 붓는 초기 속도(빠르면 세로로 늘어남)
       }
       particleBuffer = instancedArray(arr, pStruct);
       particleBuffer.setPBO(true);
@@ -585,7 +587,7 @@ export default function FluidLab() {
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
       gravUniform.value = GRAVITY; // 따르기 땐 처음부터 실중력(입자가 시간차로 들어옴)
       // 따르기(pour): 매 프레임 pourRate 만큼 입자를 풀어 위에서 떨어뜨린다.
-      const POUR_RATE = 40; // 프레임당 방출 입자 수 (전체 채우는 데 ~7s)
+      const POUR_RATE = 20; // 프레임당 방출 입자 수 (가는 물줄기, ~14s에 채움)
       const released = Math.min(N, Math.floor((frameCount + 1) * POUR_RATE));
       pourCountUniform.value = released;
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
