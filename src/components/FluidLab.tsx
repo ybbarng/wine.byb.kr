@@ -100,11 +100,8 @@ export default function FluidLab() {
     const N = 4096; // 입자 수 (반쯤 채운 병 — 우선 가볍게, 이후 늘림)
     const WINE_FILL_TOP = 0.72; // (구) 정적 와인 메쉬용 — FLUID_ON 이면 미사용
 
-    // ── PBF 파라미터 (물리는 coord 공간) ──────────────────────────────
-    const H = 0.045; // smoothing radius (커널 반경)
-    const H2 = H * H;
-    const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도 (x,z: [0,1])
-    const MAX_PER_CELL = 32; // 셀당 최대 입자 (조밀 채움 대비 여유)
+    // PBF 이산화(H·격자·rest density·완화)는 아래 병 규격 뒤에서 채움 간격 d
+    // 로부터 유도한다(자기일관). d 와 무관한 상수만 뒤에 따로 둔다.
 
     // ── 물리 도메인: world 정렬. 잔(x=0)·병(x=0.42)·따르는 공간을 담는다. ──
     // coord(0..1, 0..YMAX, 0..1) → world = DOMAIN_MIN + coord·DOMAIN_SCALE (등방).
@@ -112,8 +109,6 @@ export default function FluidLab() {
     const DOMAIN_SCALE = 1.4; // coord 1.0 = 1.4 world (기울인 병 arc 담을 폭)
     const DOMAIN_MIN = [-0.6, -0.12, -0.7]; // coord 원점의 world 좌표
     const YMAX = 1.3; // coord y 상단 (world y ≈ 1.7 까지)
-    const GRID_RES_Y = Math.ceil(YMAX * GRID_RES); // y축 셀 수
-    const CELL_COUNT = GRID_RES * GRID_RES_Y * GRID_RES;
     const w2c = (wx: number, wy: number, wz: number): [number, number, number] => [
       (wx - DOMAIN_MIN[0]) / DOMAIN_SCALE,
       (wy - DOMAIN_MIN[1]) / DOMAIN_SCALE,
@@ -133,30 +128,42 @@ export default function FluidLab() {
     // 기울기 피벗(coord): 병 축, 몸통 중간 높이(손으로 잡는 지점)
     const PIVOT = [BOTTLE_AXIS[0], BOTTLE_BOTTOM + BODY_TOP * 0.6, BOTTLE_AXIS[1]];
 
-    // ── 와인 채움: 세운 병 몸통에 격자로 N개 배치(바닥부터 절반쯤). ──
-    // 채운 격자 간격 d 로부터 rest density 를 수치 계산해, 그 밀도에서 정지시킨다.
-    const POLY6_JS = 315 / (64 * Math.PI * H ** 9);
-    const restDensityFor = (d: number): number => {
+    // ── 자기일관 SPH 이산화 — 채움 간격 d 를 정하면 H·격자·rest density·완화를
+    // 모두 그로부터 유도한다. 잔에서 검증된 안정 영역(H/d≈1.8, EPS∝1/H²)을
+    // 입자 수와 무관하게 유지 → 어떤 N 에서도 같은 물리, 지터 없이 정지에 도달.
+    const rFill = BODY_R * 0.9; // 채움 반경(몸통 안쪽 살짝)
+    const fillH = BODY_TOP * 0.55; // 몸통 바닥부터 절반쯤
+    const d = Math.cbrt((fillH * Math.PI * rFill * rFill) / N); // 격자 간격
+    const H = 1.8 * d; // 커널 반경 = 간격의 1.8배 (안정 이웃 수 ~ 잔과 동일)
+    const H2 = H * H;
+    const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도 (x,z: [0,1])
+    const GRID_RES_Y = Math.ceil(YMAX * GRID_RES); // y축 셀 수
+    const CELL_COUNT = GRID_RES * GRID_RES_Y * GRID_RES;
+    const MAX_PER_CELL = 24; // H/d≈1.8 → 셀당 ~6, 24 면 여유
+    const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
+    const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
+    const SOLVER_ITER = 4; // 비압축 강화(점프·표면진동 완화)
+    // rest density = 채운 격자에서의 밀도(수치합) — 이 밀도에서 압력 0(정지).
+    const restDensityFor = (dd: number): number => {
       let s = 0;
-      const R = Math.ceil(H / d);
+      const R = Math.ceil(H / dd);
       for (let i = -R; i <= R; i++)
         for (let j = -R; j <= R; j++)
           for (let k = -R; k <= R; k++) {
-            const r2 = (i * i + j * j + k * k) * d * d;
+            const r2 = (i * i + j * j + k * k) * dd * dd;
             if (r2 < H2) {
-              const dd = H2 - r2;
-              s += POLY6_JS * dd * dd * dd;
+              const e = H2 - r2;
+              s += POLY6 * e * e * e;
             }
           }
       return s;
     };
+    const restDensityValue = restDensityFor(d);
+    // λ 완화(CFM): 잔 세트(H=0.045, EPS=500)에서 Σ|∇C|²∝1/H² 이므로 1/H² 로 스케일.
+    const EPS_RELAX = 500.0 * (0.045 / H) ** 2;
+    // 세운 병 몸통에 격자로 N개 채움(바닥부터 절반쯤).
     const wineFill: number[][] = [];
-    let restDensityValue = 50000;
     {
-      const rFill = BODY_R * 0.9;
-      // N개가 몸통 바닥부터 절반쯤 차도록 격자 간격 d 를 역산.
-      const fillH = BODY_TOP * 0.55;
-      const d = Math.cbrt((fillH * Math.PI * rFill * rFill) / N);
       const nx = Math.ceil(rFill / d);
       const pts: number[][] = [];
       for (let iy = 0; pts.length < N && iy < 100000; iy++) {
@@ -168,12 +175,7 @@ export default function FluidLab() {
           }
       }
       for (let i = 0; i < N; i++) wineFill.push(pts[i]);
-      restDensityValue = restDensityFor(d);
     }
-    const SOLVER_ITER = 4; // 비압축 강화(점프·표면진동 완화)
-    const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
-    const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
-    const EPS_RELAX = 500.0; // λ 완화 (안정)
     const C_XSPH = 0.2; // XSPH 점성 (낮춰 생동감 복원 — 튐·흐름 살림)
     // 표면장력(s_corr): 표면 입자를 응집시켜 요동 억제 + 벽 코팅.
     const SCORR_K = 0.00001; // 표면장력 (원래 3e-5 → 순환 완화·응집 유지 절충)
@@ -334,7 +336,7 @@ export default function FluidLab() {
       // 점성(substep당 속도 유지율). 실제 유체의 점성 소산 — 출렁임(슬로싱)이
       // 잦아들게 한다. 0.99는 약해서 낙하 종단속도(1.25)가 관측 낙하(0.44)보다
       // 훨씬 높아 낙하를 안 늦춘다(과거 0.9는 종단 0.125로 낙하를 깎았음).
-      viscUniform = uniform(0.96); // 점성 감쇠 — 정지 위해 켬(초기 운동 소산)
+      viscUniform = uniform(0.99); // 잔에서 검증된 약한 점성(정지는 EPS_RELAX가)
       gravUniform = uniform(GRAVITY);
       pourCountUniform = uniform(0, "int"); // 따르기: 활성 입자 수(render에서 증가)
     }
