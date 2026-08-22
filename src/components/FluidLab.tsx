@@ -600,7 +600,7 @@ export default function FluidLab() {
       const material = new A.MeshBasicNodeMaterial();
       material.colorNode = Fn(() => {
         const nv = normalView; // 뷰 공간 법선
-        const off = nv.xy.mul(0.06); // 화면 굴절 오프셋(법선 tilt만큼)
+        const off = nv.xy.mul(0.02); // 화면 굴절 오프셋(법선 tilt만큼)
         const bg = texture(sceneRT.texture, screenUV.add(off)).rgb.toVar();
         const vd = normalize(positionView.negate());
         const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
