@@ -675,14 +675,9 @@ export default function FluidLab() {
       const h = yTop - yBase;
       const geometry = new THREE.CylinderGeometry(Rw, Rw * 0.95, h, 56, 1, false);
       const material = new A.MeshPhysicalNodeMaterial({
-        color: 0x5e0a18, // 짙은 레드 와인
+        color: 0x7a0f1e, // 진한 레드 와인 (불투명 — 병 투과 뒤로 비침)
         metalness: 0,
-        roughness: 0.12,
-        transmission: 0.15, // 살짝 투과(반투명 액체)
-        ior: 1.36,
-        thickness: 0.4,
-        attenuationColor: new THREE.Color(0x30040a),
-        attenuationDistance: 0.2,
+        roughness: 0.25,
         side: THREE.DoubleSide,
       });
       material.envMapIntensity = 1.0;
