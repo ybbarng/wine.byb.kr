@@ -648,14 +648,9 @@ export default function FluidLab() {
       const geometry = new THREE.LatheGeometry(pts, 72);
       geometry.computeVertexNormals();
       const material = new A.MeshPhysicalNodeMaterial({
-        color: 0x1c5230, // 병유리 초록(속 와인이 비치게 밝힘)
+        color: 0x0c3218, // 짙은 초록 (불투명 — 잔 투과로 병이 제대로 보이게)
         metalness: 0,
-        roughness: 0.07,
-        transmission: 0.9, // 반투명 — 속 와인·채움선 보임
-        ior: 1.5,
-        thickness: 0.12,
-        attenuationColor: new THREE.Color(0x1e6638), // 초록 tint(약하게)
-        attenuationDistance: 0.9,
+        roughness: 0.12,
         side: THREE.DoubleSide,
       });
       material.envMapIntensity = 1.0;
