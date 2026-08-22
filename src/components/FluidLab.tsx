@@ -796,14 +796,8 @@ export default function FluidLab() {
       }
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
       (particleMesh as any).count = N;
-      // ── 붓기 타임라인: 1s 정지(와인 안정) → 4s 기울임 → 유지. ──
-      // tilt(라디안)를 물리 SDF(tiltUniform)와 보이는 병(bottleGroup)에 함께 적용.
-      const tSec = frameCount / 60;
-      const HOLD = 1.0;
-      const DUR = 4.0;
-      const MAX_TILT = 1.6; // ≈92°
-      const kk = Math.min(1, Math.max(0, (tSec - HOLD) / DUR));
-      const tilt = MAX_TILT * (kk * kk * (3 - 2 * kk)); // smoothstep
+      // ── 붓기 일시정지: 병은 세운 채 고정(tilt=0). 와인만 담아 리뷰. ──
+      const tilt = 0;
       tiltUniform.value = tilt;
       bottleGroup.rotation.z = tilt;
       // SIMULATE=false 면 물리 계산은 건너뛰고(정적) SSFR 렌더만 한다.
