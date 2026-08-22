@@ -90,11 +90,24 @@ export default function FluidLab() {
     const timer = new THREE.Timer();
     timer.connect(document);
 
-    const params = { particleCount: 8192 * 2 }; // 16384
-    const N = params.particleCount;
+    const FLUID_ON = true; // 병 속 와인 렌더
+    const SIMULATE = false; // 정적(움직임 없음) — 나중에 '붓기' 단계에서 true
 
-    // 유체(와인) 시뮬 on/off. 지금은 병/잔 배치 단계라 끔.
-    const FLUID_ON = false;
+    // 병 속 와인 채움(정적 격자). 지금은 절반, 나중엔 750ml 가득(FILL_TOP_C만 바꿈).
+    const FILL_TOP_C = 1.7; // 채움 높이(coord). 절반≈1.7, 가득(750ml)≈3.0
+    const WINE_R_C = 0.4; // 병 몸통 내반경(coord)
+    const WINE_SP = 0.03; // 입자 간격(coord)
+    const wineFill: number[][] = [];
+    for (let y = 0.04; y <= FILL_TOP_C; y += WINE_SP) {
+      for (let x = -WINE_R_C; x <= WINE_R_C; x += WINE_SP) {
+        for (let z = -WINE_R_C; z <= WINE_R_C; z += WINE_SP) {
+          if (x * x + z * z <= WINE_R_C * WINE_R_C) {
+            wineFill.push([0.5 + x, y, 0.5 + z]);
+          }
+        }
+      }
+    }
+    const N = wineFill.length; // 채운 입자 수
 
     // ── PBF 파라미터 (물리는 coord 0~1 공간) ──────────────────────────
     const H = 0.045; // smoothing radius (커널 반경)
@@ -249,31 +262,11 @@ export default function FluidLab() {
         predicted: { type: "vec3" },
       });
       const arr = new Float32Array(N * STRIDE);
-      // 기울인 병을 '격자(lattice)'로 채운다 — 무작위로 채우면 국소 겹침으로
-      // 밀도 제약이 사방으로 터진다(초기 폭발). 규칙적 격자는 겹침이 없어 안정.
-      const perp1 = [AXIS[1], -AXIS[0], 0]; // 축에 수직(면내)
-      const fillA0 = NECK_LEN + 0.03;
-      const fillA1 = BOTTLE_LEN - 0.04;
-      const Rf = BOTTLE_R * 0.92;
-      let s = 0.017; // 격자 간격 — N개 이상 나올 때까지 줄인다
-      let pts: [number, number, number][] = [];
-      for (let iter = 0; iter < 8; iter++) {
-        pts = [];
-        for (let a = fillA0; a <= fillA1; a += s) {
-          for (let u = -Rf; u <= Rf; u += s) {
-            for (let v = -Rf; v <= Rf; v += s) {
-              if (u * u + v * v <= Rf * Rf) pts.push([a, u, v]);
-            }
-          }
-        }
-        if (pts.length >= N) break;
-        s *= 0.93;
-      }
+      // 세워진 병 안에 정적으로 배치(위에서 만든 wineFill 격자 그대로).
       for (let i = 0; i < N; i++) {
-        const [a, u, v] = pts[i];
-        arr[i * STRIDE] = NECK[0] + a * AXIS[0] + u * perp1[0];
-        arr[i * STRIDE + 1] = NECK[1] + a * AXIS[1] + u * perp1[1];
-        arr[i * STRIDE + 2] = NECK[2] + a * AXIS[2] + v; // perp2 = (0,0,1)
+        arr[i * STRIDE] = wineFill[i][0];
+        arr[i * STRIDE + 1] = wineFill[i][1];
+        arr[i * STRIDE + 2] = wineFill[i][2];
       }
       particleBuffer = instancedArray(arr, pStruct);
       particleBuffer.setPBO(true);
@@ -584,11 +577,7 @@ export default function FluidLab() {
       );
       const material = new A.MeshBasicNodeMaterial();
       material.positionNode = Fn(() => {
-        const pos = particleBuffer.element(instanceIndex).get("position").toVar();
-        // 병 안(y>HIDE_Y) 입자는 화면 밖으로 밀어 안 보이게(병 유리가 가리는 효과)
-        If(pos.y.greaterThan(HIDE_Y), () => {
-          pos.assign(pos.add(vec3(0, 100, 0)));
-        });
+        const pos = particleBuffer.element(instanceIndex).get("position");
         return attribute("position").add(pos);
       })();
       // 뷰 공간 선형 깊이(카메라 앞이 양수). R 채널에 저장.
@@ -597,7 +586,8 @@ export default function FluidLab() {
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
       (particleMesh as any).count = N;
       particleMesh.scale.setScalar(FLUID_SCALE);
-      particleMesh.position.set(-FLUID_SCALE * 0.5, FLUID_Y, -FLUID_SCALE * 0.5);
+      // 세워진 병 위치로: coord(0.5,0,0.5)=병 바닥 중심(world 0.42,-0.06,0)
+      particleMesh.position.set(0.42 - FLUID_SCALE * 0.5, glass.worldY, -FLUID_SCALE * 0.5);
       particleMesh.frustumCulled = false;
       fluidScene.add(particleMesh);
     }
@@ -717,16 +707,15 @@ export default function FluidLab() {
         renderer.render(scene, camera);
         return;
       }
-      const PBF_SUBSTEPS = 8;
-      dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
-      // 중력 ease-in: 처음 ~1.3s 동안 0→GRAVITY. 병 속 와인이 한꺼번에 입구로
-      // 폭발적으로 쏟아지는(잔보다 넓게 뿜는) 초기 분출을 없앤다.
-      const RAMP = 150; // 더 천천히(2.5s) 중력 올려 초기 몰림 폭발 완화
-      gravUniform.value = GRAVITY * Math.min(1, (frameCount + 1) / RAMP);
-      // 모든 입자 활성(병에 담겨 있다가 중력으로 입구로 흘러나옴)
-      pourCountUniform.value = N;
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
       (particleMesh as any).count = N;
+      // SIMULATE=false 면 물리 계산은 건너뛰고(정적) SSFR 렌더만 한다.
+      if (SIMULATE) {
+      const PBF_SUBSTEPS = 8;
+      dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
+      const RAMP = 150; // 중력 ease-in
+      gravUniform.value = GRAVITY * Math.min(1, (frameCount + 1) / RAMP);
+      pourCountUniform.value = N;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
         renderer.compute(clearCellKernel);
@@ -737,6 +726,7 @@ export default function FluidLab() {
         }
         renderer.compute(velocityKernel);
       }
+      } // end if (SIMULATE)
       // SSFR 1단계: 입자 깊이를 depthRT 에 렌더 → grayscale 로 화면 확인
       renderer.setRenderTarget(depthRT);
       renderer.setClearColor(0x000000, 1);
@@ -767,7 +757,7 @@ export default function FluidLab() {
 
       // 디버그 로그: 속도·밀도·대류·볼 밖 입자 (MLS-MPM 여정에서 만든 지표)
       frameCount++;
-      if (frameCount % 60 === 0) {
+      if (SIMULATE && frameCount % 60 === 0) {
         const t = (frameCount / 60).toFixed(0);
         Promise.all([
           renderer.getArrayBufferAsync(particleBuffer.value),
