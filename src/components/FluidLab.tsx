@@ -595,19 +595,19 @@ export default function FluidLab() {
       // 알파 블렌딩 유리(투과 대신) — 반투명끼리 중첩 정상. 가장자리(프레넬)는
       // 더 뿌옇고 정면은 맑게. 살짝 파랑기 도는 맑은 유리.
       const material = new A.MeshPhysicalNodeMaterial({
-        color: 0xeaf2f2,
+        color: 0xffffff,
         metalness: 0,
-        roughness: 0.05,
+        roughness: 0.02,
         ior: 1.5,
         transparent: true,
         depthWrite: false,
         side: THREE.DoubleSide,
       });
-      // 프레넬로 알파 조절: 정면 맑게(≈0.06), 가장자리 뚜렷(≈0.6)
+      // 프레넬 알파: 정면 아주 맑게(≈0.02), 가장자리만 유리 윤곽(≈0.32)
       const gvd = normalize(positionView.negate());
-      const gfr = pow(float(1).sub(normalView.dot(gvd).abs()), 3.0);
-      material.opacityNode = float(0.06).add(gfr.mul(0.55));
-      material.envMapIntensity = 1.4;
+      const gfr = pow(float(1).sub(normalView.dot(gvd).abs()), 3.5);
+      material.opacityNode = float(0.02).add(gfr.mul(0.3));
+      material.envMapIntensity = 0.6;
       const glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
