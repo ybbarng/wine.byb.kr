@@ -98,12 +98,12 @@ export default function FluidLab() {
     const H2 = H * H;
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도 (x,z: [0,1])
     // 도메인을 세로로 확장: 잔은 coord y[0,1] 그대로, 그 위 [1,YMAX]에 와인병.
-    const YMAX = 3.4; // 도메인 상단(coord y) — 잔 위 공간(병+낙하 물줄기)
+    const YMAX = 4.6; // 도메인 상단(coord y) — 잔 위 공간(병+낙하 물줄기)
     const GRID_RES_Y = Math.ceil(YMAX * GRID_RES); // y축 셀 수
     const CELL_COUNT = GRID_RES * GRID_RES_Y * GRID_RES;
     // ── 와인병(coord y>1, 잔 위·화면 밖). 채워서 중력으로 입구로 흘려보냄 ──
-    const BOTTLE_BOT = 2.5; // 병 바닥(입구 높이)
-    const BOTTLE_TOP = 3.35; // 병 천장
+    const BOTTLE_BOT = 3.4; // 병 바닥(입구 높이) — 화면 밖으로 충분히 올림
+    const BOTTLE_TOP = 4.5; // 병 천장
     const BOTTLE_R = 0.16; // 병 몸통 반경
     const SPOUT_R = 0.045; // 입구(주둥이) 반경 — 물줄기 굵기
     const MAX_PER_CELL = 24; // 셀당 최대 입자 (평균 1.35 → 24로 충분·이웃탐색 경량화)
