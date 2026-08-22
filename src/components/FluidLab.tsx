@@ -104,7 +104,7 @@ export default function FluidLab() {
     // ── 기울인 와인병 (coord). 입구(neck)에서 몸통 축(AXIS)을 따라 뻗음. ──
     // 채워서 중력으로 입구로 흘려보냄 → 자연 밀도 물줄기. 병은 렌더해 보여줌.
     const NECK = [0.5, 1.5, 0.5]; // 입구(주둥이) 위치 — 잔 위 가운데
-    const _ax = [0.36, 0.93, 0]; // 몸통 방향(기울기) — 입구에서 위·+x로
+    const _ax = [0.26, 0.97, 0]; // 몸통 방향(기울기) — 덜 기울임(사진처럼)
     const _am = Math.hypot(_ax[0], _ax[1], _ax[2]);
     const AXIS = [_ax[0] / _am, _ax[1] / _am, _ax[2] / _am]; // 정규화
     const BOTTLE_LEN = 1.25; // 입구→바닥 길이
