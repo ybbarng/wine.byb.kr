@@ -99,7 +99,7 @@ export default function FluidLab() {
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도
     const CELL_COUNT = GRID_RES ** 3;
     const MAX_PER_CELL = 24; // 셀당 최대 입자 (평균 1.35 → 24로 충분·이웃탐색 경량화)
-    const SOLVER_ITER = 12; // 크리스프 중력엔 비압축 유지에 필요
+    const SOLVER_ITER = 2; // small-steps: 반복은 적게, substep은 많이(효율)
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
     const EPS_RELAX = 500.0; // λ 완화 (안정)
@@ -559,7 +559,7 @@ export default function FluidLab() {
       // 탭 복귀(누적된 큰 delta)·큰 화면(낮은 프레임률)에서 스텝이 커져 확
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
-      const PBF_SUBSTEPS = 6;
+      const PBF_SUBSTEPS = 12;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
