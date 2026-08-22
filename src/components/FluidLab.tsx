@@ -98,14 +98,19 @@ export default function FluidLab() {
     const H2 = H * H;
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도 (x,z: [0,1])
     // 도메인을 세로로 확장: 잔은 coord y[0,1] 그대로, 그 위 [1,YMAX]에 와인병.
-    const YMAX = 4.6; // 도메인 상단(coord y) — 잔 위 공간(병+낙하 물줄기)
+    const YMAX = 3.2; // 도메인 상단(coord y) — 잔 위 공간(기울인 병 포함)
     const GRID_RES_Y = Math.ceil(YMAX * GRID_RES); // y축 셀 수
     const CELL_COUNT = GRID_RES * GRID_RES_Y * GRID_RES;
-    // ── 와인병(coord y>1, 잔 위·화면 밖). 채워서 중력으로 입구로 흘려보냄 ──
-    const BOTTLE_BOT = 3.4; // 병 바닥(입구 높이) — 화면 밖으로 충분히 올림
-    const BOTTLE_TOP = 4.5; // 병 천장
-    const BOTTLE_R = 0.16; // 병 몸통 반경
-    const SPOUT_R = 0.045; // 입구(주둥이) 반경 — 물줄기 굵기
+    // ── 기울인 와인병 (coord). 입구(neck)에서 몸통 축(AXIS)을 따라 뻗음. ──
+    // 채워서 중력으로 입구로 흘려보냄 → 자연 밀도 물줄기. 병은 렌더해 보여줌.
+    const NECK = [0.5, 1.5, 0.5]; // 입구(주둥이) 위치 — 잔 위 가운데
+    const _ax = [0.36, 0.93, 0]; // 몸통 방향(기울기) — 입구에서 위·+x로
+    const _am = Math.hypot(_ax[0], _ax[1], _ax[2]);
+    const AXIS = [_ax[0] / _am, _ax[1] / _am, _ax[2] / _am]; // 정규화
+    const BOTTLE_LEN = 1.25; // 입구→바닥 길이
+    const BOTTLE_R = 0.15; // 몸통 반경
+    const SPOUT_R = 0.05; // 입구 반경(물줄기 굵기)
+    const NECK_LEN = 0.4; // 입구 근처에서 SPOUT_R→BOTTLE_R 로 넓어지는 구간
     const MAX_PER_CELL = 24; // 셀당 최대 입자 (평균 1.35 → 24로 충분·이웃탐색 경량화)
     const SOLVER_ITER = 4; // 비압축 강화(점프·표면진동 완화)
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
@@ -240,17 +245,20 @@ export default function FluidLab() {
         predicted: { type: "vec3" },
       });
       const arr = new Float32Array(N * STRIDE);
-      // 와인병을 채운다 — 병 원통(BOTTLE_R) 안에 아래부터 rest 밀도로.
-      // 중력이 입구(구멍)로 흘려보내 물줄기가 자연스러운 밀도로 나온다.
-      // 살짝 성기게(FILL_H 넉넉) 채워 초기 밀도 폭발을 피함.
-      const FILL_BOT = BOTTLE_BOT + 0.04;
-      const FILL_TOP = BOTTLE_TOP - 0.05;
+      // 기울인 병을 채운다 — 축(AXIS)을 따라 입구 위(NECK_LEN)부터 바닥까지,
+      // 반경 BOTTLE_R 안에. 중력이 입구로 흘려보내 자연 밀도 물줄기가 나온다.
+      const perp1 = [AXIS[1], -AXIS[0], 0]; // 축에 수직(면내)
+      const fillA0 = NECK_LEN + 0.03;
+      const fillA1 = BOTTLE_LEN - 0.04;
       for (let i = 0; i < N; i++) {
+        const a = fillA0 + Math.random() * (fillA1 - fillA0); // 축 방향 거리
         const rr = Math.sqrt(Math.random()) * (BOTTLE_R * 0.9);
-        const ang = Math.random() * Math.PI * 2;
-        arr[i * STRIDE] = 0.5 + rr * Math.cos(ang);
-        arr[i * STRIDE + 1] = FILL_BOT + Math.random() * (FILL_TOP - FILL_BOT);
-        arr[i * STRIDE + 2] = 0.5 + rr * Math.sin(ang);
+        const phi = Math.random() * Math.PI * 2;
+        const rc = rr * Math.cos(phi);
+        const rs = rr * Math.sin(phi); // perp2 = (0,0,1)
+        arr[i * STRIDE] = NECK[0] + a * AXIS[0] + rc * perp1[0];
+        arr[i * STRIDE + 1] = NECK[1] + a * AXIS[1] + rc * perp1[1];
+        arr[i * STRIDE + 2] = NECK[2] + a * AXIS[2] + rs; // perp2 z
       }
       particleBuffer = instancedArray(arr, pStruct);
       particleBuffer.setPBO(true);
@@ -299,27 +307,36 @@ export default function FluidLab() {
             );
           });
         });
-        // 병 몸통 벽: BOTTLE_BOT<=y<=BOTTLE_TOP → 반경 BOTTLE_R 안으로
-        If(p.y.greaterThan(BOTTLE_BOT).and(p.y.lessThan(BOTTLE_TOP)), () => {
-          const over = r.sub(BOTTLE_R).max(0.0).toVar();
-          If(over.greaterThan(0.0), () => {
-            const inv = over.div(r);
-            result.assign(
-              vec3(p.x.sub(dx.mul(inv)), result.y, p.z.sub(dz.mul(inv))),
-            );
-          });
-        });
-        // 병 바닥(구멍 SPOUT_R): 바닥 밴드에서 구멍 밖이면 바닥 위로 막음(=고임)
+        // 기울인 병: 입구(NECK)에서 축(AXIS)을 따라 뻗은 원통. 입구 근처는
+        // SPOUT_R로 좁아짐. axial(축 방향 거리) 0=입구, +BOTTLE_LEN=바닥.
+        const neckV = vec3(NECK[0], NECK[1], NECK[2]);
+        const axisV = vec3(AXIS[0], AXIS[1], AXIS[2]);
+        const nl = p.sub(neckV).toVar(); // 병 로컬(입구 기준)
+        const axial = nl.dot(axisV).toVar();
+        const radialVec = nl.sub(axisV.mul(axial)).toVar();
+        const rd = radialVec.length().max(1e-5).toVar();
+        // 입구 근처 반경 좁힘: axial<NECK_LEN 이면 SPOUT_R→BOTTLE_R
+        const rAt = float(SPOUT_R)
+          .add(
+            float(BOTTLE_R - SPOUT_R).mul(clamp(axial.div(NECK_LEN), 0.0, 1.0)),
+          )
+          .toVar();
+        // 몸통 벽: axial∈[0,LEN] & 반경 초과 → 축 쪽으로 밀어넣음
         If(
-          p.y
-            .lessThan(BOTTLE_BOT)
-            .and(p.y.greaterThan(BOTTLE_BOT - 0.08))
-            .and(r.greaterThan(SPOUT_R))
-            .and(r.lessThan(BOTTLE_R + 0.04)),
+          axial
+            .greaterThan(0.0)
+            .and(axial.lessThan(BOTTLE_LEN))
+            .and(rd.greaterThan(rAt)),
           () => {
-            result.y.assign(BOTTLE_BOT);
+            const nlNew = axisV.mul(axial).add(radialVec.mul(rAt.div(rd)));
+            result.assign(neckV.add(nlNew));
           },
         );
+        // 바닥 마개: axial>LEN(바닥 밖) & 반경 안 → 바닥으로 되밀어(못 빠져나감)
+        If(axial.greaterThan(BOTTLE_LEN).and(rd.lessThan(BOTTLE_R)), () => {
+          const nlNew = axisV.mul(BOTTLE_LEN).add(radialVec);
+          result.assign(neckV.add(nlNew));
+        });
         // 도메인 경계 (y는 YMAX까지)
         result.assign(
           clamp(result, vec3(0.001), vec3(0.999, YMAX - 0.001, 0.999)),
@@ -618,7 +635,10 @@ export default function FluidLab() {
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
-      gravUniform.value = GRAVITY;
+      // 중력 ease-in: 처음 ~1.3s 동안 0→GRAVITY. 병 속 와인이 한꺼번에 입구로
+      // 폭발적으로 쏟아지는(잔보다 넓게 뿜는) 초기 분출을 없앤다.
+      const RAMP = 80;
+      gravUniform.value = GRAVITY * Math.min(1, (frameCount + 1) / RAMP);
       // 모든 입자 활성(병에 담겨 있다가 중력으로 입구로 흘러나옴)
       pourCountUniform.value = N;
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
