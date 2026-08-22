@@ -334,7 +334,7 @@ export default function FluidLab() {
       // 점성(substep당 속도 유지율). 실제 유체의 점성 소산 — 출렁임(슬로싱)이
       // 잦아들게 한다. 0.99는 약해서 낙하 종단속도(1.25)가 관측 낙하(0.44)보다
       // 훨씬 높아 낙하를 안 늦춘다(과거 0.9는 종단 0.125로 낙하를 깎았음).
-      viscUniform = uniform(1.0); // 점성 감쇠 끔(생동감) — 정지는 EPS가 담당
+      viscUniform = uniform(0.96); // 점성 감쇠 — 정지 위해 켬(초기 운동 소산)
       gravUniform = uniform(GRAVITY);
       pourCountUniform = uniform(0, "int"); // 따르기: 활성 입자 수(render에서 증가)
     }
@@ -357,26 +357,26 @@ export default function FluidLab() {
         const rad = lx.mul(lx).add(lz.mul(lz)).sqrt().max(1e-5).toVar();
         const bottomLocalY = float(BOTTLE_BOTTOM - PIVOT[1]);
         const h = ly.sub(bottomLocalY).toVar(); // 0=바닥, NECK_TOP=입구
+        // 반경 판정용 높이(바닥 아래/입구 위는 clamp) — 모서리 누수 방지 핵심.
+        const hC = clamp(h, 0.0, NECK_TOP).toVar();
         // 높이별 내반경: 몸통 BODY_R → (어깨~목) → 입구 NECK_R
         const rAt = mix(
           float(BODY_R),
           float(NECK_R),
-          clamp(h.sub(BODY_TOP).div(NECK_TOP - BODY_TOP), 0.0, 1.0),
+          clamp(hC.sub(BODY_TOP).div(NECK_TOP - BODY_TOP), 0.0, 1.0),
         ).toVar();
         const clx = lx.toVar();
         const cly = ly.toVar();
         const clz = lz.toVar();
-        // 몸통·목 벽: 높이 [0,NECK_TOP] & 반경 초과 → 축 쪽으로 밀어넣음
-        If(
-          h.greaterThan(0.0).and(h.lessThan(NECK_TOP)).and(rad.greaterThan(rAt)),
-          () => {
-            const k = rAt.div(rad);
-            clx.assign(lx.mul(k));
-            clz.assign(lz.mul(k));
-          },
-        );
-        // 바닥 마개: 바닥 아래(h<0) & 몸통 반경 안 → 바닥에 올려둠(못 빠짐)
-        If(h.lessThan(0.0).and(rad.lessThan(BODY_R)), () => {
+        // 몸통·목 벽: 병 높이 안(h<NECK_TOP) & 반경 초과 → 축 쪽으로. h<0 이면
+        // hC=0 이라 BODY_R 적용 → 바닥 밀기와 합쳐 바닥 모서리를 완전히 막는다.
+        If(h.lessThan(NECK_TOP).and(rad.greaterThan(rAt)), () => {
+          const k = rAt.div(rad);
+          clx.assign(lx.mul(k));
+          clz.assign(lz.mul(k));
+        });
+        // 바닥: 바닥면 아래로 내려가면 바닥으로 올림(못 빠짐)
+        If(h.lessThan(0.0), () => {
           cly.assign(bottomLocalY);
         });
         // local → world: R(θ)·(clx,cly) + pivot (안 걸리면 항등 = 원위치)
@@ -796,11 +796,11 @@ export default function FluidLab() {
       }
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
       (particleMesh as any).count = N;
-      // ── 붓기 일시정지: 병은 세운 채 고정(tilt=0). 와인만 담아 리뷰. ──
+      // ── 붓기 일시정지: 병은 세운 채 고정(tilt=0). 와인이 진짜 정지에 도달하는지 ──
+      // 하나의 시뮬로 확인(freeze 안 함). 여기서 평형이어야 붓기가 자연스럽게 이어짐.
       const tilt = 0;
       tiltUniform.value = tilt;
       bottleGroup.rotation.z = tilt;
-      // SIMULATE=false 면 물리 계산은 건너뛰고(정적) SSFR 렌더만 한다.
       if (SIMULATE) {
       const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
@@ -865,14 +865,14 @@ export default function FluidLab() {
             let sumV = 0;
             let maxV = 0;
             let sumD = 0;
-            let outGlass = 0;
-            let vrAbs = 0;
-            let vrNet = 0; // 부호 있는 평균 반경 속도(+팽창/−수축) — 결맞은 진동 진단
-            let vyNet = 0; // 부호 있는 평균 수직 속도 — 위아래 출렁임 진단
-            let comX = 0; // 무게중심 x — 덩어리 슬로싱(한쪽 쏠림) 진단
-            let comZ = 0;
-            const wallCoord =
-              (glass.wallThickness * glass.worldScale) / FLUID_SCALE;
+            let leaked = 0; // 병 밖으로 샌 입자 수
+            let comY = 0; // 무게중심 높이(coord) — 안정되면 일정
+            // 병 SDF(tilt=0 기준) 내부 판정용 반경 함수(shader 와 동일)
+            const radiusAtJS = (hh: number): number => {
+              const t2 = Math.max(0, Math.min(1, (hh - BODY_TOP) / (NECK_TOP - BODY_TOP)));
+              return BODY_R * (1 - t2) + NECK_R * t2;
+            };
+            const eps = 0.012;
             for (let i = 0; i < N; i++) {
               const vx = arr[i * STRIDE + 4];
               const vy = arr[i * STRIDE + 5];
@@ -884,22 +884,17 @@ export default function FluidLab() {
               const px = arr[i * STRIDE];
               const py = arr[i * STRIDE + 1];
               const pz = arr[i * STRIDE + 2];
-              const cy = Math.max(0, Math.min(1, py));
-              const rInner = bowlRadiusAtCoordY(cy);
-              const rr = Math.hypot(px - 0.5, pz - 0.5);
-              if (rr > rInner + wallCoord) outGlass++;
-              comX += px - 0.5;
-              comZ += pz - 0.5;
-              vyNet += vy;
-              if (rr > 1e-4) {
-                const vr = (vx * (px - 0.5) + vz * (pz - 0.5)) / rr;
-                vrAbs += Math.abs(vr);
-                vrNet += vr;
-              }
+              comY += py;
+              const rad = Math.hypot(px - BOTTLE_AXIS[0], pz - BOTTLE_AXIS[1]);
+              const hh = py - BOTTLE_BOTTOM;
+              const inside =
+                hh > -eps &&
+                hh < NECK_TOP + eps &&
+                rad < radiusAtJS(Math.max(0, Math.min(NECK_TOP, hh))) + eps;
+              if (!inside) leaked++;
             }
-            const comOff = Math.hypot(comX / N, comZ / N);
             console.log(
-              `[speed] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(3)} | vrNet=${(vrNet / N).toFixed(4)} vyNet=${(vyNet / N).toFixed(4)} comOff=${comOff.toFixed(4)} | dAvg=${(sumD / N).toFixed(1)} out=${outGlass}`,
+              `[wine] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(3)} leaked=${leaked}/${N} comY=${(comY / N).toFixed(4)} dAvg=${(sumD / N).toFixed(0)}`,
             );
           })
           .catch(() => {});
