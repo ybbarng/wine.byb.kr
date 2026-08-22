@@ -637,30 +637,38 @@ export default function FluidLab() {
     function setupBottle() {
       // 잔 높이(프로파일 2.92 × worldScale) = 실제 24cm. → world/m 배율.
       const m = (profileMaxY * glass.worldScale) / GLASS_HEIGHT_M; // 미터→world
-      // 보르도 병(m): 높이30·몸통R3.8·목R1.45cm·펀트16mm. 내부부피 계산=758ml.
-      const Rb = 0.038;
-      const Rn = 0.0145;
-      const punt = 0.016;
-      const yBodyTop = 0.178;
-      const yNeck = 0.228;
-      // 펀트→바닥→곧은 몸통→'부드러운 곡선 어깨'(smootherstep)→긴 목→립→입구
+      // ── 실제 표준 보르도 750ml 규격 (dimensions.com/제조 스펙, m 단위) ──
+      const Rb = 0.0368; // 몸통 반경(지름 73.6mm)
+      const Rn = 0.01475; // 목 외반경(입구 외경 29.5mm)
+      const bore = 0.00925; // 입구 내경 18.5mm
+      const punt = 0.016; // 펀트(바닥 오목) 16mm
+      const H = 0.3; // 전체 높이 300mm
+      const yBody = 0.184; // 곧은 몸통 끝 = 어깨 시작(184mm)
+      const yNeck = 0.216; // 목 시작(높고 각진 어깨 ~32mm)
+      const yLip = 0.29; // 립 시작
+      // 펀트→평평한 바닥→곧은 몸통→매끄러운(각진) 어깨→목→립→입구(bore)
       const smoother = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
       const P: number[][] = [
-        [0.0001, punt], // 펀트 꼭대기(중심, 위로 오목)
+        [0.0001, punt], // 펀트 꼭대기(중심)
         [Rb * 0.35, punt * 0.5],
-        [Rb * 0.78, 0.004],
-        [Rb * 0.96, 0.0], // 바닥 바깥(최저, 평평)
-        [Rb, 0.012], // 작은 모서리 라운드
-        [Rb, yBodyTop], // 곧은 몸통(옆면 곧게)
+        [Rb * 0.8, 0.004],
+        [Rb * 0.97, 0.0], // 바닥 바깥(최저, 평평)
+        [Rb, 0.011], // 작은 모서리
+        [Rb, yBody], // 곧은 몸통
       ];
       for (let i = 1; i <= 12; i++) {
         const t = i / 12;
-        const y = yBodyTop + t * (yNeck - yBodyTop);
+        const y = yBody + t * (yNeck - yBody);
         P.push([Rb + (Rn - Rb) * smoother(t), y]); // 매끄러운 어깨
       }
-      P.push([Rn, 0.29], [Rn * 1.15, 0.296], [Rn * 1.15, 0.3], [Rn * 0.72, 0.3]);
+      P.push(
+        [Rn, yLip], // 목
+        [Rn * 1.12, yLip + 0.006], // 립 밖으로
+        [Rn * 1.12, H],
+        [bore, H], // 입구(내경 bore)
+      );
       const pts = P.map(([r, y]) => new THREE.Vector2(r * m, y * m));
-      const geometry = new THREE.LatheGeometry(pts, 64);
+      const geometry = new THREE.LatheGeometry(pts, 72);
       geometry.computeVertexNormals();
       const material = new A.MeshPhysicalNodeMaterial({
         color: 0x08240f, // 짙은 와인병 초록(거의 검은 초록)
