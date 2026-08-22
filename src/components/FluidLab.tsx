@@ -636,33 +636,38 @@ export default function FluidLab() {
     // 실제 750ml 와인병 — 잔 옆에 세워서(반투명) 렌더. 잔 크기 대비 정확한 비율.
     function setupBottle() {
       // 잔 높이(프로파일 2.92 × worldScale) = 실제 24cm. → world/m 배율.
-      const worldPerM = (profileMaxY * glass.worldScale) / GLASS_HEIGHT_M;
-      // 750ml 보르도 병: 높이 30cm, 몸통 지름 7.5cm, 목 지름 2.5cm.
-      const H = 0.3 * worldPerM; // 병 높이
-      const bR = 0.0375 * worldPerM; // 몸통 반경
-      const nR = 0.0125 * worldPerM; // 목 반경
-      // 프로파일(반경, 높이): 바닥→몸통→어깨→목→주둥이
-      const pts = [
-        new THREE.Vector2(0.001, 0),
-        new THREE.Vector2(bR * 0.9, 0.004 * H),
-        new THREE.Vector2(bR, 0.03 * H),
-        new THREE.Vector2(bR, 0.6 * H), // 원통 몸통
-        new THREE.Vector2(bR * 0.88, 0.66 * H),
-        new THREE.Vector2(nR, 0.77 * H), // 어깨→목
-        new THREE.Vector2(nR, 0.96 * H), // 목
-        new THREE.Vector2(nR * 1.25, 0.985 * H),
-        new THREE.Vector2(nR * 1.25, 1.0 * H), // 주둥이 립
-        new THREE.Vector2(nR * 0.7, 1.0 * H), // 입구(속 비침)
+      const m = (profileMaxY * glass.worldScale) / GLASS_HEIGHT_M; // 미터→world
+      // 보르도 병(m): 높이30·몸통R3.8·목R1.45cm·펀트16mm. 내부 부피 계산=750ml.
+      const Rb = 0.038;
+      const Rn = 0.0145;
+      const punt = 0.016;
+      const yBody = 0.192; // 몸통 원통 끝(750ml 맞춤)
+      // 프로파일(반경, 높이) m — 펀트→바닥→곧은 몸통→각진 어깨→긴 목→립→입구
+      const P = [
+        [0.0001, punt], // 펀트 중심(바닥 오목)
+        [Rb * 0.55, 0.006],
+        [Rb, 0.0], // 바닥 바깥 모서리(최저)
+        [Rb, yBody], // 곧은 몸통
+        [Rb * 0.82, 0.205],
+        [Rb * 0.42, 0.212], // 각진 어깨
+        [Rn, 0.218], // 목 시작
+        [Rn, 0.292], // 목
+        [Rn * 1.2, 0.297],
+        [Rn * 1.2, 0.3], // 립
+        [Rn * 0.72, 0.3], // 입구(속 비침)
       ];
-      const geometry = new THREE.LatheGeometry(pts, 56);
+      const pts = P.map(([r, y]) => new THREE.Vector2(r * m, y * m));
+      const geometry = new THREE.LatheGeometry(pts, 64);
       geometry.computeVertexNormals();
       const material = new A.MeshPhysicalNodeMaterial({
-        color: 0x2f6a45, // 초록 병유리 (반투명 — 속이 보이게)
+        color: 0x08240f, // 짙은 와인병 초록(거의 검은 초록)
         metalness: 0,
         roughness: 0.08,
-        transmission: 0.78,
+        transmission: 0.6, // 반투명(속 비침) 유지하되 짙게
         ior: 1.5,
-        thickness: 0.2,
+        thickness: 0.5,
+        attenuationColor: new THREE.Color(0x0a3a1c), // 유리 통과 시 초록으로 짙어짐
+        attenuationDistance: 0.25,
         side: THREE.DoubleSide,
       });
       material.envMapIntensity = 1.0;
