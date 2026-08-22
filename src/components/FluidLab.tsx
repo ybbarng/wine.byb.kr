@@ -167,7 +167,7 @@ export default function FluidLab() {
     // coord 1.0 = cubeSpanProfile profile 단위 → 1 coord = 실제 몇 m (L).
     const metersPerCoord = cubeSpanProfile * metersPerProfile;
     // 시간 배율 T: 1 sim-초 = 실제 T 초. 기존 좋던 g_sim≈1.5 가 나오도록 맞춤.
-    const TIME_SCALE = 0.112;
+    const TIME_SCALE = 0.34; // 슬로모션 9배→3배 (물성 크리스프하게, substep↑ 비용)
     // g_sim = g_real · T² / L  (실제 g를 sim 좌표·시간 단위로 변환)
     const GRAVITY = -(G_REAL * TIME_SCALE * TIME_SCALE) / metersPerCoord;
 
@@ -559,7 +559,7 @@ export default function FluidLab() {
       // 탭 복귀(누적된 큰 delta)·큰 화면(낮은 프레임률)에서 스텝이 커져 확
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
-      const PBF_SUBSTEPS = 2;
+      const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
