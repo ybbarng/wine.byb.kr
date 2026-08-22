@@ -102,7 +102,7 @@ export default function FluidLab() {
     const SOLVER_ITER = 5; // small-steps: substep 많고 iter 적게(경량)
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
-    const EPS_RELAX = 500.0; // λ 분모 relaxation (고중력 안정 설정)
+    const EPS_RELAX = 120.0; // 제약 뻣뻣하게 — 높아진 중력에 덩어리 스프링백 방지
     const C_XSPH = 0.2; // XSPH 점성 (낮춰 생동감 복원 — 튐·흐름 살림)
     // 표면장력(s_corr): 표면 입자를 응집시켜 요동 억제 + 벽 코팅.
     const SCORR_K = 0.00001; // 표면장력 (원래 3e-5 → 순환 완화·응집 유지 절충)
