@@ -231,9 +231,10 @@ export default function FluidLab() {
       deltaPKernel: any,
       velocityKernel: any;
     let particleMesh: THREE.Mesh;
+    let glassMesh: THREE.Mesh; // 잔(직접 굴절용 — render에서 숨겼다 그림)
     let fluidScene: THREE.Scene;
     // biome-ignore lint/suspicious/noExplicitAny: TSL RenderTarget/QuadMesh
-    let depthRT: any;
+    let depthRT: any, sceneRT: any; // sceneRT: 잔 뺀 장면(굴절 샘플용)
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let blurRT: any, blurRT2: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL — 여러 번 반복 평활화용 ping-pong
@@ -594,21 +595,20 @@ export default function FluidLab() {
       geometry.computeVertexNormals();
       // 알파 블렌딩 유리(투과 대신) — 반투명끼리 중첩 정상. 가장자리(프레넬)는
       // 더 뿌옇고 정면은 맑게. 살짝 파랑기 도는 맑은 유리.
-      const material = new A.MeshPhysicalNodeMaterial({
-        color: 0xffffff,
-        metalness: 0,
-        roughness: 0.02,
-        ior: 1.5,
-        transparent: true,
-        depthWrite: false,
-        side: THREE.DoubleSide,
-      });
-      // 프레넬 알파: 정면 아주 맑게(≈0.015), 가장자리만 옅은 유리 윤곽(≈0.24)
-      const gvd = normalize(positionView.negate());
-      const gfr = pow(float(1).sub(normalView.dot(gvd).abs()), 4.0);
-      material.opacityNode = float(0.015).add(gfr.mul(0.22));
-      material.envMapIntensity = 0.35;
-      const glassMesh = new THREE.Mesh(geometry, material);
+      // 직접 굴절 유리: sceneRT(잔 뺀 장면=배경+병+와인)를 법선만큼 밀어 샘플
+      // → 유리 너머가 휘어 보임(굴절·질감). 반투명 병도 sceneRT에 있으니 비침.
+      const material = new A.MeshBasicNodeMaterial();
+      material.colorNode = Fn(() => {
+        const nv = normalView; // 뷰 공간 법선
+        const off = nv.xy.mul(0.06); // 화면 굴절 오프셋(법선 tilt만큼)
+        const bg = texture(sceneRT.texture, screenUV.add(off)).rgb.toVar();
+        const vd = normalize(positionView.negate());
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
+        // 굴절 배경 + 프레넬 하이라이트(가장자리 밝게 = 유리 반사/윤곽)
+        return vec4(bg.add(vec3(0.8, 0.88, 0.95).mul(fres.mul(0.55))), 1.0);
+      })();
+      material.side = THREE.FrontSide;
+      glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
       glassMesh.frustumCulled = false;
@@ -718,7 +718,12 @@ export default function FluidLab() {
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       if (!FLUID_ON) {
-        // 유체 끔 — 배경+잔+병만 렌더
+        // 직접 굴절: 1) 잔 숨기고 장면(배경+병+와인) → sceneRT
+        glassMesh.visible = false;
+        renderer.setRenderTarget(sceneRT);
+        renderer.render(scene, camera);
+        // 2) 잔 포함 장면 → 화면 (잔이 sceneRT를 굴절 샘플 → 병까지 비침)
+        glassMesh.visible = true;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
         return;
@@ -867,6 +872,8 @@ export default function FluidLab() {
       const rtH = Math.floor(container.clientHeight * dpr);
       depthRT = new THREE.RenderTarget(rtW, rtH);
       depthRT.texture.type = THREE.FloatType;
+      // 잔 뺀 장면(배경+병+와인) — 잔이 이걸 굴절해서 샘플(직접 굴절)
+      sceneRT = new THREE.RenderTarget(rtW, rtH);
       blurRT = new THREE.RenderTarget(rtW, rtH);
       blurRT.texture.type = THREE.FloatType;
       blurRT2 = new THREE.RenderTarget(rtW, rtH);
