@@ -109,8 +109,9 @@ export default function FluidLab() {
     const AXIS = [_ax[0] / _am, _ax[1] / _am, _ax[2] / _am]; // 정규화
     const BOTTLE_LEN = 1.25; // 입구→바닥 길이
     const BOTTLE_R = 0.15; // 몸통 반경
-    const SPOUT_R = 0.08; // 입구 반경(병목 넓혀 몰림 폭발 완화)
-    const NECK_LEN = 0.55; // 입구 근처에서 SPOUT_R→BOTTLE_R 로 넓어지는 구간
+    const SPOUT_R = 0.1; // 입구 반경
+    const NECK_LEN = 0.3; // 입구 근처에서 SPOUT_R→BOTTLE_R 로 넓어지는 구간
+    const HIDE_Y = 1.25; // 이 높이 위(병 안·입구 난류) 입자는 렌더에서 숨김
     const MAX_PER_CELL = 24; // 셀당 최대 입자 (평균 1.35 → 24로 충분·이웃탐색 경량화)
     const SOLVER_ITER = 4; // 비압축 강화(점프·표면진동 완화)
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
@@ -580,7 +581,11 @@ export default function FluidLab() {
       );
       const material = new A.MeshBasicNodeMaterial();
       material.positionNode = Fn(() => {
-        const pos = particleBuffer.element(instanceIndex).get("position");
+        const pos = particleBuffer.element(instanceIndex).get("position").toVar();
+        // 병 안(y>HIDE_Y) 입자는 화면 밖으로 밀어 안 보이게(병 유리가 가리는 효과)
+        If(pos.y.greaterThan(HIDE_Y), () => {
+          pos.assign(pos.add(vec3(0, 100, 0)));
+        });
         return attribute("position").add(pos);
       })();
       // 뷰 공간 선형 깊이(카메라 앞이 양수). R 채널에 저장.
@@ -650,12 +655,9 @@ export default function FluidLab() {
       const geometry = new THREE.LatheGeometry(pts, 48);
       geometry.computeVertexNormals();
       const material = new A.MeshPhysicalNodeMaterial({
-        color: 0x0e3a1e, // 짙은 초록 병유리
+        color: 0x0b2e18, // 짙은 초록 병유리 (불투명 — 속 와인 안 비침)
         metalness: 0,
-        roughness: 0.18,
-        transmission: 0.35,
-        ior: 1.5,
-        thickness: 0.4,
+        roughness: 0.15,
         side: THREE.DoubleSide,
       });
       material.envMapIntensity = 1.0;
