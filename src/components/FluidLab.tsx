@@ -22,6 +22,7 @@ import {
   int,
   ivec3,
   normalize,
+  normalView,
   positionView,
   pow,
   screenUV,
@@ -591,18 +592,22 @@ export default function FluidLab() {
         .map((p) => new THREE.Vector2(Math.max(p.x, 0.0006), p.y));
       const geometry = new THREE.LatheGeometry(pts, 240);
       geometry.computeVertexNormals();
+      // 알파 블렌딩 유리(투과 대신) — 반투명끼리 중첩 정상. 가장자리(프레넬)는
+      // 더 뿌옇고 정면은 맑게. 살짝 파랑기 도는 맑은 유리.
       const material = new A.MeshPhysicalNodeMaterial({
-        color: 0xffffff,
+        color: 0xeaf2f2,
         metalness: 0,
-        roughness: 0.03,
-        transmission: 1,
-        ior: 1.52,
-        thickness: 0.15,
-        attenuationColor: new THREE.Color(0xf6fbf9),
-        attenuationDistance: 1.2,
+        roughness: 0.05,
+        ior: 1.5,
+        transparent: true,
+        depthWrite: false,
         side: THREE.DoubleSide,
       });
-      material.envMapIntensity = 1.0;
+      // 프레넬로 알파 조절: 정면 맑게(≈0.06), 가장자리 뚜렷(≈0.6)
+      const gvd = normalize(positionView.negate());
+      const gfr = pow(float(1).sub(normalView.dot(gvd).abs()), 3.0);
+      material.opacityNode = float(0.06).add(gfr.mul(0.55));
+      material.envMapIntensity = 1.4;
       const glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
@@ -648,12 +653,19 @@ export default function FluidLab() {
       const geometry = new THREE.LatheGeometry(pts, 72);
       geometry.computeVertexNormals();
       const material = new A.MeshPhysicalNodeMaterial({
-        color: 0x0c3218, // 짙은 초록 (불투명 — 잔 투과로 병이 제대로 보이게)
+        color: 0x1a5030, // 병유리 초록 (알파 반투명 — 속 와인 비침 + 병 존재)
         metalness: 0,
-        roughness: 0.12,
+        roughness: 0.1,
+        ior: 1.5,
+        transparent: true,
+        depthWrite: false,
         side: THREE.DoubleSide,
       });
-      material.envMapIntensity = 1.0;
+      // 프레넬 알파: 정면은 속 와인 비치게(≈0.45), 가장자리는 병 뚜렷(≈0.9)
+      const bvd = normalize(positionView.negate());
+      const bfr = pow(float(1).sub(normalView.dot(bvd).abs()), 3.0);
+      material.opacityNode = float(0.45).add(bfr.mul(0.45));
+      material.envMapIntensity = 1.2;
       const mesh = new THREE.Mesh(geometry, material);
       // 잔 옆(오른쪽), 같은 바닥(테이블)에 세워 둠.
       mesh.position.set(0.42, glass.worldY, 0.0);
