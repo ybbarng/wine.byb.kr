@@ -637,25 +637,26 @@ export default function FluidLab() {
     function setupBottle() {
       // 잔 높이(프로파일 2.92 × worldScale) = 실제 24cm. → world/m 배율.
       const m = (profileMaxY * glass.worldScale) / GLASS_HEIGHT_M; // 미터→world
-      // 보르도 병(m): 높이30·몸통R3.8·목R1.45cm·펀트16mm. 내부 부피 계산=750ml.
+      // 보르도 병(m): 높이30·몸통R3.8·목R1.45cm·펀트16mm. 내부부피 계산=758ml.
       const Rb = 0.038;
       const Rn = 0.0145;
       const punt = 0.016;
-      const yBody = 0.192; // 몸통 원통 끝(750ml 맞춤)
-      // 프로파일(반경, 높이) m — 펀트→바닥→곧은 몸통→각진 어깨→긴 목→립→입구
-      const P = [
+      const yBodyTop = 0.178;
+      const yNeck = 0.228;
+      // 펀트→바닥→곧은 몸통→'부드러운 곡선 어깨'(smootherstep)→긴 목→립→입구
+      const smoother = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+      const P: number[][] = [
         [0.0001, punt], // 펀트 중심(바닥 오목)
-        [Rb * 0.55, 0.006],
-        [Rb, 0.0], // 바닥 바깥 모서리(최저)
-        [Rb, yBody], // 곧은 몸통
-        [Rb * 0.82, 0.205],
-        [Rb * 0.42, 0.212], // 각진 어깨
-        [Rn, 0.218], // 목 시작
-        [Rn, 0.292], // 목
-        [Rn * 1.2, 0.297],
-        [Rn * 1.2, 0.3], // 립
-        [Rn * 0.72, 0.3], // 입구(속 비침)
+        [Rb * 0.6, 0.006],
+        [Rb, 0.02], // 바닥 모서리
+        [Rb, yBodyTop], // 곧은 몸통
       ];
+      for (let i = 1; i <= 12; i++) {
+        const t = i / 12;
+        const y = yBodyTop + t * (yNeck - yBodyTop);
+        P.push([Rb + (Rn - Rb) * smoother(t), y]); // 매끄러운 어깨
+      }
+      P.push([Rn, 0.29], [Rn * 1.15, 0.296], [Rn * 1.15, 0.3], [Rn * 0.72, 0.3]);
       const pts = P.map(([r, y]) => new THREE.Vector2(r * m, y * m));
       const geometry = new THREE.LatheGeometry(pts, 64);
       geometry.computeVertexNormals();
