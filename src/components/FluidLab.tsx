@@ -196,7 +196,7 @@ export default function FluidLab() {
 
     // ── 버퍼/유니폼/커널 핸들 ─────────────────────────────────────────
     // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let dtUniform: any, restDensityUniform: any, viscUniform: any;
+    let dtUniform: any, restDensityUniform: any, viscUniform: any, gravUniform: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let particleBuffer: any,
       lambdaBuffer: any,
@@ -260,6 +260,7 @@ export default function FluidLab() {
       // 잦아들게 한다. 0.99는 약해서 낙하 종단속도(1.25)가 관측 낙하(0.44)보다
       // 훨씬 높아 낙하를 안 늦춘다(과거 0.9는 종단 0.125로 낙하를 깎았음).
       viscUniform = uniform(1.0); // 점성 감쇠 끔(생동감) — 정지는 EPS가 담당
+      gravUniform = uniform(GRAVITY); // render()에서 처음 0→GRAVITY로 ease-in
     }
 
     function setupComputeShaders() {
@@ -322,7 +323,7 @@ export default function FluidLab() {
       predictKernel = Fn(() => {
         const p = particleBuffer.element(instanceIndex);
         const v = p.get("velocity").toVar();
-        v.y.addAssign(float(GRAVITY).mul(dtUniform));
+        v.y.addAssign(gravUniform.mul(dtUniform));
         const pred = p.get("position").add(v.mul(dtUniform)).toVar();
         pred.assign(clamp(pred, vec3(0.001), vec3(0.999)));
         p.get("velocity").assign(v);
@@ -561,6 +562,11 @@ export default function FluidLab() {
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
+      // 중력 ease-in: 처음 48프레임(~0.8s) 동안 0→GRAVITY 로 부드럽게 올려
+      // 초기 안착 충격(살짝 남던 첫 점프)을 없앤다.
+      const RAMP = 48;
+      gravUniform.value =
+        GRAVITY * Math.min(1, (frameCount + 1) / RAMP);
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
         renderer.compute(clearCellKernel);
