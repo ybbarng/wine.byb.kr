@@ -603,11 +603,11 @@ export default function FluidLab() {
         depthWrite: false,
         side: THREE.DoubleSide,
       });
-      // 프레넬 알파: 정면 아주 맑게(≈0.02), 가장자리만 유리 윤곽(≈0.32)
+      // 프레넬 알파: 정면 아주 맑게(≈0.015), 가장자리만 옅은 유리 윤곽(≈0.24)
       const gvd = normalize(positionView.negate());
-      const gfr = pow(float(1).sub(normalView.dot(gvd).abs()), 3.5);
-      material.opacityNode = float(0.02).add(gfr.mul(0.3));
-      material.envMapIntensity = 0.6;
+      const gfr = pow(float(1).sub(normalView.dot(gvd).abs()), 4.0);
+      material.opacityNode = float(0.015).add(gfr.mul(0.22));
+      material.envMapIntensity = 0.35;
       const glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
