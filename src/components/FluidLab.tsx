@@ -97,7 +97,7 @@ export default function FluidLab() {
     // 붓기: 세워진 병 안에 와인(입자)을 채우고, 병을 기울여 입구로 쏟는다.
     const FLUID_ON = true;
     const SIMULATE = true; // false 면 물리 건너뛰고 채운 상태만 렌더(정적 확인용)
-    const N_TARGET = 8192; // 목표 입자 수(전체 채움 검증) — 실제 N 은 채움 후 확정
+    const N_TARGET = 12000; // 목표 입자 수(전체 채움 검증) — 실제 N 은 채움 후 확정
     const WINE_FILL_TOP = 0.72; // (구) 정적 와인 메쉬용 — FLUID_ON 이면 미사용
 
     // PBF 이산화(H·격자·rest density·완화)는 아래 병 규격 뒤에서 채움 간격 d
@@ -146,7 +146,9 @@ export default function FluidLab() {
       }
     }
     const d = Math.cbrt(volFull / N_TARGET); // 격자 간격
-    const PARTICLE_R = d; // 렌더 입자 반경 = 간격 → SSFR 표면이 병 벽을 안 넘음
+    const WALL = (0.003 * BOTTLE_M) / DOMAIN_SCALE; // 병유리 두께(coord)
+    // 렌더 입자 반경 — 벽 두께보다 작게 캡 → 벽까지 채워도 표면이 바깥벽을 안 넘음.
+    const PARTICLE_R = Math.min(d, WALL * 0.9);
     const H = 1.8 * d; // 커널 반경 = 간격의 1.8배 (안정 이웃 수 ~ 잔과 동일)
     const H2 = H * H;
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도 (x,z: [0,1])
@@ -174,15 +176,16 @@ export default function FluidLab() {
     const restDensityValue = restDensityFor(d);
     // λ 완화(CFM): 잔 세트(H=0.045, EPS=500)에서 Σ|∇C|²∝1/H² 이므로 1/H² 로 스케일.
     const EPS_RELAX = 500.0 * (0.045 / H) ** 2;
-    // ── 채움: 병 내부를 SDF 형상 따라 가득. 각 높이서 반경 (radiusAt−PARTICLE_R)
-    // 안쪽에만 두어, 렌더 표면(±PARTICLE_R)이 병 벽을 안 넘게 한다. ──
+    // ── 채움: 병 내부를 SDF 형상 따라 벽(radiusAt)까지 가득. 벽까지 채워야 퍼져
+    // 내려앉지 않고 입구까지 차오른다. 입구(NECK_TOP) 살짝 위까지 채워 한두 개
+    // 넘치게(정합 확인). 렌더 반경이 벽보다 작아 바깥벽은 안 넘는다. ──
     const wineFill: number[][] = [];
     {
-      const topH = NECK_TOP * 0.98;
+      const topH = NECK_TOP + d; // 입구 살짝 위 → 넘침 1~2개
       for (let iy = 0; ; iy++) {
         const h = d * 0.5 + iy * d; // 바닥 기준 높이
         if (h > topH) break;
-        const rMax = Math.max(radiusAtJS(h) - PARTICLE_R, 0);
+        const rMax = radiusAtJS(Math.min(h, NECK_TOP)); // 벽까지(여유 없음)
         const nx = Math.ceil(rMax / d);
         const y = BOTTLE_BOTTOM + h;
         for (let ix = -nx; ix <= nx; ix++)
