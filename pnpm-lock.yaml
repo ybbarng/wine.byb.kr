@@ -59,12 +59,6 @@ importers:
       three:
         specifier: ^0.185.1
         version: 0.185.1
-      three-gpu-pathtracer:
-        specifier: ^0.0.24
-        version: 0.0.24(three-mesh-bvh@0.9.14(three@0.185.1))(three@0.185.1)(xatlas-web@0.1.0)
-      three-mesh-bvh:
-        specifier: ^0.9.14
-        version: 0.9.14(three@0.185.1)
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -2163,20 +2157,8 @@ packages:
     resolution: {integrity: sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A==}
     engines: {node: '>=6'}
 
-  three-gpu-pathtracer@0.0.24:
-    resolution: {integrity: sha512-fHQ7g7ywvSwRAQywhsfech2/kspQKinfFNOcNDTJS2Q34CzcF1kpESlOVvJH8kX/bGlCnxMI+Qo16kWGAy7zCA==}
-    peerDependencies:
-      three: '>=0.180.0'
-      three-mesh-bvh: '>=0.7.4'
-      xatlas-web: ^0.1.0
-
   three-mesh-bvh@0.8.3:
     resolution: {integrity: sha512-4G5lBaF+g2auKX3P0yqx+MJC6oVt6sB5k+CchS6Ob0qvH0YIhuUk1eYr7ktsIpY+albCqE80/FVQGV190PmiAg==}
-    peerDependencies:
-      three: '>= 0.159.0'
-
-  three-mesh-bvh@0.9.14:
-    resolution: {integrity: sha512-xJzfUXnLYjgw5tRKGxjfJW3Pcx0IbwNskvpdwRryhK07SYrKrYB4W8zAaPxu784gK7G4lCBgG+vfG3YeYn95kg==}
     peerDependencies:
       three: '>= 0.159.0'
 
@@ -2366,9 +2348,6 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
-
-  xatlas-web@0.1.0:
-    resolution: {integrity: sha512-PprVfuXbaIskxLTLBUQRaWfgSy9xUQqAMIRooOw0P6NYqwgh6T0voeer6+Z5M7AFt5SGXUybuww/uDGs1yw8vQ==}
 
   zeptomatch@2.1.0:
     resolution: {integrity: sha512-KiGErG2J0G82LSpniV0CtIzjlJ10E04j02VOudJsPyPwNZgGnRKQy7I1R7GMyg/QswnE4l7ohSGrQbQbjXPPDA==}
@@ -4158,17 +4137,7 @@ snapshots:
 
   tapable@2.3.3: {}
 
-  three-gpu-pathtracer@0.0.24(three-mesh-bvh@0.9.14(three@0.185.1))(three@0.185.1)(xatlas-web@0.1.0):
-    dependencies:
-      three: 0.185.1
-      three-mesh-bvh: 0.9.14(three@0.185.1)
-      xatlas-web: 0.1.0
-
   three-mesh-bvh@0.8.3(three@0.185.1):
-    dependencies:
-      three: 0.185.1
-
-  three-mesh-bvh@0.9.14(three@0.185.1):
     dependencies:
       three: 0.185.1
 
@@ -4296,8 +4265,6 @@ snapshots:
       stackback: 0.0.2
 
   ws@8.21.3: {}
-
-  xatlas-web@0.1.0: {}
 
   zeptomatch@2.1.0:
     dependencies:
