@@ -625,12 +625,54 @@ export default function FluidLab() {
       scene.add(glassMesh);
     }
 
+    // 보이는 와인병 메쉬 — SDF(NECK/AXIS/…)와 같은 위치·기울기로 렌더.
+    function setupBottle() {
+      const FS = FLUID_SCALE;
+      const c2w = (c: number[]) =>
+        new THREE.Vector3(
+          c[0] * FS - FS * 0.5,
+          c[1] * FS + FLUID_Y,
+          c[2] * FS - FS * 0.5,
+        );
+      const neckW = c2w(NECK);
+      const Rw = BOTTLE_R * FS;
+      const Sw = SPOUT_R * FS;
+      const Lw = BOTTLE_LEN * FS;
+      const NLw = NECK_LEN * FS;
+      // 프로파일(반경, 축거리): 입구(주둥이)→어깨→몸통→바닥
+      const pts = [
+        new THREE.Vector2(Sw, 0),
+        new THREE.Vector2(Sw, NLw * 0.55),
+        new THREE.Vector2(Rw, NLw),
+        new THREE.Vector2(Rw, Lw),
+        new THREE.Vector2(0.001, Lw),
+      ];
+      const geometry = new THREE.LatheGeometry(pts, 48);
+      geometry.computeVertexNormals();
+      const material = new A.MeshPhysicalNodeMaterial({
+        color: 0x0e3a1e, // 짙은 초록 병유리
+        metalness: 0,
+        roughness: 0.18,
+        transmission: 0.35,
+        ior: 1.5,
+        thickness: 0.4,
+        side: THREE.DoubleSide,
+      });
+      material.envMapIntensity = 1.0;
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.copy(neckW);
+      mesh.rotation.z = -Math.atan2(AXIS[0], AXIS[1]); // 로컬 +y → AXIS
+      mesh.frustumCulled = false;
+      scene.add(mesh);
+    }
+
     function setupParticles() {
       setupBuffers();
       setupUniforms();
       setupComputeShaders();
       setupMesh();
       setupGlass();
+      setupBottle();
     }
 
     function onWindowResize() {
