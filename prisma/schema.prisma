@@ -1,0 +1,184 @@
+// wine.byb.kr 데이터 모델. SQLite(libsql 파일) 기준.
+// SQLite에는 enum·배열이 없어 목록/열거 값은 String으로 두고 앱에서 zod로 확인한다.
+// 목록형 필드(aromaProfile, foodPairing 등)는 JSON 문자열로 저장한다.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/wine"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// 지역 — 국가 > 광역 > 세부(AOC) 계층. parent로 스스로를 참조한다.
+model Region {
+  id              String     @id @default(cuid())
+  slug            String     @unique
+  nameKo          String
+  nameLocal       String?
+  country         String?
+  level           String     @default("appellation") // country|region|subregion|appellation
+  parentId        String?
+  parent          Region?    @relation("RegionHierarchy", fields: [parentId], references: [id])
+  children        Region[]   @relation("RegionHierarchy")
+  latitude        Float? // fly-to 목표점
+  longitude       Float?
+  boundaryGeojson String? // 경계 폴리곤(선택)
+  climate         String?
+  soil            String?
+  descriptionKo   String?
+  signatureStyles String? // JSON 배열
+  producers       Producer[]
+  wines           Wine[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([parentId])
+}
+
+// 포도 품종.
+model Grape {
+  id            String      @id @default(cuid())
+  slug          String      @unique
+  nameKo        String
+  nameLocal     String?
+  aliases       String? // JSON 배열 (까쇼=까베르네 소비뇽 등)
+  color         String? // red|white
+  body          String?
+  acidity       String?
+  tannin        String?
+  sweetness     String?
+  aromaProfile  String? // JSON 배열
+  descriptionKo String?
+  wineGrapes    WineGrape[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+// 생산자/와이너리.
+model Producer {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  nameKo        String
+  nameLocal     String?
+  regionId      String?
+  region        Region?  @relation(fields: [regionId], references: [id])
+  descriptionKo String?
+  founded       Int?
+  philosophy    String?
+  wines         Wine[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([regionId])
+}
+
+// 와인 — 하나의 "제품".
+model Wine {
+  id                String             @id @default(cuid())
+  slug              String             @unique
+  nameKo            String
+  nameLocal         String?
+  producerId        String?
+  producer          Producer?          @relation(fields: [producerId], references: [id])
+  regionId          String?
+  region            Region?            @relation(fields: [regionId], references: [id])
+  type              String? // red|white|rose|sparkling|champagne|dessert|fortified
+  abv               Float?
+  classification    String? // 등급 (AOC, IGT, Grand Cru 4등급 등)
+  blendRaw          String? // 원본 품종 문자열 보존(파싱이 애매한 서술형 대비)
+  notesKo           String?
+  foodPairing       String? // JSON 배열
+  imageUrl          String?
+  externalRefs      String? // JSON (Vivino/Wine-Searcher 링크 등)
+  grapes            WineGrape[]
+  vintages          Vintage[]
+  tastingNotes      TastingNote[]
+  priceObservations PriceObservation[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([producerId])
+  @@index([regionId])
+  @@index([type])
+}
+
+// 와인-품종 블렌딩 비율(다대다 + 비율).
+model WineGrape {
+  id      String @id @default(cuid())
+  wineId  String
+  wine    Wine   @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  grapeId String
+  grape   Grape  @relation(fields: [grapeId], references: [id])
+  percent Float?
+
+  @@unique([wineId, grapeId])
+  @@index([wineId])
+  @@index([grapeId])
+}
+
+// 빈티지 — 같은 와인의 연도별(선택).
+model Vintage {
+  id     String  @id @default(cuid())
+  wineId String
+  wine   Wine    @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  year   Int
+  note   String?
+
+  @@unique([wineId, year])
+}
+
+// 시음 기록 — 내가 마신 기록. owner는 멀티유저 확장 여지를 남기려고 상수 "admin"으로 시작.
+model TastingNote {
+  id               String    @id @default(cuid())
+  wineId           String
+  wine             Wine      @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  vintageYear      Int?
+  drankOn          DateTime?
+  purchasedOn      DateTime?
+  purchasePrice    Int?
+  purchaseCurrency String    @default("KRW")
+  purchasePlace    String?
+  rating           Int?
+  bodyText         String?
+  foodPaired       String?
+  photos           String? // JSON 배열
+  owner            String    @default("admin")
+  isPublic         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([wineId])
+  @@index([drankOn])
+}
+
+// 시세 관측 — 가격 분석용. 구매 기록도 관측치 하나로 쌓인다.
+model PriceObservation {
+  id          String    @id @default(cuid())
+  wineId      String
+  wine        Wine      @relation(fields: [wineId], references: [id], onDelete: Cascade)
+  vintageYear Int?
+  price       Int
+  currency    String    @default("KRW")
+  source      String // purchase|manual|external
+  observedOn  DateTime?
+  place       String?
+  url         String?
+  createdAt   DateTime  @default(now())
+
+  @@index([wineId])
+}
+
+// 학습 토픽.
+model LearnTopic {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  titleKo         String
+  summary         String?
+  content         String? // MDX/JSON
+  interactiveType String?
+  order           Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
