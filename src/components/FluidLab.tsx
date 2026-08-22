@@ -90,24 +90,11 @@ export default function FluidLab() {
     const timer = new THREE.Timer();
     timer.connect(document);
 
-    const FLUID_ON = true; // 병 속 와인 렌더
-    const SIMULATE = false; // 정적(움직임 없음) — 나중에 '붓기' 단계에서 true
-
-    // 병 속 와인 채움(정적 격자). 지금은 절반, 나중엔 750ml 가득(FILL_TOP_C만 바꿈).
-    const FILL_TOP_C = 1.7; // 채움 높이(coord). 절반≈1.7, 가득(750ml)≈3.0
-    const WINE_R_C = 0.4; // 병 몸통 내반경(coord)
-    const WINE_SP = 0.03; // 입자 간격(coord)
-    const wineFill: number[][] = [];
-    for (let y = 0.04; y <= FILL_TOP_C; y += WINE_SP) {
-      for (let x = -WINE_R_C; x <= WINE_R_C; x += WINE_SP) {
-        for (let z = -WINE_R_C; z <= WINE_R_C; z += WINE_SP) {
-          if (x * x + z * z <= WINE_R_C * WINE_R_C) {
-            wineFill.push([0.5 + x, y, 0.5 + z]);
-          }
-        }
-      }
-    }
-    const N = wineFill.length; // 채운 입자 수
+    // 유체(SSFR) 시뮬은 붓기 단계에서. 지금 병 속 정적 와인은 메쉬로(깊이 정상).
+    const FLUID_ON = false;
+    const N = 8192 * 2; // (유체 켤 때 쓸 입자 수)
+    // 병 속 와인 채움 높이(world y). 절반쯤. 나중에 750 가득이면 올림.
+    const WINE_FILL_TOP = 0.72; // 잔 바닥(worldY -0.06) 기준 위로
 
     // ── PBF 파라미터 (물리는 coord 0~1 공간) ──────────────────────────
     const H = 0.045; // smoothing radius (커널 반경)
@@ -679,6 +666,32 @@ export default function FluidLab() {
       scene.add(mesh);
     }
 
+    // 병 속 정적 와인 — 병 내부 원통 메쉬(깊이 정상, 병유리가 앞을 가림).
+    function setupWine() {
+      const m = (profileMaxY * glass.worldScale) / GLASS_HEIGHT_M;
+      const Rw = (0.0368 - 0.0025) * m * 0.97; // 병 몸통 내반경(살짝 안쪽)
+      const yBase = glass.worldY + 0.03; // 펀트 위
+      const yTop = glass.worldY + WINE_FILL_TOP; // 채움 높이(절반쯤)
+      const h = yTop - yBase;
+      const geometry = new THREE.CylinderGeometry(Rw, Rw * 0.95, h, 56, 1, false);
+      const material = new A.MeshPhysicalNodeMaterial({
+        color: 0x5e0a18, // 짙은 레드 와인
+        metalness: 0,
+        roughness: 0.12,
+        transmission: 0.15, // 살짝 투과(반투명 액체)
+        ior: 1.36,
+        thickness: 0.4,
+        attenuationColor: new THREE.Color(0x30040a),
+        attenuationDistance: 0.2,
+        side: THREE.DoubleSide,
+      });
+      material.envMapIntensity = 1.0;
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(0.42, yBase + h * 0.5, 0.0);
+      mesh.frustumCulled = false;
+      scene.add(mesh);
+    }
+
     function setupParticles() {
       if (FLUID_ON) {
         setupBuffers();
@@ -688,6 +701,7 @@ export default function FluidLab() {
       }
       setupGlass();
       setupBottle();
+      setupWine();
     }
 
     function onWindowResize() {
