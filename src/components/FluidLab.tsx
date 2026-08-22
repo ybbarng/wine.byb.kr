@@ -96,8 +96,16 @@ export default function FluidLab() {
     // ── PBF 파라미터 (물리는 coord 0~1 공간) ──────────────────────────
     const H = 0.045; // smoothing radius (커널 반경)
     const H2 = H * H;
-    const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도
-    const CELL_COUNT = GRID_RES ** 3;
+    const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도 (x,z: [0,1])
+    // 도메인을 세로로 확장: 잔은 coord y[0,1] 그대로, 그 위 [1,YMAX]에 와인병.
+    const YMAX = 3.4; // 도메인 상단(coord y) — 잔 위 공간(병+낙하 물줄기)
+    const GRID_RES_Y = Math.ceil(YMAX * GRID_RES); // y축 셀 수
+    const CELL_COUNT = GRID_RES * GRID_RES_Y * GRID_RES;
+    // ── 와인병(coord y>1, 잔 위·화면 밖). 채워서 중력으로 입구로 흘려보냄 ──
+    const BOTTLE_BOT = 2.5; // 병 바닥(입구 높이)
+    const BOTTLE_TOP = 3.35; // 병 천장
+    const BOTTLE_R = 0.16; // 병 몸통 반경
+    const SPOUT_R = 0.045; // 입구(주둥이) 반경 — 물줄기 굵기
     const MAX_PER_CELL = 24; // 셀당 최대 입자 (평균 1.35 → 24로 충분·이웃탐색 경량화)
     const SOLVER_ITER = 4; // 비압축 강화(점프·표면진동 완화)
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
@@ -232,21 +240,17 @@ export default function FluidLab() {
         predicted: { type: "vec3" },
       });
       const arr = new Float32Array(N * STRIDE);
-      // 따르기(pour): 모든 입자를 잔 위쪽 '스폰 물줄기 원반'에 대기시킨다.
-      // render()가 pourCount를 늘리면 index 순으로 풀려 중력으로 떨어진다.
-      // 대기 입자는 렌더·물리에서 제외돼 안 보이고 간섭 안 함.
-      const SPAWN_Y = 0.95; // 스폰 높이(잔 위쪽·가운데)
-      const SPAWN_R = 0.014; // 가는 물줄기 반경
-      const SEG = 20; // 한 프레임 배치를 세로로 분산해 물줄기가 끊기지 않게
-      const SEG_LEN = 0.08;
+      // 와인병을 채운다 — 병 원통(BOTTLE_R) 안에 아래부터 rest 밀도로.
+      // 중력이 입구(구멍)로 흘려보내 물줄기가 자연스러운 밀도로 나온다.
+      // 살짝 성기게(FILL_H 넉넉) 채워 초기 밀도 폭발을 피함.
+      const FILL_BOT = BOTTLE_BOT + 0.04;
+      const FILL_TOP = BOTTLE_TOP - 0.05;
       for (let i = 0; i < N; i++) {
-        const rr = Math.sqrt(Math.random()) * SPAWN_R;
+        const rr = Math.sqrt(Math.random()) * (BOTTLE_R * 0.9);
         const ang = Math.random() * Math.PI * 2;
         arr[i * STRIDE] = 0.5 + rr * Math.cos(ang);
-        // 배치 내에서 세로로 미리 늘려 놓음(연속 물줄기)
-        arr[i * STRIDE + 1] = SPAWN_Y - ((i % SEG) / SEG) * SEG_LEN;
+        arr[i * STRIDE + 1] = FILL_BOT + Math.random() * (FILL_TOP - FILL_BOT);
         arr[i * STRIDE + 2] = 0.5 + rr * Math.sin(ang);
-        arr[i * STRIDE + 5] = -3.5; // 아래로 붓는 초기 속도(빠르면 세로로 늘어남)
       }
       particleBuffer = instancedArray(arr, pStruct);
       particleBuffer.setPBO(true);
@@ -272,26 +276,54 @@ export default function FluidLab() {
     }
 
     function setupComputeShaders() {
-      // 잔 볼 내벽 안으로 (x,z) 반경을 조이는 SDF 경계 (재활용).
+      // 경계: 잔(y<1, 볼 SDF) + 병(y>BOTTLE_BOT, 원통+바닥구멍) + 사이 공기(자유).
       // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const clampToBowl = (p: any) => {
+      const clampToBoundary = (p: any) => {
         const result = p.toVar();
         const dx = p.x.sub(0.5).toVar();
         const dz = p.z.sub(0.5).toVar();
         const r = dx.mul(dx).add(dz.mul(dz)).sqrt().max(1e-5).toVar();
-        const cy = clamp(p.y, 0.0, 1.0).toVar();
-        const coordRMax = bowlCoefU[POLY_DEG].toVar();
-        for (let k = POLY_DEG - 1; k >= 0; k--) {
-          coordRMax.assign(coordRMax.mul(cy).add(bowlCoefU[k]));
-        }
-        coordRMax.assign(coordRMax.max(0.002));
-        const over = r.sub(coordRMax).max(0.0).toVar();
-        If(over.greaterThan(0.0), () => {
-          const inv = over.div(r);
-          result.assign(vec3(p.x.sub(dx.mul(inv)), p.y, p.z.sub(dz.mul(inv))));
+        // 잔(glass): coord y<1 → 볼 내벽 반경 안으로
+        If(p.y.lessThan(1.0), () => {
+          const cy = clamp(p.y, 0.0, 1.0).toVar();
+          const coordRMax = bowlCoefU[POLY_DEG].toVar();
+          for (let k = POLY_DEG - 1; k >= 0; k--) {
+            coordRMax.assign(coordRMax.mul(cy).add(bowlCoefU[k]));
+          }
+          coordRMax.assign(coordRMax.max(0.002));
+          const over = r.sub(coordRMax).max(0.0).toVar();
+          If(over.greaterThan(0.0), () => {
+            const inv = over.div(r);
+            result.assign(
+              vec3(p.x.sub(dx.mul(inv)), result.y, p.z.sub(dz.mul(inv))),
+            );
+          });
         });
-        // 위·아래 grid 경계
-        result.assign(clamp(result, vec3(0.001), vec3(0.999)));
+        // 병 몸통 벽: BOTTLE_BOT<=y<=BOTTLE_TOP → 반경 BOTTLE_R 안으로
+        If(p.y.greaterThan(BOTTLE_BOT).and(p.y.lessThan(BOTTLE_TOP)), () => {
+          const over = r.sub(BOTTLE_R).max(0.0).toVar();
+          If(over.greaterThan(0.0), () => {
+            const inv = over.div(r);
+            result.assign(
+              vec3(p.x.sub(dx.mul(inv)), result.y, p.z.sub(dz.mul(inv))),
+            );
+          });
+        });
+        // 병 바닥(구멍 SPOUT_R): 바닥 밴드에서 구멍 밖이면 바닥 위로 막음(=고임)
+        If(
+          p.y
+            .lessThan(BOTTLE_BOT)
+            .and(p.y.greaterThan(BOTTLE_BOT - 0.08))
+            .and(r.greaterThan(SPOUT_R))
+            .and(r.lessThan(BOTTLE_R + 0.04)),
+          () => {
+            result.y.assign(BOTTLE_BOT);
+          },
+        );
+        // 도메인 경계 (y는 YMAX까지)
+        result.assign(
+          clamp(result, vec3(0.001), vec3(0.999, YMAX - 0.001, 0.999)),
+        );
         return result;
       };
 
@@ -311,14 +343,15 @@ export default function FluidLab() {
       // 셀 인덱스 계산 (coord → grid cell)
       // biome-ignore lint/suspicious/noExplicitAny: TSL
       const cellOf = (p: any) => {
-        const c = ivec3(
-          clamp(p.mul(GRID_RES), float(0), float(GRID_RES - 1)),
+        return ivec3(
+          clamp(p.x.mul(GRID_RES), float(0), float(GRID_RES - 1)),
+          clamp(p.y.mul(GRID_RES), float(0), float(GRID_RES_Y - 1)),
+          clamp(p.z.mul(GRID_RES), float(0), float(GRID_RES - 1)),
         );
-        return c;
       };
       // biome-ignore lint/suspicious/noExplicitAny: TSL
       const cellId = (c: any) =>
-        c.x.add(c.y.mul(GRID_RES)).add(c.z.mul(GRID_RES * GRID_RES));
+        c.x.add(c.y.mul(GRID_RES)).add(c.z.mul(GRID_RES * GRID_RES_Y));
 
       // 1) 셀 카운트 초기화
       clearCellKernel = Fn(() => {
@@ -335,7 +368,7 @@ export default function FluidLab() {
           const v = p.get("velocity").toVar();
           v.y.addAssign(gravUniform.mul(dtUniform));
           const pred = p.get("position").add(v.mul(dtUniform)).toVar();
-          pred.assign(clamp(pred, vec3(0.001), vec3(0.999)));
+          pred.assign(clamp(pred, vec3(0.001), vec3(0.999, YMAX - 0.001, 0.999)));
           p.get("velocity").assign(v);
           p.get("predicted").assign(pred);
         });
@@ -388,7 +421,7 @@ export default function FluidLab() {
                       .greaterThanEqual(int(0))
                       .and(nc.x.lessThan(int(GRID_RES)))
                       .and(nc.y.greaterThanEqual(int(0)))
-                      .and(nc.y.lessThan(int(GRID_RES)))
+                      .and(nc.y.lessThan(int(GRID_RES_Y)))
                       .and(nc.z.greaterThanEqual(int(0)))
                       .and(nc.z.lessThan(int(GRID_RES)));
                     If(inb, () => {
@@ -477,7 +510,7 @@ export default function FluidLab() {
           });
           dp.divAssign(restDensityUniform);
           pi.addAssign(dp);
-          pi.assign(clampToBowl(pi));
+          pi.assign(clampToBoundary(pi));
           p.get("predicted").assign(pi);
         });
       })()
@@ -585,13 +618,11 @@ export default function FluidLab() {
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
-      gravUniform.value = GRAVITY; // 따르기 땐 처음부터 실중력(입자가 시간차로 들어옴)
-      // 따르기(pour): 매 프레임 pourRate 만큼 입자를 풀어 위에서 떨어뜨린다.
-      const POUR_RATE = 20; // 프레임당 방출 입자 수 (가는 물줄기, ~14s에 채움)
-      const released = Math.min(N, Math.floor((frameCount + 1) * POUR_RATE));
-      pourCountUniform.value = released;
+      gravUniform.value = GRAVITY;
+      // 모든 입자 활성(병에 담겨 있다가 중력으로 입구로 흘러나옴)
+      pourCountUniform.value = N;
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
-      (particleMesh as any).count = released; // 풀린 입자만 렌더
+      (particleMesh as any).count = N;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
         renderer.compute(clearCellKernel);
