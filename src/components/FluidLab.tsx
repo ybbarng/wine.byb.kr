@@ -231,10 +231,10 @@ export default function FluidLab() {
       });
       const arr = new Float32Array(N * STRIDE);
       for (let i = 0; i < N; i++) {
-        // 처음부터 '가라앉은 위치'(아래 절반)에 배치 — 전체[0~1]에 퍼뜨리면
-        // 통째로 무너지며 격렬히 튀어(crown splash) 포도알 블롭이 생긴다.
-        const cy = Math.random() * 0.5;
-        const rMax = bowlRadiusAtCoordY(cy) * 0.9;
+        // 처음부터 '성기게'(밀도 낮게) 아래쪽에 배치 — 조밀하게 겹쳐 놓으면
+        // 밀도 제약이 밀어내며 위로 폭발(첫 빅 점프). 성기면 부드럽게 압축·안착.
+        const cy = Math.random() * 0.72;
+        const rMax = bowlRadiusAtCoordY(cy) * 0.98;
         const rr = Math.sqrt(Math.random()) * rMax;
         const ang = Math.random() * Math.PI * 2;
         arr[i * STRIDE] = 0.5 + rr * Math.cos(ang);
