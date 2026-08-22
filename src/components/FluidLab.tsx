@@ -14,9 +14,11 @@ import {
   atomicStore,
   attribute,
   clamp,
+  cos,
   cross,
   exp,
   float,
+  mix,
   instanceIndex,
   instancedArray,
   int,
@@ -26,6 +28,7 @@ import {
   positionView,
   pow,
   screenUV,
+  sin,
   struct,
   texture,
   uniform,
@@ -91,32 +94,82 @@ export default function FluidLab() {
     const timer = new THREE.Timer();
     timer.connect(document);
 
-    // 유체(SSFR) 시뮬은 붓기 단계에서. 지금 병 속 정적 와인은 메쉬로(깊이 정상).
-    const FLUID_ON = false;
-    const N = 8192 * 2; // (유체 켤 때 쓸 입자 수)
-    // 병 속 와인 채움 높이(world y). 절반쯤. 나중에 750 가득이면 올림.
-    const WINE_FILL_TOP = 0.72; // 잔 바닥(worldY -0.06) 기준 위로
+    // 붓기: 세워진 병 안에 와인(입자)을 채우고, 병을 기울여 입구로 쏟는다.
+    const FLUID_ON = true;
+    const SIMULATE = true; // false 면 물리 건너뛰고 채운 상태만 렌더(정적 확인용)
+    const N = 4096; // 입자 수 (반쯤 채운 병 — 우선 가볍게, 이후 늘림)
+    const WINE_FILL_TOP = 0.72; // (구) 정적 와인 메쉬용 — FLUID_ON 이면 미사용
 
-    // ── PBF 파라미터 (물리는 coord 0~1 공간) ──────────────────────────
+    // ── PBF 파라미터 (물리는 coord 공간) ──────────────────────────────
     const H = 0.045; // smoothing radius (커널 반경)
     const H2 = H * H;
     const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도 (x,z: [0,1])
-    // 도메인을 세로로 확장: 잔은 coord y[0,1] 그대로, 그 위 [1,YMAX]에 와인병.
-    const YMAX = 3.2; // 도메인 상단(coord y) — 잔 위 공간(기울인 병 포함)
+    const MAX_PER_CELL = 32; // 셀당 최대 입자 (조밀 채움 대비 여유)
+
+    // ── 물리 도메인: world 정렬. 잔(x=0)·병(x=0.42)·따르는 공간을 담는다. ──
+    // coord(0..1, 0..YMAX, 0..1) → world = DOMAIN_MIN + coord·DOMAIN_SCALE (등방).
+    // 병이 -x(잔) 쪽으로 기울며 쏟아진다. z 는 0 중심.
+    const DOMAIN_SCALE = 1.4; // coord 1.0 = 1.4 world (기울인 병 arc 담을 폭)
+    const DOMAIN_MIN = [-0.6, -0.12, -0.7]; // coord 원점의 world 좌표
+    const YMAX = 1.3; // coord y 상단 (world y ≈ 1.7 까지)
     const GRID_RES_Y = Math.ceil(YMAX * GRID_RES); // y축 셀 수
     const CELL_COUNT = GRID_RES * GRID_RES_Y * GRID_RES;
-    // ── 기울인 와인병 (coord). 입구(neck)에서 몸통 축(AXIS)을 따라 뻗음. ──
-    // 채워서 중력으로 입구로 흘려보냄 → 자연 밀도 물줄기. 병은 렌더해 보여줌.
-    const NECK = [0.5, 1.5, 0.5]; // 입구(주둥이) 위치 — 잔 위 가운데
-    const _ax = [0.26, 0.97, 0]; // 몸통 방향(기울기) — 덜 기울임(사진처럼)
-    const _am = Math.hypot(_ax[0], _ax[1], _ax[2]);
-    const AXIS = [_ax[0] / _am, _ax[1] / _am, _ax[2] / _am]; // 정규화
-    const BOTTLE_LEN = 1.25; // 입구→바닥 길이
-    const BOTTLE_R = 0.15; // 몸통 반경
-    const SPOUT_R = 0.1; // 입구 반경
-    const NECK_LEN = 0.3; // 입구 근처에서 SPOUT_R→BOTTLE_R 로 넓어지는 구간
-    const HIDE_Y = 1.25; // 이 높이 위(병 안·입구 난류) 입자는 렌더에서 숨김
-    const MAX_PER_CELL = 24; // 셀당 최대 입자 (평균 1.35 → 24로 충분·이웃탐색 경량화)
+    const w2c = (wx: number, wy: number, wz: number): [number, number, number] => [
+      (wx - DOMAIN_MIN[0]) / DOMAIN_SCALE,
+      (wy - DOMAIN_MIN[1]) / DOMAIN_SCALE,
+      (wz - DOMAIN_MIN[2]) / DOMAIN_SCALE,
+    ];
+
+    // ── 세워진 와인병 (물리 SDF) — 보이는 병(setupBottle)과 같은 자리·규격. ──
+    // 병 축은 수직. world (0.42, -0.06, 0) 에 서 있다. m = 미터→world(≈5.11).
+    const BOTTLE_M = (2.92 * 0.42) / 0.24; // setupBottle 의 m 과 동일
+    const _bAxis = w2c(0.42, -0.06, 0.0); // 병 바닥 중심의 coord
+    const BOTTLE_AXIS = [_bAxis[0], _bAxis[2]]; // 병 축 coord x,z
+    const BOTTLE_BOTTOM = _bAxis[1]; // 병 바닥 coord y
+    const BODY_R = ((0.0368 - 0.003) * BOTTLE_M) / DOMAIN_SCALE; // 몸통 내반경
+    const NECK_R = (0.00925 * BOTTLE_M) / DOMAIN_SCALE; // 입구 내반경(bore)
+    const BODY_TOP = (0.184 * BOTTLE_M) / DOMAIN_SCALE; // 바닥→어깨 시작(몸통)
+    const NECK_TOP = (0.3 * BOTTLE_M) / DOMAIN_SCALE; // 바닥→병 끝(입구)
+    // 기울기 피벗(coord): 병 축, 몸통 중간 높이(손으로 잡는 지점)
+    const PIVOT = [BOTTLE_AXIS[0], BOTTLE_BOTTOM + BODY_TOP * 0.6, BOTTLE_AXIS[1]];
+
+    // ── 와인 채움: 세운 병 몸통에 격자로 N개 배치(바닥부터 절반쯤). ──
+    // 채운 격자 간격 d 로부터 rest density 를 수치 계산해, 그 밀도에서 정지시킨다.
+    const POLY6_JS = 315 / (64 * Math.PI * H ** 9);
+    const restDensityFor = (d: number): number => {
+      let s = 0;
+      const R = Math.ceil(H / d);
+      for (let i = -R; i <= R; i++)
+        for (let j = -R; j <= R; j++)
+          for (let k = -R; k <= R; k++) {
+            const r2 = (i * i + j * j + k * k) * d * d;
+            if (r2 < H2) {
+              const dd = H2 - r2;
+              s += POLY6_JS * dd * dd * dd;
+            }
+          }
+      return s;
+    };
+    const wineFill: number[][] = [];
+    let restDensityValue = 50000;
+    {
+      const rFill = BODY_R * 0.9;
+      // N개가 몸통 바닥부터 절반쯤 차도록 격자 간격 d 를 역산.
+      const fillH = BODY_TOP * 0.55;
+      const d = Math.cbrt((fillH * Math.PI * rFill * rFill) / N);
+      const nx = Math.ceil(rFill / d);
+      const pts: number[][] = [];
+      for (let iy = 0; pts.length < N && iy < 100000; iy++) {
+        const y = BOTTLE_BOTTOM + d * 0.5 + iy * d;
+        for (let ix = -nx; ix <= nx; ix++)
+          for (let iz = -nx; iz <= nx; iz++) {
+            if (Math.hypot(ix * d, iz * d) <= rFill)
+              pts.push([BOTTLE_AXIS[0] + ix * d, y, BOTTLE_AXIS[1] + iz * d]);
+          }
+      }
+      for (let i = 0; i < N; i++) wineFill.push(pts[i]);
+      restDensityValue = restDensityFor(d);
+    }
     const SOLVER_ITER = 4; // 비압축 강화(점프·표면진동 완화)
     const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
@@ -169,8 +222,9 @@ export default function FluidLab() {
       glass.bowlTopY - glass.bowlBottomY,
       bowlRmax * 2,
     );
-    const FLUID_SCALE = cubeSpanProfile * glass.worldScale;
-    const FLUID_Y = glass.bowlBottomY * glass.worldScale + glass.worldY;
+    const FLUID_SCALE = DOMAIN_SCALE; // 물리 coord → world 등방 배율
+    const FLUID_Y = DOMAIN_MIN[1]; // coord y=0 의 world y
+    void cubeSpanProfile; // (구 잔 중심 매핑 값 — 현재 미사용)
 
     // ── 중력: 실제 물리값에서 유도 (겉은 실제, 시간 축만 연출값) ──────────
     // g·잔 크기는 실제값으로 두고, g_sim = g_real·T²/L 로 sim 단위로 변환한다.
@@ -182,8 +236,9 @@ export default function FluidLab() {
     const G_REAL = 9.81; // 실제 중력 m/s²
     const profileMaxY = Math.max(...glass.profile.map((p) => p[1])); // 림(2.92)
     const metersPerProfile = GLASS_HEIGHT_M / profileMaxY;
-    // coord 1.0 = cubeSpanProfile profile 단위 → 1 coord = 실제 몇 m (L).
-    const metersPerCoord = cubeSpanProfile * metersPerProfile;
+    // 1 coord = DOMAIN_SCALE world, 1 world = (metersPerProfile/worldScale) m.
+    const metersPerCoord =
+      DOMAIN_SCALE * (metersPerProfile / glass.worldScale);
     // 시간 배율 T: 1 sim-초 = 실제 T 초. 기존 좋던 g_sim≈1.5 가 나오도록 맞춤.
     const TIME_SCALE = 0.34; // 슬로모션 9배→3배 (물성 크리스프하게, substep↑ 비용)
     // g_sim = g_real · T² / L  (실제 g를 sim 좌표·시간 단위로 변환)
@@ -217,6 +272,9 @@ export default function FluidLab() {
     let dtUniform: any, restDensityUniform: any, viscUniform: any, gravUniform: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL — 따르기(pour): 활성 입자 수
     let pourCountUniform: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL — 병 기울기 각(라디안)
+    let tiltUniform: any;
+    let bottleGroup: THREE.Group; // 보이는 병 — 피벗 둘레로 기울이는 그룹
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let particleBuffer: any,
       lambdaBuffer: any,
@@ -271,7 +329,8 @@ export default function FluidLab() {
 
     function setupUniforms() {
       dtUniform = uniform(1 / 60);
-      restDensityUniform = uniform(50000);
+      restDensityUniform = uniform(restDensityValue); // 채운 격자 밀도(정지)
+      tiltUniform = uniform(0); // 병 기울기 각(라디안) — render 에서 애니메이션
       // 점성(substep당 속도 유지율). 실제 유체의 점성 소산 — 출렁임(슬로싱)이
       // 잦아들게 한다. 0.99는 약해서 낙하 종단속도(1.25)가 관측 낙하(0.44)보다
       // 훨씬 높아 낙하를 안 늦춘다(과거 0.9는 종단 0.125로 낙하를 깎았음).
@@ -285,55 +344,49 @@ export default function FluidLab() {
       // biome-ignore lint/suspicious/noExplicitAny: TSL
       const clampToBoundary = (p: any) => {
         const result = p.toVar();
-        const dx = p.x.sub(0.5).toVar();
-        const dz = p.z.sub(0.5).toVar();
-        const r = dx.mul(dx).add(dz.mul(dz)).sqrt().max(1e-5).toVar();
-        // 잔(glass): coord y<1 → 볼 내벽 반경 안으로
-        If(p.y.lessThan(1.0), () => {
-          const cy = clamp(p.y, 0.0, 1.0).toVar();
-          const coordRMax = bowlCoefU[POLY_DEG].toVar();
-          for (let k = POLY_DEG - 1; k >= 0; k--) {
-            coordRMax.assign(coordRMax.mul(cy).add(bowlCoefU[k]));
-          }
-          coordRMax.assign(coordRMax.max(0.002));
-          const over = r.sub(coordRMax).max(0.0).toVar();
-          If(over.greaterThan(0.0), () => {
-            const inv = over.div(r);
-            result.assign(
-              vec3(p.x.sub(dx.mul(inv)), result.y, p.z.sub(dz.mul(inv))),
-            );
-          });
-        });
-        // 기울인 병: 입구(NECK)에서 축(AXIS)을 따라 뻗은 원통. 입구 근처는
-        // SPOUT_R로 좁아짐. axial(축 방향 거리) 0=입구, +BOTTLE_LEN=바닥.
-        const neckV = vec3(NECK[0], NECK[1], NECK[2]);
-        const axisV = vec3(AXIS[0], AXIS[1], AXIS[2]);
-        const nl = p.sub(neckV).toVar(); // 병 로컬(입구 기준)
-        const axial = nl.dot(axisV).toVar();
-        const radialVec = nl.sub(axisV.mul(axial)).toVar();
-        const rd = radialVec.length().max(1e-5).toVar();
-        // 입구 근처 반경 좁힘: axial<NECK_LEN 이면 SPOUT_R→BOTTLE_R
-        const rAt = float(SPOUT_R)
-          .add(
-            float(BOTTLE_R - SPOUT_R).mul(clamp(axial.div(NECK_LEN), 0.0, 1.0)),
-          )
-          .toVar();
-        // 몸통 벽: axial∈[0,LEN] & 반경 초과 → 축 쪽으로 밀어넣음
+        // ── 세운 병(틸트) 경계 — 피벗 둘레 z축 회전으로 로컬 프레임에서 판정 ──
+        // 로컬: 병 축은 y, 반경 = √(lx²+lz²), h = 바닥으로부터 높이.
+        const th = tiltUniform.toVar();
+        const c = cos(th).toVar();
+        const s = sin(th).toVar();
+        const d = p.sub(vec3(PIVOT[0], PIVOT[1], PIVOT[2])).toVar();
+        // local = R(-θ)·d (x-y 평면 회전)
+        const lx = d.x.mul(c).add(d.y.mul(s)).toVar();
+        const ly = d.x.mul(s).negate().add(d.y.mul(c)).toVar();
+        const lz = d.z.toVar();
+        const rad = lx.mul(lx).add(lz.mul(lz)).sqrt().max(1e-5).toVar();
+        const bottomLocalY = float(BOTTLE_BOTTOM - PIVOT[1]);
+        const h = ly.sub(bottomLocalY).toVar(); // 0=바닥, NECK_TOP=입구
+        // 높이별 내반경: 몸통 BODY_R → (어깨~목) → 입구 NECK_R
+        const rAt = mix(
+          float(BODY_R),
+          float(NECK_R),
+          clamp(h.sub(BODY_TOP).div(NECK_TOP - BODY_TOP), 0.0, 1.0),
+        ).toVar();
+        const clx = lx.toVar();
+        const cly = ly.toVar();
+        const clz = lz.toVar();
+        // 몸통·목 벽: 높이 [0,NECK_TOP] & 반경 초과 → 축 쪽으로 밀어넣음
         If(
-          axial
-            .greaterThan(0.0)
-            .and(axial.lessThan(BOTTLE_LEN))
-            .and(rd.greaterThan(rAt)),
+          h.greaterThan(0.0).and(h.lessThan(NECK_TOP)).and(rad.greaterThan(rAt)),
           () => {
-            const nlNew = axisV.mul(axial).add(radialVec.mul(rAt.div(rd)));
-            result.assign(neckV.add(nlNew));
+            const k = rAt.div(rad);
+            clx.assign(lx.mul(k));
+            clz.assign(lz.mul(k));
           },
         );
-        // 바닥 마개: axial>LEN(바닥 밖) & 반경 안 → 바닥으로 되밀어(못 빠져나감)
-        If(axial.greaterThan(BOTTLE_LEN).and(rd.lessThan(BOTTLE_R)), () => {
-          const nlNew = axisV.mul(BOTTLE_LEN).add(radialVec);
-          result.assign(neckV.add(nlNew));
+        // 바닥 마개: 바닥 아래(h<0) & 몸통 반경 안 → 바닥에 올려둠(못 빠짐)
+        If(h.lessThan(0.0).and(rad.lessThan(BODY_R)), () => {
+          cly.assign(bottomLocalY);
         });
+        // local → world: R(θ)·(clx,cly) + pivot (안 걸리면 항등 = 원위치)
+        result.assign(
+          vec3(
+            clx.mul(c).sub(cly.mul(s)).add(PIVOT[0]),
+            clx.mul(s).add(cly.mul(c)).add(PIVOT[1]),
+            clz.add(PIVOT[2]),
+          ),
+        );
         // 도메인 경계 (y는 YMAX까지)
         result.assign(
           clamp(result, vec3(0.001), vec3(0.999, YMAX - 0.001, 0.999)),
@@ -574,9 +627,9 @@ export default function FluidLab() {
       particleMesh = new THREE.Mesh(geometry, material);
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
       (particleMesh as any).count = N;
-      particleMesh.scale.setScalar(FLUID_SCALE);
-      // 세워진 병 위치로: coord(0.5,0,0.5)=병 바닥 중심(world 0.42,-0.06,0)
-      particleMesh.position.set(0.42 - FLUID_SCALE * 0.5, glass.worldY, -FLUID_SCALE * 0.5);
+      particleMesh.scale.setScalar(DOMAIN_SCALE);
+      // coord(0,0,0) = world DOMAIN_MIN (도메인 원점)
+      particleMesh.position.set(DOMAIN_MIN[0], DOMAIN_MIN[1], DOMAIN_MIN[2]);
       particleMesh.frustumCulled = false;
       fluidScene.add(particleMesh);
     }
@@ -667,10 +720,23 @@ export default function FluidLab() {
       material.opacityNode = float(0.45).add(bfr.mul(0.45));
       material.envMapIntensity = 1.2;
       const mesh = new THREE.Mesh(geometry, material);
-      // 잔 옆(오른쪽), 같은 바닥(테이블)에 세워 둠.
-      mesh.position.set(0.42, glass.worldY, 0.0);
       mesh.frustumCulled = false;
-      scene.add(mesh);
+      // 피벗(coord→world) 둘레로 기울이도록 그룹에 담는다. 물리 SDF 와 같은 피벗.
+      const pivotWorld = new THREE.Vector3(
+        DOMAIN_MIN[0] + PIVOT[0] * DOMAIN_SCALE,
+        DOMAIN_MIN[1] + PIVOT[1] * DOMAIN_SCALE,
+        DOMAIN_MIN[2] + PIVOT[2] * DOMAIN_SCALE,
+      );
+      bottleGroup = new THREE.Group();
+      bottleGroup.position.copy(pivotWorld);
+      // 병은 world (0.42, -0.06, 0) 에 서 있음 → 그룹(피벗) 기준 상대 위치로.
+      mesh.position.set(
+        0.42 - pivotWorld.x,
+        glass.worldY - pivotWorld.y,
+        0.0 - pivotWorld.z,
+      );
+      bottleGroup.add(mesh);
+      scene.add(bottleGroup);
     }
 
     // 병 속 정적 와인 — 병 내부 원통 메쉬(깊이 정상, 병유리가 앞을 가림).
@@ -703,7 +769,7 @@ export default function FluidLab() {
       }
       setupGlass();
       setupBottle();
-      setupWine();
+      if (!FLUID_ON) setupWine(); // 정적 와인 메쉬 — 유체 켜면 입자가 대신함
     }
 
     function onWindowResize() {
@@ -730,11 +796,21 @@ export default function FluidLab() {
       }
       // biome-ignore lint/suspicious/noExplicitAny: mesh.count
       (particleMesh as any).count = N;
+      // ── 붓기 타임라인: 1s 정지(와인 안정) → 4s 기울임 → 유지. ──
+      // tilt(라디안)를 물리 SDF(tiltUniform)와 보이는 병(bottleGroup)에 함께 적용.
+      const tSec = frameCount / 60;
+      const HOLD = 1.0;
+      const DUR = 4.0;
+      const MAX_TILT = 1.6; // ≈92°
+      const kk = Math.min(1, Math.max(0, (tSec - HOLD) / DUR));
+      const tilt = MAX_TILT * (kk * kk * (3 - 2 * kk)); // smoothstep
+      tiltUniform.value = tilt;
+      bottleGroup.rotation.z = tilt;
       // SIMULATE=false 면 물리 계산은 건너뛰고(정적) SSFR 렌더만 한다.
       if (SIMULATE) {
       const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
-      const RAMP = 150; // 중력 ease-in
+      const RAMP = 30; // 중력 ease-in(초기 충격 완화)
       gravUniform.value = GRAVITY * Math.min(1, (frameCount + 1) / RAMP);
       pourCountUniform.value = N;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
@@ -769,7 +845,12 @@ export default function FluidLab() {
         renderer.clear();
         blurPong.render(renderer); // 세로: blurRT2 → blurRT
       }
-      // 배경 HDR + 유리잔 렌더 → 그 위에 유체 표면(알파) 합성
+      // 잔 직접 굴절용 sceneRT(잔 뺀 장면=배경+병) 렌더
+      glassMesh.visible = false;
+      renderer.setRenderTarget(sceneRT);
+      renderer.render(scene, camera);
+      glassMesh.visible = true;
+      // 배경 HDR + 병 + 유리잔 렌더 → 그 위에 유체 표면(알파) 합성
       renderer.setRenderTarget(null);
       renderer.render(scene, camera);
       renderer.autoClear = false; // 배경을 지우지 않고 그 위에 합성
