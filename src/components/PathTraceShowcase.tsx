@@ -38,7 +38,7 @@ export default function PathTraceShowcase() {
       renderer.setPixelRatio(1);
       renderer.setSize(mount!.clientWidth, mount!.clientHeight);
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      renderer.toneMappingExposure = 1.15;
+      renderer.toneMappingExposure = 1.5;
       mount!.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
@@ -112,8 +112,8 @@ export default function PathTraceShowcase() {
         transmission: 1,
         ior: 1.5,
         thickness: 0.05 * m,
-        attenuationColor: new THREE.Color(0x2f7d45), // 병유리 초록(속 비치게 밝게)
-        attenuationDistance: 0.16 * m,
+        attenuationColor: new THREE.Color(0xbfe6c8), // (진단)거의 맑은 유리
+        attenuationDistance: 2.0 * m,
         side: THREE.DoubleSide,
       });
       const bottleMesh = new THREE.Mesh(bottleGeo, bottleMat);
@@ -127,14 +127,9 @@ export default function PathTraceShowcase() {
       const wh = yTop - yBase;
       const wineGeo = new THREE.CylinderGeometry(Rw, Rw * 0.95, wh, 64, 1, false);
       const wineMat = new THREE.MeshPhysicalMaterial({
-        color: 0xffffff,
+        color: 0x6e0c1a, // (진단)불투명 글로시 레드 — 속이 빨갛게 보이는지 확인
         metalness: 0,
-        roughness: 0.12,
-        transmission: 1,
-        ior: 1.37,
-        thickness: Rw * 2,
-        attenuationColor: new THREE.Color(0x6e0c1a), // 깊은 레드와인(비치게 밝게)
-        attenuationDistance: Rw * 0.9,
+        roughness: 0.25,
         side: THREE.DoubleSide,
       });
       const wineMesh = new THREE.Mesh(wineGeo, wineMat);
