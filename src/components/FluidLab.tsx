@@ -245,20 +245,31 @@ export default function FluidLab() {
         predicted: { type: "vec3" },
       });
       const arr = new Float32Array(N * STRIDE);
-      // 기울인 병을 채운다 — 축(AXIS)을 따라 입구 위(NECK_LEN)부터 바닥까지,
-      // 반경 BOTTLE_R 안에. 중력이 입구로 흘려보내 자연 밀도 물줄기가 나온다.
+      // 기울인 병을 '격자(lattice)'로 채운다 — 무작위로 채우면 국소 겹침으로
+      // 밀도 제약이 사방으로 터진다(초기 폭발). 규칙적 격자는 겹침이 없어 안정.
       const perp1 = [AXIS[1], -AXIS[0], 0]; // 축에 수직(면내)
       const fillA0 = NECK_LEN + 0.03;
       const fillA1 = BOTTLE_LEN - 0.04;
+      const Rf = BOTTLE_R * 0.92;
+      let s = 0.017; // 격자 간격 — N개 이상 나올 때까지 줄인다
+      let pts: [number, number, number][] = [];
+      for (let iter = 0; iter < 8; iter++) {
+        pts = [];
+        for (let a = fillA0; a <= fillA1; a += s) {
+          for (let u = -Rf; u <= Rf; u += s) {
+            for (let v = -Rf; v <= Rf; v += s) {
+              if (u * u + v * v <= Rf * Rf) pts.push([a, u, v]);
+            }
+          }
+        }
+        if (pts.length >= N) break;
+        s *= 0.93;
+      }
       for (let i = 0; i < N; i++) {
-        const a = fillA0 + Math.random() * (fillA1 - fillA0); // 축 방향 거리
-        const rr = Math.sqrt(Math.random()) * (BOTTLE_R * 0.9);
-        const phi = Math.random() * Math.PI * 2;
-        const rc = rr * Math.cos(phi);
-        const rs = rr * Math.sin(phi); // perp2 = (0,0,1)
-        arr[i * STRIDE] = NECK[0] + a * AXIS[0] + rc * perp1[0];
-        arr[i * STRIDE + 1] = NECK[1] + a * AXIS[1] + rc * perp1[1];
-        arr[i * STRIDE + 2] = NECK[2] + a * AXIS[2] + rs; // perp2 z
+        const [a, u, v] = pts[i];
+        arr[i * STRIDE] = NECK[0] + a * AXIS[0] + u * perp1[0];
+        arr[i * STRIDE + 1] = NECK[1] + a * AXIS[1] + u * perp1[1];
+        arr[i * STRIDE + 2] = NECK[2] + a * AXIS[2] + v; // perp2 = (0,0,1)
       }
       particleBuffer = instancedArray(arr, pStruct);
       particleBuffer.setPBO(true);
