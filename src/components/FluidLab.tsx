@@ -646,10 +646,12 @@ export default function FluidLab() {
       // 펀트→바닥→곧은 몸통→'부드러운 곡선 어깨'(smootherstep)→긴 목→립→입구
       const smoother = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
       const P: number[][] = [
-        [0.0001, punt], // 펀트 중심(바닥 오목)
-        [Rb * 0.6, 0.006],
-        [Rb, 0.02], // 바닥 모서리
-        [Rb, yBodyTop], // 곧은 몸통
+        [0.0001, punt], // 펀트 꼭대기(중심, 위로 오목)
+        [Rb * 0.35, punt * 0.5],
+        [Rb * 0.78, 0.004],
+        [Rb * 0.96, 0.0], // 바닥 바깥(최저, 평평)
+        [Rb, 0.012], // 작은 모서리 라운드
+        [Rb, yBodyTop], // 곧은 몸통(옆면 곧게)
       ];
       for (let i = 1; i <= 12; i++) {
         const t = i / 12;
