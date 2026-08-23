@@ -94,9 +94,10 @@ export default function FluidLab() {
     const timer = new THREE.Timer();
     timer.connect(document);
 
-    // 붓기: 세워진 병 안에 와인(입자)을 채우고, 병을 기울여 입구로 쏟는다.
-    const FLUID_ON = true;
-    const SIMULATE = true; // false 면 물리 건너뛰고 채운 상태만 렌더(정적 확인용)
+    // 표면·부피 기반으로 전환(docs/wine-experience-goals.md). 입자 유체는 끔.
+    const FLUID_ON = false;
+    const SIMULATE = false; // 입자 물리 미사용
+    void SIMULATE;
     const N_TARGET = 12000; // 목표 입자 수(전체 채움 검증) — 실제 N 은 채움 후 확정
     const WINE_FILL_TOP = 0.72; // (구) 정적 와인 메쉬용 — FLUID_ON 이면 미사용
 
@@ -796,6 +797,62 @@ export default function FluidLab() {
       scene.add(mesh);
     }
 
+    // 잔 속 와인 — 표면·부피 기반. 잔 내벽 프로파일 lathe 를 수면에서 클립(부피
+    // 채움) + 수면 disc. 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
+    let glassWineFillPy = 2.05; // 수면 높이(프로파일 y) — 붓기 때 애니메이션
+    // biome-ignore lint/suspicious/noExplicitAny: TSL clip plane
+    let glassWineClip: any;
+    let glassWineDisc: THREE.Mesh;
+    function setupGlassWine() {
+      const pyBottom = 1.36; // 컵 내부 바닥(프로파일 y)
+      const pyRim = 2.92;
+      const NSEG = 90;
+      const pts: THREE.Vector2[] = [new THREE.Vector2(0.001, pyBottom)];
+      for (let i = 0; i <= NSEG; i++) {
+        const py = pyBottom + ((pyRim - pyBottom) * i) / NSEG;
+        pts.push(new THREE.Vector2(Math.max(innerRadiusAt(py), 0.001), py));
+      }
+      const geo = new THREE.LatheGeometry(pts, 120);
+      geo.computeVertexNormals();
+      const fillWorldY = glassWineFillPy * glass.worldScale + glass.worldY;
+      glassWineClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), fillWorldY);
+      const bodyMat = new A.MeshBasicNodeMaterial();
+      bodyMat.colorNode = Fn(() => {
+        const vd = normalize(positionView.negate());
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 2.0);
+        return vec4(
+          mix(vec3(0.2, 0.015, 0.05), vec3(0.5, 0.06, 0.13), fres.mul(0.65)),
+          1.0,
+        );
+      })();
+      bodyMat.side = THREE.DoubleSide;
+      bodyMat.clippingPlanes = [glassWineClip];
+      const body = new THREE.Mesh(geo, bodyMat);
+      body.scale.setScalar(glass.worldScale);
+      body.position.set(0, glass.worldY, 0);
+      body.frustumCulled = false;
+      scene.add(body);
+      // 수면 disc (반사 하이라이트 강한 프레넬 = 와인 표면이 빛을 받음)
+      const rFill = Math.max(innerRadiusAt(glassWineFillPy), 0.001);
+      const discGeo = new THREE.CircleGeometry(rFill, 120);
+      const discMat = new A.MeshBasicNodeMaterial();
+      discMat.colorNode = Fn(() => {
+        const vd = normalize(positionView.negate());
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
+        return vec4(
+          vec3(0.26, 0.025, 0.07).add(vec3(0.75, 0.68, 0.72).mul(fres.mul(0.5))),
+          1.0,
+        );
+      })();
+      discMat.side = THREE.DoubleSide;
+      glassWineDisc = new THREE.Mesh(discGeo, discMat);
+      glassWineDisc.rotation.x = -Math.PI / 2;
+      glassWineDisc.scale.setScalar(glass.worldScale);
+      glassWineDisc.position.set(0, fillWorldY, 0);
+      glassWineDisc.frustumCulled = false;
+      scene.add(glassWineDisc);
+    }
+
     function setupParticles() {
       if (FLUID_ON) {
         setupBuffers();
@@ -805,7 +862,7 @@ export default function FluidLab() {
       }
       setupGlass();
       setupBottle();
-      if (!FLUID_ON) setupWine(); // 정적 와인 메쉬 — 유체 켜면 입자가 대신함
+      if (!FLUID_ON) setupGlassWine(); // 표면·부피 기반 잔 와인
     }
 
     function onWindowResize() {
@@ -940,6 +997,7 @@ export default function FluidLab() {
       });
       renderer.setPixelRatio(window.devicePixelRatio);
       renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.localClippingEnabled = true; // 와인 수면 클립(부피 채움 표현)
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.35;
       container.appendChild(renderer.domElement);
