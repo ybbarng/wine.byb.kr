@@ -696,7 +696,7 @@ export default function FluidLab() {
         roughness: 0.04,
         transmission: 1,
         ior: 1.5,
-        thickness: 0.3,
+        thickness: 0.012, // 실제 잔 벽 두께 ~2mm (world). 과장된 굴절/아크 제거
         transparent: true,
         side: THREE.DoubleSide,
       });
