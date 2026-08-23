@@ -847,18 +847,14 @@ export default function FluidLab() {
       glassWineBody.position.set(0, glass.worldY, 0);
       glassWineBody.frustumCulled = false;
       scene.add(glassWineBody);
-      // 수면 disc (단위 원판, scale 로 반경 조절) — 반사 하이라이트 프레넬.
-      const discMat = new A.MeshBasicNodeMaterial();
-      discMat.colorNode = Fn(() => {
-        const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 4.0);
-        // 어두운 와인 수면 + 가장자리만 은은한 따뜻한 반사(형광 분홍 방지).
-        return vec4(
-          vec3(0.07, 0.005, 0.018).add(vec3(0.4, 0.34, 0.3).mul(fres.mul(0.3))),
-          1.0,
-        );
-      })();
-      discMat.side = THREE.DoubleSide;
+      // 수면 disc (단위 원판, scale 로 반경 조절) — MeshPhysical 로 HDR 환경을
+      // 반사해 진짜 액체 표면처럼(프레넬 반사: 정면 어두운 와인, 비스듬히 밝은 반사).
+      const discMat = new A.MeshPhysicalNodeMaterial({
+        color: new THREE.Color(0.14, 0.01, 0.035), // 어두운 와인(디퓨즈)
+        roughness: 0.06, // 매끈한 액체 → 선명한 환경 반사
+        metalness: 0,
+        side: THREE.DoubleSide,
+      });
       glassWineDisc = new THREE.Mesh(new THREE.CircleGeometry(1, 120), discMat);
       glassWineDisc.rotation.x = -Math.PI / 2;
       glassWineDisc.frustumCulled = false;
