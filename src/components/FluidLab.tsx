@@ -815,7 +815,7 @@ export default function FluidLab() {
     // (클립은 WebGPU 노드머티리얼에서 안 먹어 지오메트리로 제한) + 수면 disc.
     // 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
     const GLASS_WINE_BOTTOM = 1.36; // 컵 내부 바닥(프로파일 y)
-    const GLASS_WINE_FILL = 1.98; // 수면(프로파일 y) — 볼 하단~중간
+    const GLASS_WINE_FILL = 2.62; // 수면(프로파일 y) — 가득(림 2.92 근처)
     const LATHE_SEG = 120;
     let liquidMesh: THREE.Mesh;
     let liquidGeo: THREE.BufferGeometry;
