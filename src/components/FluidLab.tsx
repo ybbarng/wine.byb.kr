@@ -121,10 +121,13 @@ export default function FluidLab() {
     const _bAxis = w2c(0.42, -0.06, 0.0); // 병 바닥 중심의 coord
     const BOTTLE_AXIS = [_bAxis[0], _bAxis[2]]; // 병 축 coord x,z
     const BOTTLE_BOTTOM = _bAxis[1]; // 병 바닥 coord y
+    // 보이는 병(setupBottle) 프로파일과 동일: 몸통(Rb) → 짧은 어깨(smootherstep,
+    // yBody→yNeck) → 곧은 목(Rn) → 입구. 내반경 = 외반경 − 벽두께(0.003m).
     const BODY_R = ((0.0368 - 0.003) * BOTTLE_M) / DOMAIN_SCALE; // 몸통 내반경
-    const NECK_R = (0.00925 * BOTTLE_M) / DOMAIN_SCALE; // 입구 내반경(bore)
-    const BODY_TOP = (0.184 * BOTTLE_M) / DOMAIN_SCALE; // 바닥→어깨 시작(몸통)
-    const NECK_TOP = (0.3 * BOTTLE_M) / DOMAIN_SCALE; // 바닥→병 끝(입구)
+    const NECK_R = ((0.01475 - 0.003) * BOTTLE_M) / DOMAIN_SCALE; // 목 내반경
+    const BODY_TOP = (0.184 * BOTTLE_M) / DOMAIN_SCALE; // 어깨 시작(yBody)
+    const SHOULDER_TOP = (0.216 * BOTTLE_M) / DOMAIN_SCALE; // 어깨 끝=목 시작(yNeck)
+    const NECK_TOP = (0.3 * BOTTLE_M) / DOMAIN_SCALE; // 병 끝(입구, H)
     // 기울기 피벗(coord): 병 축, 몸통 중간 높이(손으로 잡는 지점)
     const PIVOT = [BOTTLE_AXIS[0], BOTTLE_BOTTOM + BODY_TOP * 0.6, BOTTLE_AXIS[1]];
 
@@ -132,9 +135,13 @@ export default function FluidLab() {
     // 모두 그로부터 유도한다. 잔에서 검증된 안정 영역(H/d≈1.8, EPS∝1/H²)을
     // 입자 수와 무관하게 유지 → 어떤 N 에서도 같은 물리, 지터 없이 정지에 도달.
     // 병 내부 반경(바닥 기준 높이 h) — shader 의 rAt 과 동일식(채움·검증 공용).
+    // 몸통(BODY_R) → 어깨(smootherstep, BODY_TOP→SHOULDER_TOP) → 곧은 목(NECK_R).
     const radiusAtJS = (hh: number): number => {
-      const t2 = Math.max(0, Math.min(1, (hh - BODY_TOP) / (NECK_TOP - BODY_TOP)));
-      return BODY_R * (1 - t2) + NECK_R * t2;
+      if (hh <= BODY_TOP) return BODY_R;
+      if (hh >= SHOULDER_TOP) return NECK_R;
+      const t = (hh - BODY_TOP) / (SHOULDER_TOP - BODY_TOP);
+      const s = t * t * t * (t * (t * 6 - 15) + 10); // smootherstep
+      return BODY_R + (NECK_R - BODY_R) * s;
     };
     // 전체 내부 부피(원판 적분)에서 목표 입자 수 → 격자 간격 d 산출(자기일관).
     let volFull = 0;
@@ -185,7 +192,9 @@ export default function FluidLab() {
       for (let iy = 0; ; iy++) {
         const h = d * 0.5 + iy * d; // 바닥 기준 높이
         if (h > topH) break;
-        const rMax = radiusAtJS(Math.min(h, NECK_TOP)); // 벽까지(여유 없음)
+        // 렌더 표면(+PARTICLE_R)이 정확히 내벽에 걸리도록 그만큼 안쪽에 채움
+        // → 초록 유리 두께가 둘러 보임(중력 꺼진 검증이라 침강 없음).
+        const rMax = Math.max(radiusAtJS(Math.min(h, NECK_TOP)) - PARTICLE_R, 0);
         const nx = Math.ceil(rMax / d);
         const y = BOTTLE_BOTTOM + h;
         for (let ix = -nx; ix <= nx; ix++)
@@ -381,12 +390,17 @@ export default function FluidLab() {
         const h = ly.sub(bottomLocalY).toVar(); // 0=바닥, NECK_TOP=입구
         // 반경 판정용 높이(바닥 아래/입구 위는 clamp) — 모서리 누수 방지 핵심.
         const hC = clamp(h, 0.0, NECK_TOP).toVar();
-        // 높이별 내반경: 몸통 BODY_R → (어깨~목) → 입구 NECK_R
-        const rAt = mix(
-          float(BODY_R),
-          float(NECK_R),
-          clamp(hC.sub(BODY_TOP).div(NECK_TOP - BODY_TOP), 0.0, 1.0),
+        // 높이별 내반경: 몸통 BODY_R → 어깨(smootherstep) → 곧은 목 NECK_R.
+        const tSh = clamp(
+          hC.sub(BODY_TOP).div(SHOULDER_TOP - BODY_TOP),
+          0.0,
+          1.0,
         ).toVar();
+        const sSh = tSh
+          .mul(tSh)
+          .mul(tSh)
+          .mul(tSh.mul(tSh.mul(6.0).sub(15.0)).add(10.0)); // smootherstep
+        const rAt = mix(float(BODY_R), float(NECK_R), sSh).toVar();
         const clx = lx.toVar();
         const cly = ly.toVar();
         const clz = lz.toVar();
