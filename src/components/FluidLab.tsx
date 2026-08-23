@@ -1035,12 +1035,20 @@ export default function FluidLab() {
         sloshVZ += (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt + driveZ;
         sloshX = Math.max(-0.7, Math.min(0.7, sloshX + sloshVX * dt));
         sloshZ = Math.max(-0.7, Math.min(0.7, sloshZ + sloshVZ * dt));
-        // 잔은 세운 채, 수면을 슬로싱 기울기 평면으로 채운다(부피 보존).
-        // 평면 py = H0 + sloshX·px + sloshZ·pz → m1=-sloshX, m5=1, m9=-sloshZ.
-        glassGroup.rotation.set(0, 0, 0);
+        // 잔도 스월 따라 살짝 기운다(원으로 저으면 잔이 도는 느낌).
+        const GF = 0.4;
+        glassGroup.rotation.set(sloshZ * GF, 0, -sloshX * GF);
         glassGroup.updateMatrix();
+        // 와인 수면 = 월드 (수평 + 슬로싱 기울기). 잔이 기울어도(회전 R) 로컬
+        // 프레임에서 그 월드 평면을 표현하도록 계수 계산. a,b=슬로싱 월드 기울기.
+        const el = glassGroup.matrix.elements;
+        const a = sloshX;
+        const b = sloshZ;
+        const M1 = el[1] - a * el[0] - b * el[2];
+        const M5 = el[5] - a * el[4] - b * el[6];
+        const M9 = el[9] - a * el[8] - b * el[10];
         for (let it = 0; it < 4; it++) {
-          rebuildLiquid(-sloshX, 1, -sloshZ, liqH);
+          rebuildLiquid(M1, M5, M9, liqH);
           liqH += (liqV0 - liqVol) / (liqFoot || 1);
           liqH = Math.max(GLASS_WINE_BOTTOM + 0.1, Math.min(liqH, 2.7));
         }
