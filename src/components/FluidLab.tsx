@@ -847,8 +847,16 @@ export default function FluidLab() {
     let sloshZ = 0;
     let sloshVX = 0;
     let sloshVZ = 0;
-    let dragAX = 0; // 이번 프레임 드래그 이동 누적(x)
-    let dragAZ = 0;
+    // 마우스 = 잔 제어. 잔은 마우스 오프셋을 추종해 기울고, 놓으면 세워진다.
+    // 와인 슬로싱은 잔의 움직임(속도)에 구동 → 놓으면 잔은 멈추고 와인만 출렁.
+    let mStartX = 0;
+    let mStartY = 0;
+    let mCurX = 0;
+    let mCurY = 0;
+    let gTiltX = 0; // 잔 기울기(마우스 추종)
+    let gTiltZ = 0;
+    let gPrevX = 0; // 이전 프레임 잔 기울기(속도 계산)
+    let gPrevZ = 0;
     let swDragging = false;
 
     // 고정 토폴로지 그리드 생성(정점 위치는 rebuildLiquid 가 매 프레임 채움).
@@ -1029,24 +1037,34 @@ export default function FluidLab() {
         if (streamMesh) streamMesh.visible = false;
         // ── 스월링 ── 드래그로 잔(그룹)을 기울이고, 액체 수면은 월드 수평 유지.
         const dt = 1 / 60;
-        // 슬로싱 2D 감쇠 진동자 — 드래그 움직임이 구동. 원으로 저으면 (sloshX,Z)
-        // 가 세차(회전)해 수면 크레스트가 돌고, 멈추면 감쇠로 잦아든다.
-        const OMEGA = 8.0; // 슬로싱 고유진동수
-        const ZETA = 0.09; // 감쇠(작을수록 여러 번 돌다 멈춤)
-        const DRIVE = 0.05; // 드래그(px) → 슬로싱 결합(민감도)
-        const SLOSH_MAX = 0.28; // 수면 기울기 상한(≈16°) — 과격함 방지
-        // 한 프레임 구동 impulse 제한(빠른 드래그 스파이크 억제)
-        const driveX = Math.max(-2, Math.min(2, dragAX * DRIVE));
-        const driveZ = Math.max(-2, Math.min(2, dragAZ * DRIVE));
-        dragAX = 0;
-        dragAZ = 0;
-        sloshVX += (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt + driveX;
-        sloshVZ += (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt + driveZ;
+        // 잔 = 마우스 추종. 드래그 시작점 기준 오프셋으로 기울고, 놓으면 세워진다.
+        const GAMP = 0.006; // px → rad
+        const GMAX = 0.26;
+        let gtx = 0;
+        let gtz = 0;
+        if (swDragging) {
+          gtx = Math.max(-GMAX, Math.min(GMAX, (mCurY - mStartY) * GAMP));
+          gtz = Math.max(-GMAX, Math.min(GMAX, (mCurX - mStartX) * GAMP));
+        }
+        const gEase = swDragging ? 0.3 : 0.14; // 놓으면 부드럽게 세워짐(안 흔들림)
+        gTiltX += (gtx - gTiltX) * gEase;
+        gTiltZ += (gtz - gTiltZ) * gEase;
+        // 잔 기울기 속도 → 와인 슬로싱 구동. 잔을 움직이면 와인이 출렁이고,
+        // 놓으면 잔은 세워지며 와인만 관성으로 계속 출렁이다 잦아든다.
+        const gvx = (gTiltX - gPrevX) / dt;
+        const gvz = (gTiltZ - gPrevZ) / dt;
+        gPrevX = gTiltX;
+        gPrevZ = gTiltZ;
+        const OMEGA = 8.0;
+        const ZETA = 0.09;
+        const COUPLE = 1.4; // 잔 움직임 → 와인 슬로싱 결합
+        const SLOSH_MAX = 0.28;
+        sloshVX += (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt - COUPLE * gvz * dt;
+        sloshVZ += (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt - COUPLE * gvx * dt;
         sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshX + sloshVX * dt));
         sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshZ + sloshVZ * dt));
-        // 잔도 스월 따라 살짝 기운다(원으로 저으면 잔이 도는 느낌).
-        const GF = 0.3;
-        glassGroup.rotation.set(sloshZ * GF, 0, -sloshX * GF);
+        // 잔 기울기 적용(마우스 추종).
+        glassGroup.rotation.set(gTiltX, 0, gTiltZ);
         glassGroup.updateMatrix();
         // 와인 수면 = 월드 (수평 + 슬로싱 기울기). 잔이 기울어도(회전 R) 로컬
         // 프레임에서 그 월드 평면을 표현하도록 계수 계산. a,b=슬로싱 월드 기울기.
@@ -1185,17 +1203,20 @@ export default function FluidLab() {
       container.appendChild(renderer.domElement);
 
       // 스월링 입력: 드래그로 잔을 기울인다(WineGlass.tsx 방식).
-      const onSwDown = () => {
+      const onSwDown = (e: PointerEvent) => {
         swDragging = true;
+        mStartX = e.clientX;
+        mStartY = e.clientY;
+        mCurX = e.clientX;
+        mCurY = e.clientY;
       };
       const onSwUp = () => {
         swDragging = false;
       };
       const onSwMove = (e: PointerEvent) => {
         if (!swDragging) return;
-        // 드래그 움직임을 슬로싱 구동으로 누적(원으로 저으면 크레스트가 돈다).
-        dragAX += e.movementX;
-        dragAZ += e.movementY;
+        mCurX = e.clientX;
+        mCurY = e.clientY;
       };
       window.addEventListener("pointerdown", onSwDown);
       window.addEventListener("pointerup", onSwUp);
