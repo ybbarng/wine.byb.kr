@@ -888,12 +888,8 @@ export default function FluidLab() {
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       if (!FLUID_ON) {
-        // 직접 굴절: 1) 잔 숨기고 장면(배경+병+와인) → sceneRT
+        // [진단] 유리를 숨기고 맨 와인이 잔을 채우는지 확인
         glassMesh.visible = false;
-        renderer.setRenderTarget(sceneRT);
-        renderer.render(scene, camera);
-        // 2) 잔 포함 장면 → 화면 (잔이 sceneRT를 굴절 샘플 → 병까지 비침)
-        glassMesh.visible = true;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
         return;
