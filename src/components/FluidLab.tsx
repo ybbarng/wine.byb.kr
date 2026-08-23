@@ -26,6 +26,7 @@ import {
   normalize,
   normalView,
   positionView,
+  positionLocal,
   pow,
   screenUV,
   sin,
@@ -818,6 +819,18 @@ export default function FluidLab() {
     let glassWineFillPy = 1.98; // 수면 높이 — 볼 하단~중간(자연스러운 와인 양)
     let glassWineBody: THREE.Mesh;
     let glassWineDisc: THREE.Mesh;
+    // 스월링: 수면 기울기 벡터(tx,tz) = 표면 slope. 정점 변위로 와인 표면·몸통
+    // 윗부분을 기울여 슬로싱. 마우스 움직임이 감쇠 진동자를 구동.
+    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform vec2
+    const swirlU: any = uniform(new THREE.Vector2(0, 0));
+    let swTiltX = 0;
+    let swTiltZ = 0;
+    let swVelX = 0;
+    let swVelZ = 0;
+    let mouseNX = 0; // 마우스 NDC x
+    let mouseNY = 0;
+    let mousePrevX = 0;
+    let mousePrevY = 0;
     // 바닥~fillPy 까지 잔 내벽 프로파일 lathe (수면에서 잘린 부피)
     function buildGlassWineGeo(fillPy: number): THREE.BufferGeometry {
       const top = Math.max(fillPy, GLASS_WINE_BOTTOM + 0.001);
@@ -854,6 +867,20 @@ export default function FluidLab() {
         );
       })();
       bodyMat.side = THREE.DoubleSide;
+      // 스월 변위: 윗부분(수면 쪽)일수록 기울기(swirlU) 만큼 y 를 밀어 슬로싱.
+      // frac: 바닥 0 → 수면 1. 몸통이 전단(shear)돼 수면이 기울어 돈다.
+      const FILL_SPAN = glassWineFillPy - GLASS_WINE_BOTTOM;
+      bodyMat.positionNode = Fn(() => {
+        const p = positionLocal.toVar();
+        const frac = clamp(
+          p.y.sub(GLASS_WINE_BOTTOM).div(FILL_SPAN),
+          0.0,
+          1.0,
+        );
+        const d = swirlU.x.mul(p.x).add(swirlU.y.mul(p.z));
+        p.y.addAssign(d.mul(frac));
+        return p;
+      })();
       glassWineBody = new THREE.Mesh(buildGlassWineGeo(glassWineFillPy), bodyMat);
       glassWineBody.scale.setScalar(glass.worldScale);
       glassWineBody.position.set(0, glass.worldY, 0);
@@ -871,8 +898,15 @@ export default function FluidLab() {
         );
       })();
       discMat.side = THREE.DoubleSide;
-      glassWineDisc = new THREE.Mesh(new THREE.CircleGeometry(1, 120), discMat);
-      glassWineDisc.rotation.x = -Math.PI / 2;
+      // 수면도 같은 기울기(swirlU)로 변위 → 몸통 윗면과 일치하게 기울어 돈다.
+      discMat.positionNode = Fn(() => {
+        const p = positionLocal.toVar();
+        p.y.addAssign(swirlU.x.mul(p.x).add(swirlU.y.mul(p.z)));
+        return p;
+      })();
+      const discGeo = new THREE.CircleGeometry(1, 120);
+      discGeo.rotateX(-Math.PI / 2); // XZ 평면으로 구움(정점 변위 좌표 단순화)
+      glassWineDisc = new THREE.Mesh(discGeo, discMat);
       glassWineDisc.frustumCulled = false;
       scene.add(glassWineDisc);
       updateGlassWineLevel(glassWineFillPy); // 위치·크기 반영
@@ -935,47 +969,25 @@ export default function FluidLab() {
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       if (!FLUID_ON) {
-        // ── 붓기 안무 ── 병을 들어 잔 위로 기울임 → 스트림 + 수위 상승.
-        const ss = (x: number) => {
-          const k = Math.max(0, Math.min(1, x));
-          return k * k * (3 - 2 * k);
-        };
-        const t = frameCount / 60;
-        const POUR_TILT = 2.0; // ≈115°
-        const neckLY = 0.969; // 스포우트의 그룹로컬 높이(피벗 위)
-        // 붓기 자세: 스포우트가 잔 중앙 위(neckTarget)에 오도록 pivot 역산.
-        const nx = neckLY * -Math.sin(POUR_TILT);
-        const ny = neckLY * Math.cos(POUR_TILT);
-        const pourPivotX = 0.05 - nx;
-        const pourPivotY = 1.32 - ny;
-        const moveK = ss((t - 0.8) / 1.8); // 0.8~2.6s 들어올려 기울임
-        bottleGroup.position.set(
-          bottlePivotWorld.x + (pourPivotX - bottlePivotWorld.x) * moveK,
-          bottlePivotWorld.y + (pourPivotY - bottlePivotWorld.y) * moveK,
-          0,
-        );
-        bottleGroup.rotation.z = POUR_TILT * moveK;
-        // 채움 2.2~6.5s
-        const pourStart = 2.2;
-        const pourEnd = 6.5;
-        const fillPy = 1.36 + (1.98 - 1.36) * ss((t - pourStart) / (pourEnd - pourStart));
-        updateGlassWineLevel(fillPy);
-        // 스트림 (붓는 동안만)
-        if (t > pourStart - 0.15 && t < pourEnd) {
-          const sp = new THREE.Vector3();
-          bottleSpout.getWorldPosition(sp);
-          const surf = new THREE.Vector3(
-            0,
-            fillPy * glass.worldScale + glass.worldY,
-            0,
-          );
-          placeStream(sp, surf, 0.012);
-          streamMesh.visible = true;
-        } else {
-          streamMesh.visible = false;
-        }
+        // 병·붓기는 지금 숨김(코드는 보존 — 나중에 사용).
+        if (bottleGroup) bottleGroup.visible = false;
+        if (streamMesh) streamMesh.visible = false;
+        // ── 스월링 ── 마우스 움직임이 수면 슬로싱(2D 감쇠 진동)을 구동.
+        // tilt(swTiltX,Z)=수면 기울기. 마우스를 원으로 돌리면 tilt 가 세차운동→회전.
+        const dt = 1 / 60;
+        const velX = mouseNX - mousePrevX; // 이번 프레임 마우스 이동(NDC)
+        const velY = mouseNY - mousePrevY;
+        mousePrevX = mouseNX;
+        mousePrevY = mouseNY;
+        const OMEGA = 7.0; // 슬로싱 고유진동수(rad/s)
+        const ZETA = 0.13; // 감쇠비(작을수록 여러 번 출렁)
+        const DRIVE = 1.1; // 마우스 이동 → 슬로싱 결합
+        swVelX += (-(OMEGA * OMEGA) * swTiltX - 2 * ZETA * OMEGA * swVelX) * dt + DRIVE * velX;
+        swVelZ += (-(OMEGA * OMEGA) * swTiltZ - 2 * ZETA * OMEGA * swVelZ) * dt + DRIVE * velY;
+        swTiltX = Math.max(-1.2, Math.min(1.2, swTiltX + swVelX * dt));
+        swTiltZ = Math.max(-1.2, Math.min(1.2, swTiltZ + swVelZ * dt));
+        swirlU.value.set(swTiltX, swTiltZ);
         frameCount++;
-        // 내장 투과 유리 — 일반 렌더로 자체 처리(투과 타깃 자동).
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
         return;
@@ -1094,6 +1106,14 @@ export default function FluidLab() {
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.35;
       container.appendChild(renderer.domElement);
+
+      // 스월링 입력: 마우스 움직임(NDC)을 추적 → render 에서 슬로싱 구동.
+      const onPointerMove = (e: PointerEvent) => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        mouseNX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouseNY = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+      };
+      renderer.domElement.addEventListener("pointermove", onPointerMove);
 
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(
