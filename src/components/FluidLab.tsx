@@ -951,20 +951,23 @@ export default function FluidLab() {
       buildLiquid();
       liqV0 = liqVol; // upright 부피를 목표로(기울여도 유지)
       liqH = GLASS_WINE_FILL;
-      // 액체 재질: 광택 반사(환경) + 약한 투과 + 깊이 흡수(Beer–Lambert). 매트한
-      // 점토가 아니라 젖은 액체로 보이게. (WineGlass.tsx 에서 검증된 설정.)
+      // 액체 재질: 불투명(유리 뒤로 확실히 보임) + 반투명 "흉내".
+      //  - 깊은 중심(정면, fres 낮음): 거의 검은 버건디
+      //  - 얇은 가장자리(fres 높음): 루비빛 발광(빛이 통과하는 듯) = emissive
+      //  - 표면: 광택 반사(환경) = 젖은 액체 하이라이트
       const bodyMat = new A.MeshPhysicalNodeMaterial({
-        color: new THREE.Color(0x3a0816), // 더 깊은 버건디
-        roughness: 0.22, // 약간 높여 반사를 눅임(형광 분홍 방지)
+        color: new THREE.Color(0x18060c), // 거의 검은 버건디(디퓨즈 과밝음 방지)
+        roughness: 0.16, // 매끈 → 선명한 표면 반사(광택)
         metalness: 0,
-        transmission: 0.22,
-        thickness: 1.5,
-        ior: 1.35,
-        attenuationColor: new THREE.Color(0x2a050f),
-        attenuationDistance: 0.45,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.55; // 환경 반사 강도 낮춤(수면 과밝음 완화)
+      bodyMat.envMapIntensity = 0.6; // 표면 광택(환경 반사)
+      bodyMat.emissiveNode = Fn(() => {
+        const vd = normalize(positionView.negate());
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 2.5);
+        // 얇은 가장자리 루비 발광(반투명 흉내). 깊은 중심은 0(어둡게).
+        return vec3(0.44, 0.03, 0.09).mul(fres.mul(0.9));
+      })();
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
       liquidMesh.frustumCulled = false;
