@@ -956,17 +956,17 @@ export default function FluidLab() {
       //  - 얇은 가장자리(fres 높음): 루비빛 발광(빛이 통과하는 듯) = emissive
       //  - 표면: 광택 반사(환경) = 젖은 액체 하이라이트
       const bodyMat = new A.MeshPhysicalNodeMaterial({
-        color: new THREE.Color(0x220a12), // 깊은 버건디
-        roughness: 0.2, // 매끈하되 살짝 부드러운 반사(과밝음 방지)
+        color: new THREE.Color(0x45121f), // 루비/가넷 버건디(피 아닌 와인빛)
+        roughness: 0.2,
         metalness: 0,
         side: THREE.DoubleSide,
       });
       bodyMat.envMapIntensity = 0.35; // 표면 광택(환경 반사) — 눅여서 분홍 방지
-      // 아주 얇은 실루엣 가장자리에만 은은한 루비 발광(반투명 흉내, 약하게).
+      // 얇은 곳일수록 빛이 통과해 루비/가넷으로 빛남(반투명 흉내). 가장자리 집중.
       bodyMat.emissiveNode = Fn(() => {
         const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 4.0);
-        return vec3(0.34, 0.02, 0.07).mul(fres.mul(0.4));
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
+        return vec3(0.5, 0.07, 0.14).mul(fres.mul(0.5));
       })();
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
@@ -1049,7 +1049,8 @@ export default function FluidLab() {
         let gtx = 0;
         let gtz = 0;
         if (swDragging) {
-          gtx = Math.max(-GMAX, Math.min(GMAX, (mCurY - mStartY) * GAMP));
+          // 마우스 위=잔 먼쪽, 아래=가까운쪽(더 자연스러움) → Y 부호 반전.
+          gtx = Math.max(-GMAX, Math.min(GMAX, (mStartY - mCurY) * GAMP));
           gtz = Math.max(-GMAX, Math.min(GMAX, (mCurX - mStartX) * GAMP));
         }
         const gEase = swDragging ? 0.3 : 0.14; // 놓으면 부드럽게 세워짐(안 흔들림)
