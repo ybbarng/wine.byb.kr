@@ -1024,19 +1024,21 @@ export default function FluidLab() {
         const dt = 1 / 60;
         // 슬로싱 2D 감쇠 진동자 — 드래그 움직임이 구동. 원으로 저으면 (sloshX,Z)
         // 가 세차(회전)해 수면 크레스트가 돌고, 멈추면 감쇠로 잦아든다.
-        const OMEGA = 9.0; // 슬로싱 고유진동수
-        const ZETA = 0.06; // 감쇠(작을수록 여러 번 돌다 멈춤)
-        const DRIVE = 0.15; // 드래그(px) → 슬로싱 결합
-        const driveX = dragAX * DRIVE;
-        const driveZ = dragAZ * DRIVE;
+        const OMEGA = 8.0; // 슬로싱 고유진동수
+        const ZETA = 0.09; // 감쇠(작을수록 여러 번 돌다 멈춤)
+        const DRIVE = 0.05; // 드래그(px) → 슬로싱 결합(민감도)
+        const SLOSH_MAX = 0.28; // 수면 기울기 상한(≈16°) — 과격함 방지
+        // 한 프레임 구동 impulse 제한(빠른 드래그 스파이크 억제)
+        const driveX = Math.max(-2, Math.min(2, dragAX * DRIVE));
+        const driveZ = Math.max(-2, Math.min(2, dragAZ * DRIVE));
         dragAX = 0;
         dragAZ = 0;
         sloshVX += (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt + driveX;
         sloshVZ += (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt + driveZ;
-        sloshX = Math.max(-0.7, Math.min(0.7, sloshX + sloshVX * dt));
-        sloshZ = Math.max(-0.7, Math.min(0.7, sloshZ + sloshVZ * dt));
+        sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshX + sloshVX * dt));
+        sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshZ + sloshVZ * dt));
         // 잔도 스월 따라 살짝 기운다(원으로 저으면 잔이 도는 느낌).
-        const GF = 0.4;
+        const GF = 0.3;
         glassGroup.rotation.set(sloshZ * GF, 0, -sloshX * GF);
         glassGroup.updateMatrix();
         // 와인 수면 = 월드 (수평 + 슬로싱 기울기). 잔이 기울어도(회전 R) 로컬
