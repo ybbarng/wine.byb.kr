@@ -26,7 +26,6 @@ import {
   normalize,
   normalView,
   positionView,
-  positionLocal,
   pow,
   screenUV,
   sin,
@@ -816,50 +815,56 @@ export default function FluidLab() {
     // (클립은 WebGPU 노드머티리얼에서 안 먹어 지오메트리로 제한) + 수면 disc.
     // 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
     const GLASS_WINE_BOTTOM = 1.36; // 컵 내부 바닥(프로파일 y)
-    let glassWineFillPy = 1.98; // 수면 높이 — 볼 하단~중간(자연스러운 와인 양)
-    let glassWineBody: THREE.Mesh;
-    let glassWineDisc: THREE.Mesh;
-    // 스월링: 수면 기울기 벡터(tx,tz) = 표면 slope. 정점 변위로 와인 표면·몸통
-    // 윗부분을 기울여 슬로싱. 마우스 움직임이 감쇠 진동자를 구동.
-    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform vec2
-    const swirlU: any = uniform(new THREE.Vector2(0, 0));
-    let swTiltX = 0;
-    let swTiltZ = 0;
-    let swVelX = 0;
-    let swVelZ = 0;
-    let mouseNX = 0; // 마우스 NDC x
-    let mouseNY = 0;
-    let mousePrevX = 0;
-    let mousePrevY = 0;
-    // 바닥~fillPy 까지 잔 내벽 프로파일 lathe (수면에서 잘린 부피)
-    function buildGlassWineGeo(fillPy: number): THREE.BufferGeometry {
-      const top = Math.max(fillPy, GLASS_WINE_BOTTOM + 0.001);
-      const NSEG = 64;
-      const pts: THREE.Vector2[] = [new THREE.Vector2(0.001, GLASS_WINE_BOTTOM)];
-      for (let i = 0; i <= NSEG; i++) {
-        const py = GLASS_WINE_BOTTOM + ((top - GLASS_WINE_BOTTOM) * i) / NSEG;
-        pts.push(new THREE.Vector2(Math.max(innerRadiusAt(py), 0.001), py));
+    const GLASS_WINE_FILL = 1.98; // 수면(프로파일 y) — 볼 하단~중간
+    const LATHE_SEG = 120;
+    let liquidMesh: THREE.Mesh;
+    let liquidGeo: THREE.BufferGeometry;
+    let liquidSurfVerts: { idx: number; x: number; z: number }[] = [];
+    let glassGroup: THREE.Group; // 유리+액체를 함께 기울이는 그룹(드래그 스월)
+    // 스월 상태(WineGlass.tsx 방식 이식): 드래그로 잔을 기울이고, 액체 수면은
+    // 월드 수평(중력)을 유지 → 잔 벽을 타고 출렁. 관성 진동(a)으로 넘실.
+    const swTarget = { x: 0, z: 0 }; // 드래그 목표 기울기
+    const swCur = { x: 0, z: 0 }; // 현재 기울기(지연 추종)
+    const swTilt = { a: 0, va: 0 }; // 수면 높이 관성
+    let swDragging = false;
+
+    // 액체 볼륨: 잔 내벽 따라 채운 몸통 + 평평한 표면(프로파일 뒷부분=표면 정점,
+    // 매 프레임 월드 수평으로 변형). WineGlass.tsx 의 액체 구성과 동일.
+    function buildLiquid() {
+      const P: [number, number][] = [[0.001, GLASS_WINE_BOTTOM]];
+      const NB = 26;
+      for (let i = 0; i <= NB; i++) {
+        const py =
+          GLASS_WINE_BOTTOM + ((GLASS_WINE_FILL - GLASS_WINE_BOTTOM) * i) / NB;
+        P.push([Math.max(innerRadiusAt(py), 0.001), py]);
       }
-      const g = new THREE.LatheGeometry(pts, 120);
-      g.computeVertexNormals();
-      return g;
+      const surfaceStart = P.length; // 이 index 이상이 표면(수평 유지 대상)
+      const rEdge = Math.max(innerRadiusAt(GLASS_WINE_FILL), 0.001);
+      const NS = 10;
+      for (let i = 1; i <= NS; i++) {
+        P.push([Math.max(rEdge * (1 - i / NS), 0.0006), GLASS_WINE_FILL]);
+      }
+      const plen = P.length;
+      liquidGeo = new THREE.LatheGeometry(
+        P.map(([r, y]) => new THREE.Vector2(r, y)),
+        LATHE_SEG,
+      );
+      liquidGeo.computeVertexNormals();
+      const pos = liquidGeo.attributes.position;
+      liquidSurfVerts = [];
+      for (let i = 0; i <= LATHE_SEG; i++)
+        for (let j = surfaceStart; j < plen; j++) {
+          const idx = i * plen + j;
+          liquidSurfVerts.push({ idx, x: pos.getX(idx), z: pos.getZ(idx) });
+        }
     }
-    // 수면 위치·크기를 fillPy 로 갱신(붓기 애니메이션용)
-    function updateGlassWineLevel(fillPy: number) {
-      glassWineFillPy = fillPy;
-      glassWineBody.geometry.dispose();
-      glassWineBody.geometry = buildGlassWineGeo(fillPy);
-      const fillWorldY = fillPy * glass.worldScale + glass.worldY;
-      glassWineDisc.position.set(0, fillWorldY, 0);
-      const r = Math.max(innerRadiusAt(fillPy), 0.001) * glass.worldScale;
-      glassWineDisc.scale.set(r, r, r);
-    }
+
     function setupGlassWine() {
+      buildLiquid();
       const bodyMat = new A.MeshBasicNodeMaterial();
       bodyMat.colorNode = Fn(() => {
         const vd = normalize(positionView.negate());
-        // 깊은 곳(정면, fres 낮음) 거의 검은 버건디 → 얇은 가장자리(fres 높음)
-        // 루비빛 (Beer–Lambert 근사: 두꺼우면 흡수, 얇으면 통과).
+        // 깊은 곳(정면) 검은 버건디 → 얇은 가장자리 루비(흡수 근사).
         const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
         return vec4(
           mix(vec3(0.05, 0.003, 0.012), vec3(0.34, 0.02, 0.06), fres.mul(0.9)),
@@ -867,49 +872,17 @@ export default function FluidLab() {
         );
       })();
       bodyMat.side = THREE.DoubleSide;
-      // 스월 변위: 윗부분(수면 쪽)일수록 기울기(swirlU) 만큼 y 를 밀어 슬로싱.
-      // frac: 바닥 0 → 수면 1. 몸통이 전단(shear)돼 수면이 기울어 돈다.
-      const FILL_SPAN = glassWineFillPy - GLASS_WINE_BOTTOM;
-      bodyMat.positionNode = Fn(() => {
-        const p = positionLocal.toVar();
-        const frac = clamp(
-          p.y.sub(GLASS_WINE_BOTTOM).div(FILL_SPAN),
-          0.0,
-          1.0,
-        );
-        const d = swirlU.x.mul(p.x).add(swirlU.y.mul(p.z));
-        p.y.addAssign(d.mul(frac));
-        return p;
-      })();
-      glassWineBody = new THREE.Mesh(buildGlassWineGeo(glassWineFillPy), bodyMat);
-      glassWineBody.scale.setScalar(glass.worldScale);
-      glassWineBody.position.set(0, glass.worldY, 0);
-      glassWineBody.frustumCulled = false;
-      scene.add(glassWineBody);
-      // 수면 disc — 어두운 와인 + 가장자리만 은은한 따뜻한 반사(프레넬).
-      // (MeshPhysical 디퓨즈는 HDR 받아 형광 분홍 → 언릿 유지가 자연스러움.)
-      const discMat = new A.MeshBasicNodeMaterial();
-      discMat.colorNode = Fn(() => {
-        const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 4.0);
-        return vec4(
-          vec3(0.07, 0.005, 0.018).add(vec3(0.4, 0.34, 0.3).mul(fres.mul(0.3))),
-          1.0,
-        );
-      })();
-      discMat.side = THREE.DoubleSide;
-      // 수면도 같은 기울기(swirlU)로 변위 → 몸통 윗면과 일치하게 기울어 돈다.
-      discMat.positionNode = Fn(() => {
-        const p = positionLocal.toVar();
-        p.y.addAssign(swirlU.x.mul(p.x).add(swirlU.y.mul(p.z)));
-        return p;
-      })();
-      const discGeo = new THREE.CircleGeometry(1, 120);
-      discGeo.rotateX(-Math.PI / 2); // XZ 평면으로 구움(정점 변위 좌표 단순화)
-      glassWineDisc = new THREE.Mesh(discGeo, discMat);
-      glassWineDisc.frustumCulled = false;
-      scene.add(glassWineDisc);
-      updateGlassWineLevel(glassWineFillPy); // 위치·크기 반영
+      liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
+      liquidMesh.scale.setScalar(glass.worldScale);
+      liquidMesh.frustumCulled = false;
+      // 유리+액체를 그룹에 담아 함께 기울인다(드래그 스월).
+      glassGroup = new THREE.Group();
+      glassGroup.position.set(0, glass.worldY, 0);
+      scene.remove(glassMesh);
+      glassMesh.position.set(0, 0, 0); // 그룹 로컬 원점
+      glassGroup.add(glassMesh);
+      glassGroup.add(liquidMesh);
+      scene.add(glassGroup);
     }
 
     // 붓기 물줄기 — 단위 원통(Y축, 아래로 가늘어짐). 매 프레임 스포우트→잔 표면
@@ -972,21 +945,33 @@ export default function FluidLab() {
         // 병·붓기는 지금 숨김(코드는 보존 — 나중에 사용).
         if (bottleGroup) bottleGroup.visible = false;
         if (streamMesh) streamMesh.visible = false;
-        // ── 스월링 ── 마우스 움직임이 수면 슬로싱(2D 감쇠 진동)을 구동.
-        // tilt(swTiltX,Z)=수면 기울기. 마우스를 원으로 돌리면 tilt 가 세차운동→회전.
+        // ── 스월링 ── 드래그로 잔(그룹)을 기울이고, 액체 수면은 월드 수평 유지.
         const dt = 1 / 60;
-        const velX = mouseNX - mousePrevX; // 이번 프레임 마우스 이동(NDC)
-        const velY = mouseNY - mousePrevY;
-        mousePrevX = mouseNX;
-        mousePrevY = mouseNY;
-        const OMEGA = 7.0; // 슬로싱 고유진동수(rad/s)
-        const ZETA = 0.13; // 감쇠비(작을수록 여러 번 출렁)
-        const DRIVE = 1.1; // 마우스 이동 → 슬로싱 결합
-        swVelX += (-(OMEGA * OMEGA) * swTiltX - 2 * ZETA * OMEGA * swVelX) * dt + DRIVE * velX;
-        swVelZ += (-(OMEGA * OMEGA) * swTiltZ - 2 * ZETA * OMEGA * swVelZ) * dt + DRIVE * velY;
-        swTiltX = Math.max(-1.2, Math.min(1.2, swTiltX + swVelX * dt));
-        swTiltZ = Math.max(-1.2, Math.min(1.2, swTiltZ + swVelZ * dt));
-        swirlU.value.set(swTiltX, swTiltZ);
+        if (!swDragging) {
+          swTarget.x += (0 - swTarget.x) * Math.min(1, dt * 3);
+          swTarget.z += (0 - swTarget.z) * Math.min(1, dt * 3);
+        }
+        const ease = Math.min(1, dt * 9);
+        swCur.x += (swTarget.x - swCur.x) * ease;
+        swCur.z += (swTarget.z - swCur.z) * ease;
+        glassGroup.rotation.set(swCur.x, 0, swCur.z);
+        glassGroup.updateMatrix();
+        // 수면 높이 관성(넘실) — 감쇠 진동
+        swTilt.va += (0 - swTilt.a) * 60 * dt;
+        swTilt.va -= swTilt.va * 5.5 * dt;
+        swTilt.a += swTilt.va * dt;
+        // 수면 정점을 월드 수평으로: 그룹 회전행렬 y행으로 로컬 y 역산.
+        const el = glassGroup.matrix.elements;
+        const R10 = el[1];
+        const R11 = el[5] || 1;
+        const R12 = el[9];
+        const h = GLASS_WINE_FILL + swTilt.a;
+        const pos = liquidGeo.attributes.position;
+        for (const v of liquidSurfVerts) {
+          pos.setY(v.idx, (h - R10 * v.x - R12 * v.z) / R11);
+        }
+        pos.needsUpdate = true;
+        liquidGeo.computeVertexNormals();
         frameCount++;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
@@ -1107,13 +1092,29 @@ export default function FluidLab() {
       renderer.toneMappingExposure = 1.35;
       container.appendChild(renderer.domElement);
 
-      // 스월링 입력: 마우스 움직임(NDC)을 추적 → render 에서 슬로싱 구동.
-      const onPointerMove = (e: PointerEvent) => {
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouseNX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        mouseNY = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+      // 스월링 입력: 드래그로 잔을 기울인다(WineGlass.tsx 방식).
+      const onSwDown = () => {
+        swDragging = true;
       };
-      renderer.domElement.addEventListener("pointermove", onPointerMove);
+      const onSwUp = () => {
+        swDragging = false;
+      };
+      const onSwMove = (e: PointerEvent) => {
+        if (!swDragging) return;
+        swTarget.x = THREE.MathUtils.clamp(
+          swTarget.x + e.movementY / 200,
+          -0.5,
+          0.5,
+        );
+        swTarget.z = THREE.MathUtils.clamp(
+          swTarget.z - e.movementX / 200,
+          -0.5,
+          0.5,
+        );
+      };
+      window.addEventListener("pointerdown", onSwDown);
+      window.addEventListener("pointerup", onSwUp);
+      window.addEventListener("pointermove", onSwMove);
 
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(
@@ -1130,6 +1131,8 @@ export default function FluidLab() {
       controls.maxDistance = 5;
       controls.maxPolarAngle = Math.PI * 0.5;
       controls.target.set(0.25, 0.55, 0);
+      controls.enableRotate = false; // 드래그는 카메라 회전이 아니라 스월(잔 기울임)
+      controls.enablePan = false;
 
       const hdrLoader = new UltraHDRLoader().setPath("/textures/equirectangular/");
       const hdrTexture = await hdrLoader.loadAsync("royal_esplanade_2k.hdr.jpg");
