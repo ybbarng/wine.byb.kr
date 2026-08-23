@@ -819,9 +819,11 @@ export default function FluidLab() {
       const bodyMat = new A.MeshBasicNodeMaterial();
       bodyMat.colorNode = Fn(() => {
         const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 2.0);
+        // 깊은 곳(정면, fres 낮음) 거의 검은 버건디 → 얇은 가장자리(fres 높음)
+        // 루비빛 (Beer–Lambert 근사: 두꺼우면 흡수, 얇으면 통과).
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
         return vec4(
-          mix(vec3(0.2, 0.015, 0.05), vec3(0.5, 0.06, 0.13), fres.mul(0.65)),
+          mix(vec3(0.05, 0.003, 0.012), vec3(0.34, 0.02, 0.06), fres.mul(0.9)),
           1.0,
         );
       })();
@@ -839,8 +841,9 @@ export default function FluidLab() {
       discMat.colorNode = Fn(() => {
         const vd = normalize(positionView.negate());
         const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
+        // 어두운 버건디 수면 + 비스듬히 볼 때 환경 반사 하이라이트(회색빛).
         return vec4(
-          vec3(0.26, 0.025, 0.07).add(vec3(0.75, 0.68, 0.72).mul(fres.mul(0.5))),
+          vec3(0.1, 0.008, 0.025).add(vec3(0.55, 0.5, 0.55).mul(fres.mul(0.45))),
           1.0,
         );
       })();
