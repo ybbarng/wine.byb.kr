@@ -307,6 +307,9 @@ export default function FluidLab() {
     // biome-ignore lint/suspicious/noExplicitAny: TSL — 병 기울기 각(라디안)
     let tiltUniform: any;
     let bottleGroup: THREE.Group; // 보이는 병 — 피벗 둘레로 기울이는 그룹
+    let bottleSpout: THREE.Object3D; // 병 입구(주둥이) 마커 — 붓기 스트림 시작점
+    let bottlePivotWorld: THREE.Vector3; // 병 피벗 world(서 있는 위치)
+    let streamMesh: THREE.Mesh; // 붓기 물줄기(스포우트→잔)
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let particleBuffer: any,
       lambdaBuffer: any,
@@ -768,6 +771,7 @@ export default function FluidLab() {
       );
       bottleGroup = new THREE.Group();
       bottleGroup.position.copy(pivotWorld);
+      bottlePivotWorld = pivotWorld.clone();
       // 병은 world (0.42, -0.06, 0) 에 서 있음 → 그룹(피벗) 기준 상대 위치로.
       mesh.position.set(
         0.42 - pivotWorld.x,
@@ -775,6 +779,14 @@ export default function FluidLab() {
         0.0 - pivotWorld.z,
       );
       bottleGroup.add(mesh);
+      // 입구(주둥이) 마커 — 병 로컬 (0, H, 0) = 병 끝 중심(bore). 기울면 함께 이동.
+      bottleSpout = new THREE.Object3D();
+      bottleSpout.position.set(
+        mesh.position.x,
+        mesh.position.y + 0.3 * BOTTLE_M,
+        mesh.position.z,
+      );
+      bottleGroup.add(bottleSpout);
       scene.add(bottleGroup);
     }
 
@@ -866,6 +878,36 @@ export default function FluidLab() {
       updateGlassWineLevel(glassWineFillPy); // 위치·크기 반영
     }
 
+    // 붓기 물줄기 — 단위 원통(Y축, 아래로 가늘어짐). 매 프레임 스포우트→잔 표면
+    // 으로 위치·방향·길이 조정. 와인(살짝 투과)으로 렌더.
+    function setupStream() {
+      const geo = new THREE.CylinderGeometry(1, 0.62, 1, 20, 1, true);
+      const mat = new A.MeshPhysicalNodeMaterial({
+        color: 0x66101c, // 붓는 와인(밝은 레드 — 얇은 줄기라 빛 통과)
+        roughness: 0.12,
+        transmission: 0.5,
+        ior: 1.35,
+        thickness: 0.02,
+        transparent: true,
+        side: THREE.DoubleSide,
+      });
+      streamMesh = new THREE.Mesh(geo, mat);
+      streamMesh.visible = false;
+      streamMesh.frustumCulled = false;
+      scene.add(streamMesh);
+    }
+    // 스트림을 두 점(a=스포우트, b=잔 표면) 사이에 배치. rTop=위 반경.
+    function placeStream(a: THREE.Vector3, b: THREE.Vector3, rTop: number) {
+      const dir = new THREE.Vector3().subVectors(b, a);
+      const len = Math.max(dir.length(), 1e-4);
+      streamMesh.position.copy(a).add(b).multiplyScalar(0.5);
+      streamMesh.scale.set(rTop, len, rTop); // 지오메트리 taper 유지(위 rTop, 아래 0.62·rTop)
+      streamMesh.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0, 1, 0),
+        dir.multiplyScalar(1 / len),
+      );
+    }
+
     function setupParticles() {
       if (FLUID_ON) {
         setupBuffers();
@@ -875,7 +917,10 @@ export default function FluidLab() {
       }
       setupGlass();
       setupBottle();
-      if (!FLUID_ON) setupGlassWine(); // 표면·부피 기반 잔 와인
+      if (!FLUID_ON) {
+        setupGlassWine(); // 표면·부피 기반 잔 와인
+        setupStream(); // 붓기 물줄기
+      }
     }
 
     function onWindowResize() {
@@ -890,6 +935,46 @@ export default function FluidLab() {
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       if (!FLUID_ON) {
+        // ── 붓기 안무 ── 병을 들어 잔 위로 기울임 → 스트림 + 수위 상승.
+        const ss = (x: number) => {
+          const k = Math.max(0, Math.min(1, x));
+          return k * k * (3 - 2 * k);
+        };
+        const t = frameCount / 60;
+        const POUR_TILT = 2.0; // ≈115°
+        const neckLY = 0.969; // 스포우트의 그룹로컬 높이(피벗 위)
+        // 붓기 자세: 스포우트가 잔 중앙 위(neckTarget)에 오도록 pivot 역산.
+        const nx = neckLY * -Math.sin(POUR_TILT);
+        const ny = neckLY * Math.cos(POUR_TILT);
+        const pourPivotX = 0.05 - nx;
+        const pourPivotY = 1.32 - ny;
+        const moveK = ss((t - 0.8) / 1.8); // 0.8~2.6s 들어올려 기울임
+        bottleGroup.position.set(
+          bottlePivotWorld.x + (pourPivotX - bottlePivotWorld.x) * moveK,
+          bottlePivotWorld.y + (pourPivotY - bottlePivotWorld.y) * moveK,
+          0,
+        );
+        bottleGroup.rotation.z = POUR_TILT * moveK;
+        // 채움 2.2~6.5s
+        const pourStart = 2.2;
+        const pourEnd = 6.5;
+        const fillPy = 1.36 + (1.98 - 1.36) * ss((t - pourStart) / (pourEnd - pourStart));
+        updateGlassWineLevel(fillPy);
+        // 스트림 (붓는 동안만)
+        if (t > pourStart - 0.15 && t < pourEnd) {
+          const sp = new THREE.Vector3();
+          bottleSpout.getWorldPosition(sp);
+          const surf = new THREE.Vector3(
+            0,
+            fillPy * glass.worldScale + glass.worldY,
+            0,
+          );
+          placeStream(sp, surf, 0.012);
+          streamMesh.visible = true;
+        } else {
+          streamMesh.visible = false;
+        }
+        frameCount++;
         // 내장 투과 유리 — 일반 렌더로 자체 처리(투과 타깃 자동).
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
