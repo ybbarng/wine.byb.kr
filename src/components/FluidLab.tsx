@@ -25,6 +25,7 @@ import {
   ivec3,
   normalize,
   normalView,
+  normalWorld,
   positionView,
   pow,
   screenUV,
@@ -962,11 +963,13 @@ export default function FluidLab() {
         side: THREE.DoubleSide,
       });
       bodyMat.envMapIntensity = 0.35; // 표면 광택(환경 반사) — 눅여서 분홍 방지
-      // 얇은 곳일수록 빛이 통과해 루비/가넷으로 빛남(반투명 흉내). 가장자리 집중.
+      // 얇은 곳일수록 빛이 통과해 루비로 빛남(반투명 흉내). 단, 수면(윗면)엔 안
+      // 걸리게 옆면(벽)만 — sideMask=1-|normalWorld.y|. 수면은 반사만(광택).
       bodyMat.emissiveNode = Fn(() => {
         const vd = normalize(positionView.negate());
         const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
-        return vec3(0.5, 0.07, 0.14).mul(fres.mul(0.5));
+        const sideMask = float(1).sub(normalWorld.y.abs());
+        return vec3(0.5, 0.07, 0.14).mul(fres.mul(sideMask).mul(0.7));
       })();
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
