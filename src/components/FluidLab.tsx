@@ -687,17 +687,19 @@ export default function FluidLab() {
       // 더 뿌옇고 정면은 맑게. 살짝 파랑기 도는 맑은 유리.
       // 직접 굴절 유리: sceneRT(잔 뺀 장면=배경+병+와인)를 법선만큼 밀어 샘플
       // → 유리 너머가 휘어 보임(굴절·질감). 반투명 병도 sceneRT에 있으니 비침.
-      const material = new A.MeshBasicNodeMaterial();
-      material.colorNode = Fn(() => {
-        const nv = normalView; // 뷰 공간 법선
-        const off = nv.xy.mul(0.01); // 화면 굴절 오프셋(작게 — 속 와인 축소 왜곡 방지)
-        const bg = texture(sceneRT.texture, screenUV.add(off)).rgb.toVar();
-        const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.5);
-        // 굴절된 배경(유리 너머) + 아주 옅은 프레넬 윤곽/하이라이트
-        return vec4(bg.add(vec3(0.85, 0.9, 1.0).mul(fres.mul(0.18))), 1.0);
-      })();
-      material.side = THREE.FrontSide;
+      // 예전 실사 유리 복원 — three.js 내장 투과(transmission). 물리적 굴절이라
+      // 속 와인(불투명)이 잔을 자연스럽게 채워 보인다. (반투명 병은 투과 대상이
+      // 아니라 잔 너머로 안 비침 — 옆에 있어 겹침은 미미.)
+      const material = new A.MeshPhysicalNodeMaterial({
+        color: 0xffffff,
+        metalness: 0,
+        roughness: 0.04,
+        transmission: 1,
+        ior: 1.5,
+        thickness: 0.3,
+        transparent: true,
+        side: THREE.DoubleSide,
+      });
       glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
@@ -888,12 +890,7 @@ export default function FluidLab() {
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       if (!FLUID_ON) {
-        // 직접 굴절: 1) 잔 숨기고 장면(배경+병+와인) → sceneRT
-        glassMesh.visible = false;
-        renderer.setRenderTarget(sceneRT);
-        renderer.render(scene, camera);
-        // 2) 잔 포함 장면 → 화면 (잔이 sceneRT를 굴절 샘플)
-        glassMesh.visible = true;
+        // 내장 투과 유리 — 일반 렌더로 자체 처리(투과 타깃 자동).
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
         return;
