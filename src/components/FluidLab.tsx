@@ -799,7 +799,7 @@ export default function FluidLab() {
 
     // 잔 속 와인 — 표면·부피 기반. 잔 내벽 프로파일 lathe 를 수면에서 클립(부피
     // 채움) + 수면 disc. 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
-    let glassWineFillPy = 2.05; // 수면 높이(프로파일 y) — 붓기 때 애니메이션
+    let glassWineFillPy = 1.82; // 수면 높이(프로파일 y) — 볼 아래 1/3쯤(자연스러운 양)
     // biome-ignore lint/suspicious/noExplicitAny: TSL clip plane
     let glassWineClip: any;
     let glassWineDisc: THREE.Mesh;
