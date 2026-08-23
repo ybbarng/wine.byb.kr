@@ -1101,13 +1101,14 @@ export default function FluidLab() {
       };
       const onSwMove = (e: PointerEvent) => {
         if (!swDragging) return;
+        // 카메라가 반대편(-x,-z)에서 봐서 화면↔월드 축이 뒤집힘 → 부호 반전.
         swTarget.x = THREE.MathUtils.clamp(
-          swTarget.x + e.movementY / 200,
+          swTarget.x - e.movementY / 200,
           -0.5,
           0.5,
         );
         swTarget.z = THREE.MathUtils.clamp(
-          swTarget.z - e.movementX / 200,
+          swTarget.z + e.movementX / 200,
           -0.5,
           0.5,
         );
