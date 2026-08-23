@@ -816,11 +816,24 @@ export default function FluidLab() {
     // 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
     const GLASS_WINE_BOTTOM = 1.36; // 컵 내부 바닥(프로파일 y)
     const GLASS_WINE_FILL = 1.98; // 수면(프로파일 y) — 볼 하단~중간(자연스러운 양)
-    const LATHE_SEG = 120;
     let liquidMesh: THREE.Mesh;
     let liquidGeo: THREE.BufferGeometry;
-    let liquidSurfVerts: { idx: number; x: number; z: number }[] = [];
     let glassGroup: THREE.Group; // 유리+액체를 함께 기울이는 그룹(드래그 스월)
+    // 액체 그리드(파라메트릭): 각도 L_SEG × (벽 L_NV + 표면 L_NS). 매 프레임
+    // 각도별 수위선을 구해 "기운 잔 안 + 수평면 아래"로 다시 채운다(강체 아님).
+    const L_SEG = 96;
+    const L_NV = 20; // 벽(바닥→수위선) 세로 분할
+    const L_NS = 8; // 표면(수위선→중심) 분할
+    const L_PPC = L_NV + 1 + L_NS; // 컬럼당 정점 수
+    const L_COS: number[] = [];
+    const L_SIN: number[] = [];
+    for (let i = 0; i <= L_SEG; i++) {
+      const ang = (i / L_SEG) * Math.PI * 2;
+      L_COS.push(Math.cos(ang));
+      L_SIN.push(Math.sin(ang));
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: BufferAttribute
+    let liquidPosAttr: any;
     // 스월 상태(WineGlass.tsx 방식 이식): 드래그로 잔을 기울이고, 액체 수면은
     // 월드 수평(중력)을 유지 → 잔 벽을 타고 출렁. 관성 진동(a)으로 넘실.
     const swTarget = { x: 0, z: 0 }; // 드래그 목표 기울기
@@ -828,35 +841,68 @@ export default function FluidLab() {
     const swTilt = { a: 0, va: 0 }; // 수면 높이 관성
     let swDragging = false;
 
-    // 액체 볼륨: 잔 내벽 따라 채운 몸통 + 평평한 표면(프로파일 뒷부분=표면 정점,
-    // 매 프레임 월드 수평으로 변형). WineGlass.tsx 의 액체 구성과 동일.
+    // 고정 토폴로지 그리드 생성(정점 위치는 rebuildLiquid 가 매 프레임 채움).
     function buildLiquid() {
-      const P: [number, number][] = [[0.001, GLASS_WINE_BOTTOM]];
-      const NB = 26;
-      for (let i = 0; i <= NB; i++) {
-        const py =
-          GLASS_WINE_BOTTOM + ((GLASS_WINE_FILL - GLASS_WINE_BOTTOM) * i) / NB;
-        P.push([Math.max(innerRadiusAt(py), 0.001), py]);
-      }
-      const surfaceStart = P.length; // 이 index 이상이 표면(수평 유지 대상)
-      const rEdge = Math.max(innerRadiusAt(GLASS_WINE_FILL), 0.001);
-      const NS = 10;
-      for (let i = 1; i <= NS; i++) {
-        P.push([Math.max(rEdge * (1 - i / NS), 0.0006), GLASS_WINE_FILL]);
-      }
-      const plen = P.length;
-      liquidGeo = new THREE.LatheGeometry(
-        P.map(([r, y]) => new THREE.Vector2(r, y)),
-        LATHE_SEG,
+      const nCol = L_SEG + 1;
+      liquidGeo = new THREE.BufferGeometry();
+      liquidPosAttr = new THREE.BufferAttribute(
+        new Float32Array(nCol * L_PPC * 3),
+        3,
       );
-      liquidGeo.computeVertexNormals();
-      const pos = liquidGeo.attributes.position;
-      liquidSurfVerts = [];
-      for (let i = 0; i <= LATHE_SEG; i++)
-        for (let j = surfaceStart; j < plen; j++) {
-          const idx = i * plen + j;
-          liquidSurfVerts.push({ idx, x: pos.getX(idx), z: pos.getZ(idx) });
+      liquidGeo.setAttribute("position", liquidPosAttr);
+      const idx: number[] = [];
+      for (let i = 0; i < L_SEG; i++)
+        for (let r = 0; r < L_PPC - 1; r++) {
+          const a = i * L_PPC + r;
+          const b = (i + 1) * L_PPC + r;
+          idx.push(a, b, a + 1, b, b + 1, a + 1);
         }
+      liquidGeo.setIndex(idx);
+      rebuildLiquid(0, 1, 0, GLASS_WINE_FILL); // 초기(수직) 채움
+    }
+
+    // 각도별 수위선(벽∩수평면)을 구해 잔 내부를 수평면 아래로 채운다. m1,m5,m9 는
+    // glassGroup 회전행렬 y행 → 수평면을 액체 로컬 프레임의 기운 평면으로 표현.
+    function rebuildLiquid(m1: number, m5: number, m9: number, H0: number) {
+      const arr = liquidPosAttr.array as Float32Array;
+      const m5s = m5 || 1;
+      for (let i = 0; i <= L_SEG; i++) {
+        const c = L_COS[i];
+        const s = L_SIN[i];
+        // 수위선 py_w: 벽(r=innerRadiusAt(py))이 수평면과 만나는 높이(고정점 반복).
+        let pw = H0 / m5s;
+        for (let it = 0; it < 5; it++) {
+          const rr = Math.max(
+            innerRadiusAt(Math.max(GLASS_WINE_BOTTOM, Math.min(pw, 2.91))),
+            0.0006,
+          );
+          pw = (H0 - m1 * rr * c - m9 * rr * s) / m5s;
+        }
+        pw = Math.max(GLASS_WINE_BOTTOM + 0.02, Math.min(pw, 2.91));
+        const rw = Math.max(innerRadiusAt(pw), 0.0006);
+        let base = i * L_PPC * 3;
+        // 벽: 바닥(중심)→수위선
+        for (let j = 0; j <= L_NV; j++) {
+          const py = GLASS_WINE_BOTTOM + ((pw - GLASS_WINE_BOTTOM) * j) / L_NV;
+          const r = j === 0 ? 0.0006 : Math.max(innerRadiusAt(py), 0.0006);
+          arr[base] = r * c;
+          arr[base + 1] = py;
+          arr[base + 2] = r * s;
+          base += 3;
+        }
+        // 표면: 수위선→중심(수평면 위)
+        for (let k = 1; k <= L_NS; k++) {
+          const r = rw * (1 - k / L_NS);
+          const px = r * c;
+          const pz = r * s;
+          arr[base] = px;
+          arr[base + 1] = (H0 - m1 * px - m9 * pz) / m5s;
+          arr[base + 2] = pz;
+          base += 3;
+        }
+      }
+      liquidPosAttr.needsUpdate = true;
+      liquidGeo.computeVertexNormals();
     }
 
     function setupGlassWine() {
@@ -960,18 +1006,9 @@ export default function FluidLab() {
         swTilt.va += (0 - swTilt.a) * 60 * dt;
         swTilt.va -= swTilt.va * 5.5 * dt;
         swTilt.a += swTilt.va * dt;
-        // 수면 정점을 월드 수평으로: 그룹 회전행렬 y행으로 로컬 y 역산.
+        // 각도별 수위선으로 액체를 다시 채운다(기운 잔 안 + 수평면 아래).
         const el = glassGroup.matrix.elements;
-        const R10 = el[1];
-        const R11 = el[5] || 1;
-        const R12 = el[9];
-        const h = GLASS_WINE_FILL + swTilt.a;
-        const pos = liquidGeo.attributes.position;
-        for (const v of liquidSurfVerts) {
-          pos.setY(v.idx, (h - R10 * v.x - R12 * v.z) / R11);
-        }
-        pos.needsUpdate = true;
-        liquidGeo.computeVertexNormals();
+        rebuildLiquid(el[1], el[5], el[9], GLASS_WINE_FILL + swTilt.a);
         frameCount++;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
