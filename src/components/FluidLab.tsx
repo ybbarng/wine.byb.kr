@@ -840,9 +840,15 @@ export default function FluidLab() {
     let liqFoot = 1; // 수면 수평 단면적(dV/dH ≈ 이 값)
     // 스월 상태(WineGlass.tsx 방식 이식): 드래그로 잔을 기울이고, 액체 수면은
     // 월드 수평(중력)을 유지 → 잔 벽을 타고 출렁. 관성 진동(a)으로 넘실.
-    const swTarget = { x: 0, z: 0 }; // 드래그 목표 기울기
-    const swCur = { x: 0, z: 0 }; // 현재 기울기(지연 추종)
-    const swTilt = { a: 0, va: 0 }; // 수면 높이 관성
+    // 슬로싱: 수면 기울기(sloshX,Z)=2D 감쇠 진동자. 마우스 움직임이 구동 →
+    // 원으로 흔들면 기울기가 세차(회전)해 수면 크레스트가 돌고, 멈추면 잦아듦.
+    // 잔은 세운 채, 와인 표면만 기울어 돈다(실제 스월).
+    let sloshX = 0;
+    let sloshZ = 0;
+    let sloshVX = 0;
+    let sloshVZ = 0;
+    let dragAX = 0; // 이번 프레임 드래그 이동 누적(x)
+    let dragAZ = 0;
     let swDragging = false;
 
     // 고정 토폴로지 그리드 생성(정점 위치는 rebuildLiquid 가 매 프레임 채움).
@@ -1016,20 +1022,25 @@ export default function FluidLab() {
         if (streamMesh) streamMesh.visible = false;
         // ── 스월링 ── 드래그로 잔(그룹)을 기울이고, 액체 수면은 월드 수평 유지.
         const dt = 1 / 60;
-        if (!swDragging) {
-          swTarget.x += (0 - swTarget.x) * Math.min(1, dt * 3);
-          swTarget.z += (0 - swTarget.z) * Math.min(1, dt * 3);
-        }
-        const ease = Math.min(1, dt * 9);
-        swCur.x += (swTarget.x - swCur.x) * ease;
-        swCur.z += (swTarget.z - swCur.z) * ease;
-        glassGroup.rotation.set(swCur.x, 0, swCur.z);
+        // 슬로싱 2D 감쇠 진동자 — 드래그 움직임이 구동. 원으로 저으면 (sloshX,Z)
+        // 가 세차(회전)해 수면 크레스트가 돌고, 멈추면 감쇠로 잦아든다.
+        const OMEGA = 9.0; // 슬로싱 고유진동수
+        const ZETA = 0.06; // 감쇠(작을수록 여러 번 돌다 멈춤)
+        const DRIVE = 0.15; // 드래그(px) → 슬로싱 결합
+        const driveX = dragAX * DRIVE;
+        const driveZ = dragAZ * DRIVE;
+        dragAX = 0;
+        dragAZ = 0;
+        sloshVX += (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt + driveX;
+        sloshVZ += (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt + driveZ;
+        sloshX = Math.max(-0.7, Math.min(0.7, sloshX + sloshVX * dt));
+        sloshZ = Math.max(-0.7, Math.min(0.7, sloshZ + sloshVZ * dt));
+        // 잔은 세운 채, 수면을 슬로싱 기울기 평면으로 채운다(부피 보존).
+        // 평면 py = H0 + sloshX·px + sloshZ·pz → m1=-sloshX, m5=1, m9=-sloshZ.
+        glassGroup.rotation.set(0, 0, 0);
         glassGroup.updateMatrix();
-        // 각도별 수위선으로 액체를 다시 채우되, 부피가 목표(liqV0)로 유지되도록
-        // 수면 높이(liqH)를 뉴턴 스텝으로 조절(기울여도 와인 양 일정).
-        const el = glassGroup.matrix.elements;
         for (let it = 0; it < 4; it++) {
-          rebuildLiquid(el[1], el[5], el[9], liqH);
+          rebuildLiquid(-sloshX, 1, -sloshZ, liqH);
           liqH += (liqV0 - liqVol) / (liqFoot || 1);
           liqH = Math.max(GLASS_WINE_BOTTOM + 0.1, Math.min(liqH, 2.7));
         }
@@ -1162,17 +1173,9 @@ export default function FluidLab() {
       };
       const onSwMove = (e: PointerEvent) => {
         if (!swDragging) return;
-        // 카메라가 반대편(-x,-z)에서 봐서 화면↔월드 축이 뒤집힘 → 부호 반전.
-        swTarget.x = THREE.MathUtils.clamp(
-          swTarget.x - e.movementY / 200,
-          -0.5,
-          0.5,
-        );
-        swTarget.z = THREE.MathUtils.clamp(
-          swTarget.z + e.movementX / 200,
-          -0.5,
-          0.5,
-        );
+        // 드래그 움직임을 슬로싱 구동으로 누적(원으로 저으면 크레스트가 돈다).
+        dragAX += e.movementX;
+        dragAZ += e.movementY;
       };
       window.addEventListener("pointerdown", onSwDown);
       window.addEventListener("pointerup", onSwUp);
