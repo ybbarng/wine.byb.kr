@@ -965,7 +965,7 @@ export default function FluidLab() {
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.14; // 은은한 광택(반사 오염 최소화)
+      bodyMat.envMapIntensity = 0.07; // 광택 최소(푸른 반사가 레드와 섞여 마젠타 방지)
       bodyMat.emissiveNode = Fn(() => {
         const vd = normalize(positionView.negate());
         const fres = pow(float(1).sub(normalView.dot(vd).abs()), 2.2);
@@ -1070,9 +1070,9 @@ export default function FluidLab() {
         gPrevX = gTiltX;
         gPrevZ = gTiltZ;
         const OMEGA = 8.0;
-        const ZETA = 0.09;
-        const COUPLE = 1.4; // 잔 움직임 → 와인 슬로싱 결합
-        const SLOSH_MAX = 0.28;
+        const ZETA = 0.08;
+        const COUPLE = 1.7; // 잔 움직임 → 와인 슬로싱 결합
+        const SLOSH_MAX = 0.5; // 최대 수면 기울기↑ — 세게 흔들면 더 세워짐(역동성)
         sloshVX += (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt - COUPLE * gvz * dt;
         sloshVZ += (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt - COUPLE * gvx * dt;
         sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshX + sloshVX * dt));
