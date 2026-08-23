@@ -965,13 +965,14 @@ export default function FluidLab() {
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.18; // 은은한 광택(반사 오염 최소화)
+      bodyMat.envMapIntensity = 0.14; // 은은한 광택(반사 오염 최소화)
       bodyMat.emissiveNode = Fn(() => {
         const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 2.0);
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 2.2);
         const sideMask = float(1).sub(normalWorld.y.abs());
-        const deep = vec3(0.26, 0.02, 0.06); // 깊은 크림슨(두꺼운 중심)
-        const edge = vec3(0.62, 0.08, 0.17); // 밝은 루비(얇은 가장자리)
+        // 값을 낮게 유지(ACES 가 밝은 채도색을 분홍으로 밀어냄 → 어둡게).
+        const deep = vec3(0.1, 0.007, 0.022); // 깊은 크림슨(두꺼운 중심)
+        const edge = vec3(0.3, 0.03, 0.075); // 루비(얇은 가장자리)
         return mix(deep, edge, fres.mul(sideMask));
       })();
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
