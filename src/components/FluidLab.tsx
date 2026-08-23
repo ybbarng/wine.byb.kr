@@ -956,17 +956,17 @@ export default function FluidLab() {
       //  - 얇은 가장자리(fres 높음): 루비빛 발광(빛이 통과하는 듯) = emissive
       //  - 표면: 광택 반사(환경) = 젖은 액체 하이라이트
       const bodyMat = new A.MeshPhysicalNodeMaterial({
-        color: new THREE.Color(0x18060c), // 거의 검은 버건디(디퓨즈 과밝음 방지)
-        roughness: 0.16, // 매끈 → 선명한 표면 반사(광택)
+        color: new THREE.Color(0x220a12), // 깊은 버건디
+        roughness: 0.2, // 매끈하되 살짝 부드러운 반사(과밝음 방지)
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.6; // 표면 광택(환경 반사)
+      bodyMat.envMapIntensity = 0.35; // 표면 광택(환경 반사) — 눅여서 분홍 방지
+      // 아주 얇은 실루엣 가장자리에만 은은한 루비 발광(반투명 흉내, 약하게).
       bodyMat.emissiveNode = Fn(() => {
         const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 2.5);
-        // 얇은 가장자리 루비 발광(반투명 흉내). 깊은 중심은 0(어둡게).
-        return vec3(0.44, 0.03, 0.09).mul(fres.mul(0.9));
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 4.0);
+        return vec3(0.34, 0.02, 0.07).mul(fres.mul(0.4));
       })();
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
