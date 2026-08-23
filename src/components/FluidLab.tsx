@@ -957,12 +957,12 @@ export default function FluidLab() {
       //  - 얇은 가장자리(fres 높음): 루비빛 발광(빛이 통과하는 듯) = emissive
       //  - 표면: 광택 반사(환경) = 젖은 액체 하이라이트
       const bodyMat = new A.MeshPhysicalNodeMaterial({
-        color: new THREE.Color(0x45121f), // 루비/가넷 버건디(피 아닌 와인빛)
+        color: new THREE.Color(0x180509), // 아주 어두운 버건디(밝은 HDR에도 안 뜨게)
         roughness: 0.2,
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.35; // 표면 광택(환경 반사) — 눅여서 분홍 방지
+      bodyMat.envMapIntensity = 0.3; // 표면 광택(환경 반사) — 은은하게
       // 얇은 곳일수록 빛이 통과해 루비로 빛남(반투명 흉내). 단, 수면(윗면)엔 안
       // 걸리게 옆면(벽)만 — sideMask=1-|normalWorld.y|. 수면은 반사만(광택).
       bodyMat.emissiveNode = Fn(() => {
