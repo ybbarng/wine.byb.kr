@@ -834,6 +834,10 @@ export default function FluidLab() {
     }
     // biome-ignore lint/suspicious/noExplicitAny: BufferAttribute
     let liquidPosAttr: any;
+    let liqV0 = 0; // 목표 부피(upright 기준) — 기울여도 이만큼 유지
+    let liqH = GLASS_WINE_FILL; // 현재 수면 높이(부피 보존으로 조절)
+    let liqVol = 0; // 이번 rebuild 의 부피
+    let liqFoot = 1; // 수면 수평 단면적(dV/dH ≈ 이 값)
     // 스월 상태(WineGlass.tsx 방식 이식): 드래그로 잔을 기울이고, 액체 수면은
     // 월드 수평(중력)을 유지 → 잔 벽을 타고 출렁. 관성 진동(a)으로 넘실.
     const swTarget = { x: 0, z: 0 }; // 드래그 목표 기울기
@@ -866,6 +870,8 @@ export default function FluidLab() {
     function rebuildLiquid(m1: number, m5: number, m9: number, H0: number) {
       const arr = liquidPosAttr.array as Float32Array;
       const m5s = m5 || 1;
+      const dPhi = (Math.PI * 2) / L_SEG;
+      let foot = 0;
       for (let i = 0; i <= L_SEG; i++) {
         const c = L_COS[i];
         const s = L_SIN[i];
@@ -880,11 +886,12 @@ export default function FluidLab() {
         }
         pw = Math.max(GLASS_WINE_BOTTOM + 0.02, Math.min(pw, 2.91));
         const rw = Math.max(innerRadiusAt(pw), 0.0006);
+        if (i < L_SEG) foot += 0.5 * rw * rw * dPhi; // 수면 수평 단면적
         let base = i * L_PPC * 3;
         // 벽: 바닥(중심)→수위선
         for (let j = 0; j <= L_NV; j++) {
           const py = GLASS_WINE_BOTTOM + ((pw - GLASS_WINE_BOTTOM) * j) / L_NV;
-          const r = j === 0 ? 0.0006 : Math.max(innerRadiusAt(py), 0.0006);
+          const r = j === 0 ? 0 : Math.max(innerRadiusAt(py), 0.0006);
           arr[base] = r * c;
           arr[base + 1] = py;
           arr[base + 2] = r * s;
@@ -903,10 +910,26 @@ export default function FluidLab() {
       }
       liquidPosAttr.needsUpdate = true;
       liquidGeo.computeVertexNormals();
+      liqFoot = foot;
+      // 부피(닫힌 메쉬 signed volume) — 중심이 r=0 로 공유돼 닫힘.
+      const ix = liquidGeo.index.array as ArrayLike<number>;
+      let vol = 0;
+      for (let t = 0; t < ix.length; t += 3) {
+        const a = ix[t] * 3;
+        const b = ix[t + 1] * 3;
+        const d = ix[t + 2] * 3;
+        vol +=
+          arr[a] * (arr[b + 1] * arr[d + 2] - arr[b + 2] * arr[d + 1]) -
+          arr[a + 1] * (arr[b] * arr[d + 2] - arr[b + 2] * arr[d]) +
+          arr[a + 2] * (arr[b] * arr[d + 1] - arr[b + 1] * arr[d]);
+      }
+      liqVol = Math.abs(vol) / 6;
     }
 
     function setupGlassWine() {
       buildLiquid();
+      liqV0 = liqVol; // upright 부피를 목표로(기울여도 유지)
+      liqH = GLASS_WINE_FILL;
       const bodyMat = new A.MeshBasicNodeMaterial();
       bodyMat.colorNode = Fn(() => {
         const vd = normalize(positionView.negate());
@@ -1002,13 +1025,14 @@ export default function FluidLab() {
         swCur.z += (swTarget.z - swCur.z) * ease;
         glassGroup.rotation.set(swCur.x, 0, swCur.z);
         glassGroup.updateMatrix();
-        // 수면 높이 관성(넘실) — 감쇠 진동
-        swTilt.va += (0 - swTilt.a) * 60 * dt;
-        swTilt.va -= swTilt.va * 5.5 * dt;
-        swTilt.a += swTilt.va * dt;
-        // 각도별 수위선으로 액체를 다시 채운다(기운 잔 안 + 수평면 아래).
+        // 각도별 수위선으로 액체를 다시 채우되, 부피가 목표(liqV0)로 유지되도록
+        // 수면 높이(liqH)를 뉴턴 스텝으로 조절(기울여도 와인 양 일정).
         const el = glassGroup.matrix.elements;
-        rebuildLiquid(el[1], el[5], el[9], GLASS_WINE_FILL + swTilt.a);
+        for (let it = 0; it < 4; it++) {
+          rebuildLiquid(el[1], el[5], el[9], liqH);
+          liqH += (liqV0 - liqVol) / (liqFoot || 1);
+          liqH = Math.max(GLASS_WINE_BOTTOM + 0.1, Math.min(liqH, 2.7));
+        }
         frameCount++;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
