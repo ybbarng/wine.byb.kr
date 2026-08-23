@@ -954,16 +954,17 @@ export default function FluidLab() {
       // 액체 재질: 광택 반사(환경) + 약한 투과 + 깊이 흡수(Beer–Lambert). 매트한
       // 점토가 아니라 젖은 액체로 보이게. (WineGlass.tsx 에서 검증된 설정.)
       const bodyMat = new A.MeshPhysicalNodeMaterial({
-        color: new THREE.Color(0x4e0c1f),
-        roughness: 0.14, // 낮게 → 매끈한 액체 표면(선명한 반사·하이라이트)
+        color: new THREE.Color(0x3a0816), // 더 깊은 버건디
+        roughness: 0.22, // 약간 높여 반사를 눅임(형광 분홍 방지)
         metalness: 0,
-        transmission: 0.25, // 약한 투과(빛이 조금 통과 → 깊이감)
+        transmission: 0.22,
         thickness: 1.5,
         ior: 1.35,
-        attenuationColor: new THREE.Color(0x360712),
-        attenuationDistance: 0.5,
+        attenuationColor: new THREE.Color(0x2a050f),
+        attenuationDistance: 0.45,
         side: THREE.DoubleSide,
       });
+      bodyMat.envMapIntensity = 0.55; // 환경 반사 강도 낮춤(수면 과밝음 완화)
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
       liquidMesh.frustumCulled = false;
