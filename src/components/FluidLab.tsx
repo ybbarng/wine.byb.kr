@@ -868,12 +868,19 @@ export default function FluidLab() {
           idx.push(a, b, a + 1, b, b + 1, a + 1);
         }
       liquidGeo.setIndex(idx);
-      rebuildLiquid(0, 1, 0, GLASS_WINE_FILL); // 초기(수직) 채움
+      rebuildLiquid(0, 1, 0, GLASS_WINE_FILL, 0); // 초기(수직) 채움
     }
 
     // 각도별 수위선(벽∩수평면)을 구해 잔 내부를 수평면 아래로 채운다. m1,m5,m9 는
     // glassGroup 회전행렬 y행 → 수평면을 액체 로컬 프레임의 기운 평면으로 표현.
-    function rebuildLiquid(m1: number, m5: number, m9: number, H0: number) {
+    // K: 회전 오목 포물면 계수(스월 세기). 표면 = 평면 + K·r²(벽 쪽 차오름).
+    function rebuildLiquid(
+      m1: number,
+      m5: number,
+      m9: number,
+      H0: number,
+      K: number,
+    ) {
       const arr = liquidPosAttr.array as Float32Array;
       const m5s = m5 || 1;
       const dPhi = (Math.PI * 2) / L_SEG;
@@ -881,14 +888,14 @@ export default function FluidLab() {
       for (let i = 0; i <= L_SEG; i++) {
         const c = L_COS[i];
         const s = L_SIN[i];
-        // 수위선 py_w: 벽(r=innerRadiusAt(py))이 수평면과 만나는 높이(고정점 반복).
+        // 수위선 py_w: 벽(r=innerRadiusAt(py))이 표면(평면+포물)과 만나는 높이.
         let pw = H0 / m5s;
         for (let it = 0; it < 5; it++) {
           const rr = Math.max(
             innerRadiusAt(Math.max(GLASS_WINE_BOTTOM, Math.min(pw, 2.91))),
             0.0006,
           );
-          pw = (H0 - m1 * rr * c - m9 * rr * s) / m5s;
+          pw = (H0 - m1 * rr * c - m9 * rr * s) / m5s + K * rr * rr;
         }
         pw = Math.max(GLASS_WINE_BOTTOM + 0.02, Math.min(pw, 2.91));
         const rw = Math.max(innerRadiusAt(pw), 0.0006);
@@ -903,13 +910,13 @@ export default function FluidLab() {
           arr[base + 2] = r * s;
           base += 3;
         }
-        // 표면: 수위선→중심(수평면 위)
+        // 표면: 수위선→중심(평면 + 포물면)
         for (let k = 1; k <= L_NS; k++) {
           const r = rw * (1 - k / L_NS);
           const px = r * c;
           const pz = r * s;
           arr[base] = px;
-          arr[base + 1] = (H0 - m1 * px - m9 * pz) / m5s;
+          arr[base + 1] = (H0 - m1 * px - m9 * pz) / m5s + K * r * r;
           arr[base + 2] = pz;
           base += 3;
         }
@@ -1049,8 +1056,11 @@ export default function FluidLab() {
         const M1 = el[1] - a * el[0] - b * el[2];
         const M5 = el[5] - a * el[4] - b * el[6];
         const M9 = el[9] - a * el[8] - b * el[10];
+        // 회전 오목 포물면: 스월 세기(수면 기울기 크기)에 비례해 벽 쪽 차오름.
+        const swirlMag = Math.hypot(sloshX, sloshZ);
+        const K = swirlMag * 1.1;
         for (let it = 0; it < 4; it++) {
-          rebuildLiquid(M1, M5, M9, liqH);
+          rebuildLiquid(M1, M5, M9, liqH, K);
           liqH += (liqV0 - liqVol) / (liqFoot || 1);
           liqH = Math.max(GLASS_WINE_BOTTOM + 0.1, Math.min(liqH, 2.7));
         }
