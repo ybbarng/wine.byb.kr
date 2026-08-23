@@ -690,7 +690,7 @@ export default function FluidLab() {
       const material = new A.MeshBasicNodeMaterial();
       material.colorNode = Fn(() => {
         const nv = normalView; // 뷰 공간 법선
-        const off = nv.xy.mul(0.035); // 화면 굴절 오프셋(법선 tilt만큼)
+        const off = nv.xy.mul(0.01); // 화면 굴절 오프셋(작게 — 속 와인 축소 왜곡 방지)
         const bg = texture(sceneRT.texture, screenUV.add(off)).rgb.toVar();
         const vd = normalize(positionView.negate());
         const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.5);
@@ -888,8 +888,12 @@ export default function FluidLab() {
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       if (!FLUID_ON) {
-        // [진단] 유리를 숨기고 맨 와인이 잔을 채우는지 확인
+        // 직접 굴절: 1) 잔 숨기고 장면(배경+병+와인) → sceneRT
         glassMesh.visible = false;
+        renderer.setRenderTarget(sceneRT);
+        renderer.render(scene, camera);
+        // 2) 잔 포함 장면 → 화면 (잔이 sceneRT를 굴절 샘플)
+        glassMesh.visible = true;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
         return;
