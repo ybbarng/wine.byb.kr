@@ -971,8 +971,8 @@ export default function FluidLab() {
         const fres = pow(float(1).sub(normalView.dot(vd).abs()), 2.2);
         const sideMask = float(1).sub(normalWorld.y.abs());
         // 순수 레드(크림슨) — B>G 면 마젠타로 뜨므로 G≈B 로. 값 낮게(ACES 분홍 방지).
-        const deep = vec3(0.16, 0.014, 0.014); // 깊은 크림슨(두꺼운 중심)
-        const edge = vec3(0.4, 0.05, 0.05); // 루비(얇은 가장자리)
+        const deep = vec3(0.11, 0.009, 0.011); // 깊은 크림슨(두꺼운 중심)
+        const edge = vec3(0.32, 0.04, 0.045); // 루비(얇은 가장자리)
         return mix(deep, edge, fres.mul(sideMask));
       })();
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
