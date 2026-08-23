@@ -801,7 +801,7 @@ export default function FluidLab() {
     // (클립은 WebGPU 노드머티리얼에서 안 먹어 지오메트리로 제한) + 수면 disc.
     // 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
     const GLASS_WINE_BOTTOM = 1.36; // 컵 내부 바닥(프로파일 y)
-    let glassWineFillPy = 1.82; // 수면 높이 — 볼 아래 1/3쯤(자연스러운 양)
+    let glassWineFillPy = 1.98; // 수면 높이 — 볼 하단~중간(자연스러운 와인 양)
     let glassWineBody: THREE.Mesh;
     let glassWineDisc: THREE.Mesh;
     // 바닥~fillPy 까지 잔 내벽 프로파일 lathe (수면에서 잘린 부피)
@@ -849,9 +849,10 @@ export default function FluidLab() {
       const discMat = new A.MeshBasicNodeMaterial();
       discMat.colorNode = Fn(() => {
         const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
+        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 4.0);
+        // 어두운 와인 수면 + 가장자리만 은은한 따뜻한 반사(형광 분홍 방지).
         return vec4(
-          vec3(0.1, 0.008, 0.025).add(vec3(0.55, 0.5, 0.55).mul(fres.mul(0.45))),
+          vec3(0.07, 0.005, 0.018).add(vec3(0.4, 0.34, 0.3).mul(fres.mul(0.3))),
           1.0,
         );
       })();
