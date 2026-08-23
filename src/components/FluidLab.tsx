@@ -797,25 +797,37 @@ export default function FluidLab() {
       scene.add(mesh);
     }
 
-    // 잔 속 와인 — 표면·부피 기반. 잔 내벽 프로파일 lathe 를 수면에서 클립(부피
-    // 채움) + 수면 disc. 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
-    let glassWineFillPy = 1.82; // 수면 높이(프로파일 y) — 볼 아래 1/3쯤(자연스러운 양)
-    // biome-ignore lint/suspicious/noExplicitAny: TSL clip plane
-    let glassWineClip: any;
+    // 잔 속 와인 — 표면·부피 기반. 잔 내벽 프로파일 lathe 를 "수면까지만" 생성
+    // (클립은 WebGPU 노드머티리얼에서 안 먹어 지오메트리로 제한) + 수면 disc.
+    // 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
+    const GLASS_WINE_BOTTOM = 1.36; // 컵 내부 바닥(프로파일 y)
+    let glassWineFillPy = 1.82; // 수면 높이 — 볼 아래 1/3쯤(자연스러운 양)
+    let glassWineBody: THREE.Mesh;
     let glassWineDisc: THREE.Mesh;
-    function setupGlassWine() {
-      const pyBottom = 1.36; // 컵 내부 바닥(프로파일 y)
-      const pyRim = 2.92;
-      const NSEG = 90;
-      const pts: THREE.Vector2[] = [new THREE.Vector2(0.001, pyBottom)];
+    // 바닥~fillPy 까지 잔 내벽 프로파일 lathe (수면에서 잘린 부피)
+    function buildGlassWineGeo(fillPy: number): THREE.BufferGeometry {
+      const top = Math.max(fillPy, GLASS_WINE_BOTTOM + 0.001);
+      const NSEG = 64;
+      const pts: THREE.Vector2[] = [new THREE.Vector2(0.001, GLASS_WINE_BOTTOM)];
       for (let i = 0; i <= NSEG; i++) {
-        const py = pyBottom + ((pyRim - pyBottom) * i) / NSEG;
+        const py = GLASS_WINE_BOTTOM + ((top - GLASS_WINE_BOTTOM) * i) / NSEG;
         pts.push(new THREE.Vector2(Math.max(innerRadiusAt(py), 0.001), py));
       }
-      const geo = new THREE.LatheGeometry(pts, 120);
-      geo.computeVertexNormals();
-      const fillWorldY = glassWineFillPy * glass.worldScale + glass.worldY;
-      glassWineClip = new THREE.Plane(new THREE.Vector3(0, -1, 0), fillWorldY);
+      const g = new THREE.LatheGeometry(pts, 120);
+      g.computeVertexNormals();
+      return g;
+    }
+    // 수면 위치·크기를 fillPy 로 갱신(붓기 애니메이션용)
+    function updateGlassWineLevel(fillPy: number) {
+      glassWineFillPy = fillPy;
+      glassWineBody.geometry.dispose();
+      glassWineBody.geometry = buildGlassWineGeo(fillPy);
+      const fillWorldY = fillPy * glass.worldScale + glass.worldY;
+      glassWineDisc.position.set(0, fillWorldY, 0);
+      const r = Math.max(innerRadiusAt(fillPy), 0.001) * glass.worldScale;
+      glassWineDisc.scale.set(r, r, r);
+    }
+    function setupGlassWine() {
       const bodyMat = new A.MeshBasicNodeMaterial();
       bodyMat.colorNode = Fn(() => {
         const vd = normalize(positionView.negate());
@@ -828,32 +840,27 @@ export default function FluidLab() {
         );
       })();
       bodyMat.side = THREE.DoubleSide;
-      bodyMat.clippingPlanes = [glassWineClip];
-      const body = new THREE.Mesh(geo, bodyMat);
-      body.scale.setScalar(glass.worldScale);
-      body.position.set(0, glass.worldY, 0);
-      body.frustumCulled = false;
-      scene.add(body);
-      // 수면 disc (반사 하이라이트 강한 프레넬 = 와인 표면이 빛을 받음)
-      const rFill = Math.max(innerRadiusAt(glassWineFillPy), 0.001);
-      const discGeo = new THREE.CircleGeometry(rFill, 120);
+      glassWineBody = new THREE.Mesh(buildGlassWineGeo(glassWineFillPy), bodyMat);
+      glassWineBody.scale.setScalar(glass.worldScale);
+      glassWineBody.position.set(0, glass.worldY, 0);
+      glassWineBody.frustumCulled = false;
+      scene.add(glassWineBody);
+      // 수면 disc (단위 원판, scale 로 반경 조절) — 반사 하이라이트 프레넬.
       const discMat = new A.MeshBasicNodeMaterial();
       discMat.colorNode = Fn(() => {
         const vd = normalize(positionView.negate());
         const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
-        // 어두운 버건디 수면 + 비스듬히 볼 때 환경 반사 하이라이트(회색빛).
         return vec4(
           vec3(0.1, 0.008, 0.025).add(vec3(0.55, 0.5, 0.55).mul(fres.mul(0.45))),
           1.0,
         );
       })();
       discMat.side = THREE.DoubleSide;
-      glassWineDisc = new THREE.Mesh(discGeo, discMat);
+      glassWineDisc = new THREE.Mesh(new THREE.CircleGeometry(1, 120), discMat);
       glassWineDisc.rotation.x = -Math.PI / 2;
-      glassWineDisc.scale.setScalar(glass.worldScale);
-      glassWineDisc.position.set(0, fillWorldY, 0);
       glassWineDisc.frustumCulled = false;
       scene.add(glassWineDisc);
+      updateGlassWineLevel(glassWineFillPy); // 위치·크기 반영
     }
 
     function setupParticles() {
