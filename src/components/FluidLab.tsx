@@ -951,17 +951,19 @@ export default function FluidLab() {
       buildLiquid();
       liqV0 = liqVol; // upright 부피를 목표로(기울여도 유지)
       liqH = GLASS_WINE_FILL;
-      const bodyMat = new A.MeshBasicNodeMaterial();
-      bodyMat.colorNode = Fn(() => {
-        const vd = normalize(positionView.negate());
-        // 깊은 곳(정면) 검은 버건디 → 얇은 가장자리 루비(흡수 근사).
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 3.0);
-        return vec4(
-          mix(vec3(0.05, 0.003, 0.012), vec3(0.34, 0.02, 0.06), fres.mul(0.9)),
-          1.0,
-        );
-      })();
-      bodyMat.side = THREE.DoubleSide;
+      // 액체 재질: 광택 반사(환경) + 약한 투과 + 깊이 흡수(Beer–Lambert). 매트한
+      // 점토가 아니라 젖은 액체로 보이게. (WineGlass.tsx 에서 검증된 설정.)
+      const bodyMat = new A.MeshPhysicalNodeMaterial({
+        color: new THREE.Color(0x4e0c1f),
+        roughness: 0.14, // 낮게 → 매끈한 액체 표면(선명한 반사·하이라이트)
+        metalness: 0,
+        transmission: 0.25, // 약한 투과(빛이 조금 통과 → 깊이감)
+        thickness: 1.5,
+        ior: 1.35,
+        attenuationColor: new THREE.Color(0x360712),
+        attenuationDistance: 0.5,
+        side: THREE.DoubleSide,
+      });
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
       liquidMesh.frustumCulled = false;
