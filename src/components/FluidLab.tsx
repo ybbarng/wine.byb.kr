@@ -826,8 +826,9 @@ export default function FluidLab() {
       if (SIMULATE) {
       const PBF_SUBSTEPS = 8;
       dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
-      const RAMP = 30; // 중력 ease-in(초기 충격 완화)
-      gravUniform.value = GRAVITY * Math.min(1, (frameCount + 1) / RAMP);
+      // 검증(SDF↔시각 대조): 중력 끔 → 침강 없이 채운 SDF 형상 그대로 확인.
+      // (붓기 단계에선 실제 중력으로 복귀.)
+      gravUniform.value = 0;
       pourCountUniform.value = N;
       for (let s = 0; s < PBF_SUBSTEPS; s++) {
         renderer.compute(predictKernel);
