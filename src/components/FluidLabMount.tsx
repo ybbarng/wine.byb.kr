@@ -21,9 +21,9 @@ const WINE_PRESETS: Preset[] = [
   { name: "피노 누아", absorb: [9, 40, 52], color: "#7c1f2c" },
   { name: "시라", absorb: [11, 55, 72], color: "#340a18" },
   { name: "산지오베제", absorb: [14, 66, 78], color: "#611423" },
-  { name: "로제", absorb: [5, 20, 30], color: "#e0808e" },
-  { name: "샤르도네", absorb: [2.5, 5, 22], color: "#e6cf82" },
-  { name: "소비뇽 블랑", absorb: [2, 3.5, 20], color: "#e3dc99" },
+  { name: "로제", absorb: [3.5, 10, 8.5], color: "#e59aa4" },
+  { name: "샤르도네", absorb: [1.6, 3.2, 13], color: "#ecd88f" },
+  { name: "소비뇽 블랑", absorb: [1.3, 2.4, 11], color: "#e7e0a6" },
 ];
 
 export default function FluidLabMount() {
