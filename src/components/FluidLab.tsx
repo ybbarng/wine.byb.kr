@@ -1430,6 +1430,9 @@ export default function FluidLab({
       studioEnv.mapping = THREE.EquirectangularReflectionMapping;
       studioEnv.needsUpdate = true;
       scene.environment = studioEnv;
+      // 노드 재질은 envMapIntensity 대신 scene.environmentIntensity 로 IBL 세기를
+      // 제어한다(수면이 밝은 천장을 통째로 반사해 흰 원반이 되는 것을 억제).
+      scene.environmentIntensity = 0.35;
 
       // SSFR: 유체 입자만 담는 씬 + 깊이 RenderTarget + 화면 표면 quad
       fluidScene = new THREE.Scene();
