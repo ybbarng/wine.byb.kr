@@ -22,8 +22,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm db:generate # 타입체크가 참조하는 Prisma 클라이언트 생성
       - run: pnpm lint
+      # typecheck·build가 각자 prisma generate를 포함한다(서버 빌드와 동일 흐름이라 여기서 통과하면 서버도 통과).
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build # 렌더·CSS·라우트 오류를 조기에 잡는다(DB 조회 페이지는 force-dynamic)
