@@ -77,14 +77,39 @@ function polyfit(xs: number[], ys: number[], deg: number): number[] {
 // Position Based Fluids (Macklin & Müller 2013) 을 three/tsl 로 재구현.
 // 비압축(밀도 제약) + 해시 그리드 이웃 + 잔 SDF 경계.
 // biome-ignore lint: PBF 구조
-export default function FluidLab() {
+export default function FluidLab({
+  wineAbsorb,
+}: {
+  wineAbsorb?: [number, number, number];
+}) {
   const ref = useRef<HTMLDivElement>(null);
+  // 와인 흡수계수 uniform(실시간 색 변경). setup 에서 채워지고 prop 으로 갱신.
+  // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
+  const absorbURef = useRef<any>(null);
+
+  // 와인 프리셋 버튼 → 흡수계수 갱신(실시간).
+  useEffect(() => {
+    if (absorbURef.current && wineAbsorb) {
+      absorbURef.current.value.set(wineAbsorb[0], wineAbsorb[1], wineAbsorb[2]);
+    }
+  }, [wineAbsorb]);
 
   useEffect(() => {
     const container = ref.current;
     if (!container) return;
     // biome-ignore lint/suspicious/noExplicitAny: TSL/webgpu
     const A = THREE as any;
+
+    // 와인 Beer–Lambert 흡수계수 uniform(프리셋 버튼으로 실시간 변경). 기본은
+    // 현재 프리셋(있으면) 아니면 메를로/가넷 기본값.
+    const absorbU = uniform(
+      new THREE.Vector3(
+        wineAbsorb ? wineAbsorb[0] : 16,
+        wineAbsorb ? wineAbsorb[1] : 78,
+        wineAbsorb ? wineAbsorb[2] : 98,
+      ),
+    );
+    absorbURef.current = absorbU;
 
     let renderer: THREE.WebGPURenderer;
     let scene: THREE.Scene;
@@ -984,11 +1009,11 @@ export default function FluidLab() {
         const tWall = backDist.sub(frontDist).max(0.045);
         const surfaceMask = normalWorld.y.abs();
         const t = mix(tWall, float(0.28), surfaceMask).toVar();
-        // Beer–Lambert exp(-k·d): R 적게, G·B 많이(B≥G → 보라 대신 붉은 가넷).
+        // Beer–Lambert exp(-k·d). 흡수계수는 uniform(프리셋 버튼으로 실시간 변경).
         return vec3(
-          t.mul(16.0).negate().exp(),
-          t.mul(78.0).negate().exp(),
-          t.mul(98.0).negate().exp(),
+          t.mul(absorbU.x).negate().exp(),
+          t.mul(absorbU.y).negate().exp(),
+          t.mul(absorbU.z).negate().exp(),
         );
       })();
       liquidBodyMat = bodyMat;
@@ -1278,6 +1303,7 @@ export default function FluidLab() {
         downY = e.clientY;
       };
       const onSwUp = () => {
+        if (!swDragging) return; // down 이 캔버스에서 시작 안 했으면 무시(버튼 등)
         swDragging = false;
         // 거의 안 움직였으면 클릭 → 자동 스월 3바퀴.
         if (Math.hypot(mCurX - downX, mCurY - downY) < 6) {
@@ -1290,7 +1316,7 @@ export default function FluidLab() {
         mCurX = e.clientX;
         mCurY = e.clientY;
       };
-      window.addEventListener("pointerdown", onSwDown);
+      renderer.domElement.addEventListener("pointerdown", onSwDown); // 캔버스에서만 시작
       window.addEventListener("pointerup", onSwUp);
       window.addEventListener("pointermove", onSwMove);
 
