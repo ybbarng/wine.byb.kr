@@ -17,6 +17,8 @@ import {
   clamp,
   cos,
   cross,
+  dFdx,
+  dFdy,
   exp,
   float,
   frontFacing,
@@ -753,29 +755,36 @@ export default function FluidLab({
         const up = yl.sub(glassWlU).toVar(); // 수위선 위 높이
         const th = atan(positionLocal.z, positionLocal.x).toVar();
         const gate = smoothstep(float(0.0), float(0.02), up); // 수위선 위만
-        const climb = glassWetU.mul(0.5).add(0.05).toVar(); // 막이 도달한 높이
-        const arch = float(1).sub(smoothstep(float(0.0), climb, up)).toVar();
-        // 줄기(legs): 둘레로 좁은 봉우리 여러 개. drip 만큼 아래로 더 뻗음.
-        const stripe = pow(sin(th.mul(11.0)).max(0), float(7.0)).toVar();
-        const legLen = climb.mul(float(0.45).add(glassDripU.mul(1.1))).toVar();
-        const leg = float(1)
-          .sub(smoothstep(float(0.0), legLen, up))
-          .mul(stripe)
+        // 막이 도달한 높이(스월 세게=높이). 볼 벽을 꽤 타고 오른다.
+        const filmTop = glassWetU.mul(0.9).add(0.06).toVar();
+        // 막 밴드: 수위선~막꼭대기. 위 가장자리(아치)에서 진해짐(와인이 고임).
+        const inFilm = smoothstep(filmTop, filmTop.sub(0.04), up)
+          .mul(smoothstep(float(-0.02), float(0.03), up))
           .toVar();
-        return glassWetU.mul(gate).mul(arch.mul(0.4).add(leg.mul(0.9))).clamp(0, 1);
+        // 아치 선: 막 꼭대기의 진한 가는 선.
+        const dTop = up.sub(filmTop).div(0.035).toVar();
+        const archLine = dTop.mul(dTop).negate().exp().toVar();
+        // 줄기(legs): 둘레로 좁은 봉우리. 막 꼭대기에서 아래로 뻗고, drip 만큼 길어짐.
+        const stripe = pow(sin(th.mul(11.0)).max(0), float(8.0)).toVar();
+        const legBot = filmTop.sub(filmTop.mul(float(0.25).add(glassDripU.mul(0.8))));
+        const legBand = smoothstep(legBot, legBot.add(0.03), up)
+          .mul(smoothstep(filmTop.add(0.02), filmTop.sub(0.01), up))
+          .toVar();
+        const leg = stripe.mul(legBand).toVar();
+        return glassWetU
+          .mul(gate)
+          .mul(inFilm.mul(0.22).add(archLine.mul(0.5)).add(leg.mul(0.9)))
+          .clamp(0, 1);
       });
-      // 감쇠색: 젖으면 와인 레드(투과광이 이 색만 남기고 흡수), 마르면 흰색(맑음).
-      material.attenuationColorNode = mix(
-        vec3(1, 1, 1),
-        vec3(0.5, 0.03, 0.08),
-        filmMask(),
-      );
-      // 감쇠거리: 젖으면 짧게(강한 흡수), 마르면 매우 길게(흡수 없음).
-      material.attenuationDistanceNode = mix(
-        float(10.0),
-        float(0.004),
-        filmMask(),
-      );
+      // 실제 와인 눈물은 색이 거의 없는 투명한 물줄기 — 색 흡수 대신 "그 자리만
+      // 굴절이 살짝 다르게". 젖은 막/줄기(filmMask)의 화면 기울기(dFdx/dFdy)로
+      // 유리 법선을 미세하게 틀어 → 투과·반사가 그 줄기에서만 굴절돼 보인다.
+      // 마른 곳은 mask=0 → 섭동 0 → 유리 그대로(저위험).
+      material.normalNode = Fn(() => {
+        const m = filmMask().toVar();
+        const bump = vec3(dFdx(m), dFdy(m), float(0)).mul(-6.0).toVar();
+        return normalize(normalView.add(bump));
+      })();
       glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
