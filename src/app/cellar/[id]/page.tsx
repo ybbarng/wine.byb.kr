@@ -67,6 +67,12 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
           <p className="mt-3 text-sm text-rose/70">
             {joinDot(wine.producer?.nameKo, wine.region?.nameKo, country)}
           </p>
+          <Link
+            href={`/wine/${wine.slug}`}
+            className="mt-2 inline-block text-sm text-gold/80 hover:text-gold"
+          >
+            이 와인 페이지 →
+          </Link>
         </header>
 
         {/* 품종 */}
