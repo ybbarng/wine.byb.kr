@@ -9,6 +9,7 @@ import {
   Fn,
   If,
   Loop,
+  atan,
   atomicAdd,
   atomicLoad,
   atomicStore,
@@ -27,6 +28,7 @@ import {
   normalize,
   normalView,
   normalWorld,
+  positionLocal,
   positionView,
   pow,
   screenUV,
@@ -702,6 +704,15 @@ export default function FluidLab({
       fluidScene.add(particleMesh);
     }
 
+    // 와인 legs(눈물) — 유리 벽 젖은 자리에서 투과 배경을 와인색으로 흡수(감쇠).
+    // 발광 아님. 젖음=0 이면 감쇠 없음 → 마른 유리와 동일. render 가 갱신.
+    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
+    let glassWetU: any = null; // 젖음(0~1, 스월 후 스파이크→감쇠)
+    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
+    let glassWlU: any = null; // 수위선(프로파일 y)
+    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
+    let glassDripU: any = null; // 흘러내림 진행(0→1)
+
     function setupGlass() {
       const curve = new THREE.CatmullRomCurve3(
         glass.profile.map(([r, y]) => new THREE.Vector3(r, y, 0)),
@@ -731,6 +742,40 @@ export default function FluidLab({
         transparent: true,
         side: THREE.DoubleSide,
       });
+      // ── 와인 legs(눈물) ── 젖은 자리에서 투과 감쇠(attenuation)를 와인색으로 —
+      // 유리를 통과하는 배경 빛을 흡수해 어둡게·붉게 물들인다(발광 아님). 마른 곳은
+      // 감쇠 없음(맑음). 수위선 위 벽에 막(아치)+흘러내리는 줄기를 만든다.
+      glassWetU = uniform(0);
+      glassWlU = uniform(GLASS_WINE_FILL);
+      glassDripU = uniform(0);
+      const filmMask = Fn(() => {
+        const yl = positionLocal.y.toVar(); // 프로파일 높이(0~2.92)
+        const up = yl.sub(glassWlU).toVar(); // 수위선 위 높이
+        const th = atan(positionLocal.z, positionLocal.x).toVar();
+        const gate = smoothstep(float(0.0), float(0.02), up); // 수위선 위만
+        const climb = glassWetU.mul(0.5).add(0.05).toVar(); // 막이 도달한 높이
+        const arch = float(1).sub(smoothstep(float(0.0), climb, up)).toVar();
+        // 줄기(legs): 둘레로 좁은 봉우리 여러 개. drip 만큼 아래로 더 뻗음.
+        const stripe = pow(sin(th.mul(11.0)).max(0), float(7.0)).toVar();
+        const legLen = climb.mul(float(0.45).add(glassDripU.mul(1.1))).toVar();
+        const leg = float(1)
+          .sub(smoothstep(float(0.0), legLen, up))
+          .mul(stripe)
+          .toVar();
+        return glassWetU.mul(gate).mul(arch.mul(0.4).add(leg.mul(0.9))).clamp(0, 1);
+      });
+      // 감쇠색: 젖으면 와인 레드(투과광이 이 색만 남기고 흡수), 마르면 흰색(맑음).
+      material.attenuationColorNode = mix(
+        vec3(1, 1, 1),
+        vec3(0.5, 0.03, 0.08),
+        filmMask(),
+      );
+      // 감쇠거리: 젖으면 짧게(강한 흡수), 마르면 매우 길게(흡수 없음).
+      material.attenuationDistanceNode = mix(
+        float(10.0),
+        float(0.004),
+        filmMask(),
+      );
       glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
@@ -922,6 +967,9 @@ export default function FluidLab({
     // 진행성 잔물결: 정지=평면, 흔들면 활성. simT=파동 위상용 시각, waveAct=활성도.
     let simT = 0;
     let waveAct = 0;
+    // legs(눈물): wetness=벽 젖음(스월 시↑, 이후 서서히↓), dripT=줄기 흘러내림 진행.
+    let wetness = 0;
+    let dripT = 0;
     // 마우스 = 잔 제어. 잔은 마우스 오프셋을 추종해 기울고, 놓으면 세워진다.
     // 와인 슬로싱은 잔의 움직임(속도)에 구동 → 놓으면 잔은 멈추고 와인만 출렁.
     let mStartX = 0;
@@ -1234,6 +1282,21 @@ export default function FluidLab({
         const a3 = phi + W3SPD * simT;
         l3c = Math.cos(a3);
         l3s = Math.sin(a3);
+        // legs: 스월 중엔 벽이 젖고(빠르게↑, 흘러내림 리셋), 멈추면 서서히 마르며
+        // 줄기가 아래로 흘러내린다(dripT↑). 유리 감쇠 필름 uniform 갱신.
+        const swirling = autoSwirl || swirlMag > 0.15;
+        if (swirling) {
+          wetness = Math.min(1, wetness + dt * 2.5);
+          dripT = 0;
+        } else {
+          wetness = Math.max(0, wetness - dt * 0.12);
+          dripT = Math.min(1, dripT + dt * 0.35);
+        }
+        if (glassWetU) {
+          glassWetU.value = wetness;
+          glassDripU.value = dripT;
+          glassWlU.value = liqH;
+        }
         for (let it = 0; it < 4; it++) {
           rebuildLiquid(M1, M5, M9, liqH, K);
           liqH += (liqV0 - liqVol) / (liqFoot || 1);
