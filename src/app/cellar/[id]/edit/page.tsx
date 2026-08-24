@@ -1,0 +1,48 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { SiteHeader } from "@/components/site-header";
+import { AdminGuard } from "@/features/admin/admin-guard";
+import { getTastingNote, getWineOptions } from "@/features/cellar/queries";
+import { type ExistingNote, TastingNoteForm } from "@/features/cellar/tasting-note-form";
+import { toDateInput } from "@/features/cellar/tasting-note-schema";
+
+export const metadata: Metadata = {
+  title: "기록 수정",
+  robots: { index: false },
+};
+
+export const dynamic = "force-dynamic";
+
+export default async function EditTastingNotePage({ params }: PageProps<"/cellar/[id]/edit">) {
+  const { id } = await params;
+  const [data, wines] = await Promise.all([getTastingNote(id), getWineOptions()]);
+  if (!data) notFound();
+
+  const n = data.note;
+  const existing: ExistingNote = {
+    id: n.id,
+    wineId: n.wineId,
+    drankOn: toDateInput(n.drankOn),
+    purchasedOn: toDateInput(n.purchasedOn),
+    vintageYear: n.vintageYear,
+    purchasePrice: n.purchasePrice,
+    purchasePlace: n.purchasePlace,
+    rating: n.rating,
+    bodyText: n.bodyText,
+    foodPaired: n.foodPaired,
+  };
+
+  return (
+    <div className="flex flex-1 flex-col">
+      <SiteHeader />
+      <main className="mx-auto w-full max-w-xl flex-1 px-6 pb-24">
+        <header className="mt-6">
+          <h1 className="font-serif text-3xl tracking-tight text-foreground">기록 수정</h1>
+        </header>
+        <AdminGuard>
+          <TastingNoteForm wines={wines} existing={existing} />
+        </AdminGuard>
+      </main>
+    </div>
+  );
+}

@@ -38,3 +38,8 @@ export type TastingNoteInput = z.output<typeof tastingNoteSchema>;
 export function toUtcDate(dateStr: string | undefined): Date | undefined {
   return dateStr ? new Date(`${dateStr}T00:00:00.000Z`) : undefined;
 }
+
+/** Date → 날짜 입력칸용 "YYYY-MM-DD"(UTC). 없으면 null. */
+export function toDateInput(date: Date | null): string | null {
+  return date ? date.toISOString().slice(0, 10) : null;
+}

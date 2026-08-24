@@ -1,0 +1,21 @@
+"use client";
+
+import Link from "next/link";
+import { useAuthStore } from "@/features/admin/auth-store";
+
+// 상세 페이지에서 로그인한 관리자에게만 "수정" 버튼을 보인다. 삭제는 수정 폼 안에 있다.
+export function NoteActions({ id }: { id: string }) {
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+  const password = useAuthStore((s) => s.password);
+
+  if (!hasHydrated || !password) return null;
+
+  return (
+    <Link
+      href={`/cellar/${id}/edit`}
+      className="rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-sm text-gold transition-colors hover:bg-gold/20"
+    >
+      수정
+    </Link>
+  );
+}

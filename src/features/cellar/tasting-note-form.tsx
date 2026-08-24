@@ -18,6 +18,34 @@ export interface WineOption {
   nameLocal: string | null;
 }
 
+// 수정 모드에서 폼을 채울 기존 값. 날짜는 서버에서 "YYYY-MM-DD"로 넘긴다.
+export interface ExistingNote {
+  id: string;
+  wineId: string;
+  drankOn: string | null;
+  purchasedOn: string | null;
+  vintageYear: number | null;
+  purchasePrice: number | null;
+  purchasePlace: string | null;
+  rating: number | null;
+  bodyText: string | null;
+  foodPaired: string | null;
+}
+
+function toDefaults(n: ExistingNote): TastingNoteFormInput {
+  return {
+    wineId: n.wineId,
+    drankOn: n.drankOn ?? "",
+    purchasedOn: n.purchasedOn ?? "",
+    vintageYear: n.vintageYear?.toString() ?? "",
+    purchasePrice: n.purchasePrice?.toString() ?? "",
+    purchasePlace: n.purchasePlace ?? "",
+    rating: n.rating ?? undefined,
+    bodyText: n.bodyText ?? "",
+    foodPaired: n.foodPaired ?? "",
+  };
+}
+
 const inputClass =
   "w-full rounded-lg border border-rose/20 bg-white/5 px-3 py-2 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";
 
@@ -30,10 +58,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function TastingNoteForm({ wines }: { wines: WineOption[] }) {
+export function TastingNoteForm({
+  wines,
+  existing,
+}: {
+  wines: WineOption[];
+  existing?: ExistingNote;
+}) {
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const isEdit = existing != null;
 
   const {
     register,
@@ -43,26 +79,45 @@ export function TastingNoteForm({ wines }: { wines: WineOption[] }) {
     formState: { errors, isSubmitting },
   } = useForm<TastingNoteFormInput, unknown, TastingNoteInput>({
     resolver: zodResolver(tastingNoteSchema),
+    defaultValues: existing ? toDefaults(existing) : undefined,
   });
 
   // 스키마 입력 타입상 느슨하게 나오므로 별점 계산을 위해 number로 좁힌다.
   const rating = watch("rating") as number | undefined;
 
+  function handleAuthFail() {
+    logout();
+    router.push("/admin/login");
+  }
+
   async function onSubmit(data: TastingNoteInput) {
     setServerError(null);
-    const res = await fetch("/api/tasting-notes", {
-      method: "POST",
+    const res = await fetch(isEdit ? `/api/tasting-notes/${existing.id}` : "/api/tasting-notes", {
+      method: isEdit ? "PATCH" : "POST",
       headers: { "content-type": "application/json", ...adminHeaders() },
       body: JSON.stringify(data),
     });
-    if (res.status === 401) {
-      logout();
-      router.push("/admin/login");
-      return;
-    }
+    if (res.status === 401) return handleAuthFail();
     if (!res.ok) {
       const body = await res.json().catch(() => null);
       setServerError(body?.error ?? "저장에 실패했습니다.");
+      return;
+    }
+    router.push(isEdit ? `/cellar/${existing.id}` : "/cellar");
+    router.refresh();
+  }
+
+  async function onDelete() {
+    if (!existing || !window.confirm("이 기록을 삭제할까요?")) return;
+    setDeleting(true);
+    const res = await fetch(`/api/tasting-notes/${existing.id}`, {
+      method: "DELETE",
+      headers: adminHeaders(),
+    });
+    setDeleting(false);
+    if (res.status === 401) return handleAuthFail();
+    if (!res.ok) {
+      setServerError("삭제에 실패했습니다.");
       return;
     }
     router.push("/cellar");
@@ -177,15 +232,25 @@ export function TastingNoteForm({ wines }: { wines: WineOption[] }) {
           disabled={isSubmitting}
           className="rounded-xl bg-wine px-5 py-3 font-medium text-foreground transition-colors hover:bg-wine-bright disabled:opacity-40"
         >
-          {isSubmitting ? "저장 중…" : "기록 저장"}
+          {isSubmitting ? "저장 중…" : isEdit ? "수정 저장" : "기록 저장"}
         </button>
         <button
           type="button"
-          onClick={() => router.push("/cellar")}
+          onClick={() => router.push(isEdit && existing ? `/cellar/${existing.id}` : "/cellar")}
           className="text-sm text-rose/50 transition-colors hover:text-foreground"
         >
           취소
         </button>
+        {isEdit ? (
+          <button
+            type="button"
+            onClick={onDelete}
+            disabled={deleting}
+            className="ml-auto text-sm text-wine-bright/80 transition-colors hover:text-wine-bright disabled:opacity-40"
+          >
+            {deleting ? "삭제 중…" : "삭제"}
+          </button>
+        ) : null}
       </div>
     </form>
   );
