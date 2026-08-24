@@ -67,10 +67,15 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
           </p>
         </header>
 
-        {/* 산지 지도 — 진입 시 해당 산지로 날아간다 */}
+        {/* 산지 지도 — 진입 시 해당 국가를 가득 채우고 주요 산지를 핀으로 */}
         {target ? (
           <div className="mt-8">
-            <RegionMap lat={target.lat} lng={target.lng} label={country ?? name.primary} />
+            <RegionMap
+              country={country}
+              regionName={wine.region?.nameKo}
+              fallback={target}
+              label={country ?? name.primary}
+            />
           </div>
         ) : null}
 
