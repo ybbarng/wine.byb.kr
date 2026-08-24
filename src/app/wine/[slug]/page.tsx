@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { getWineBySlug } from "@/features/wine/queries";
+import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { RegionMap } from "@/features/wine/region-map";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
 import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
@@ -77,6 +78,13 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
               label={country ?? name.primary}
             />
           </div>
+        ) : null}
+
+        {/* 산지 계층 — 좁아질수록 떼루아가 구체적이다 */}
+        {country || wine.region ? (
+          <Section title="산지 계층">
+            <RegionHierarchy country={country} regionName={wine.region?.nameKo ?? null} />
+          </Section>
         ) : null}
 
         {/* 품종 */}
