@@ -797,7 +797,7 @@ export default function FluidLab({
       // 마른 곳은 mask=0 → 섭동 0 → 유리 그대로(저위험).
       material.normalNode = Fn(() => {
         const m = filmMask().toVar();
-        const bump = vec3(dFdx(m), dFdy(m), float(0)).mul(-16.0).toVar();
+        const bump = vec3(dFdx(m), dFdy(m), float(0)).mul(-7.0).toVar();
         return normalize(normalView.add(bump));
       })();
       glassMesh = new THREE.Mesh(geometry, material);
