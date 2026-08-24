@@ -1320,8 +1320,10 @@ export default function FluidLab({
           for (let b = 0; b < LEG_NA; b++) {
             const ang = (b / LEG_NA) * Math.PI * 2 - Math.PI; // 셰이더 θ 매핑과 일치
             const cd = Math.cos(ang - phi);
+            // 크레스트 방위(cd>0)만, cd^3 로 좁게 집중 → 오른 쪽에만 자국. 반대쪽
+            // (cd<0)은 갱신 안 함(cos²처럼 대칭되지 않게 부호 유지).
             if (cd > 0) {
-              const r = reach * cd * cd; // 크레스트 쪽에 집중
+              const r = reach * cd * cd * cd;
               if (r > wetTopArr[b]) wetTopArr[b] = r;
             }
           }
