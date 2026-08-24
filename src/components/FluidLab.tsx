@@ -860,46 +860,39 @@ export default function FluidLab({
       L_COS.push(Math.cos(ang));
       L_SIN.push(Math.sin(ang));
     }
-    // 컬럼별 수위선 반경 캐시(법선 루프에서 잔물결 taper 에 필요).
-    const rwCol = new Float32Array(L_SEG + 1);
-    // 진행성 잔물결 성분(방향·주파수 다른 평면파 합). 벽에서 0 으로 taper.
-    const WV = [
-      { kx: 8.0, kz: 3.0, w: 7.0, a: 0.046, ph: 0.0 },
-      { kx: -4.0, kz: 9.0, w: 9.0, a: 0.034, ph: 1.7 },
-      { kx: 7.0, kz: -9.0, w: 11.0, a: 0.024, ph: 3.1 },
-      { kx: -12.0, kz: 6.0, w: 14.0, a: 0.007, ph: 0.9 }, // 잔 파동(과하면 반짝임 튐)
-    ];
-    // 잔물결 변위 W(px,pz) 와 그 기울기(grad[0]=∂/∂x, grad[1]=∂/∂z) 반환.
-    // waveAct(활성도)·simT(시각)은 외부 클로저 변수. 정지 시 waveAct=0 → 평면.
-    function waveAt(px: number, pz: number, rw: number, grad: number[]) {
-      if (waveAct <= 1e-4) {
-        grad[0] = 0;
-        grad[1] = 0;
-        return 0;
-      }
-      const rw2 = rw * rw || 1e-6;
-      const tp = 1 - (px * px + pz * pz) / rw2; // 벽(r=rw)에서 0
-      if (tp <= 0) {
-        grad[0] = 0;
-        grad[1] = 0;
-        return 0;
-      }
-      const dtpx = (-2 * px) / rw2;
-      const dtpz = (-2 * pz) / rw2;
-      let sumSin = 0;
-      let sx = 0;
-      let sz = 0;
-      for (const wv of WV) {
-        const th = wv.kx * px + wv.kz * pz - wv.w * simT + wv.ph;
-        const sn = Math.sin(th);
-        const cs = Math.cos(th);
-        sumSin += wv.a * sn;
-        sx += wv.a * wv.kx * cs;
-        sz += wv.a * wv.kz * cs;
-      }
-      grad[0] = waveAct * (dtpx * sumSin + tp * sx);
-      grad[1] = waveAct * (dtpz * sumSin + tp * sz);
-      return waveAct * tp * sumSin;
+    // 스월 회전 파동(자연스러운 스월). 고정 방향 평면파(연못 물결처럼 교차 →
+    // 부자연)를 버리고, 잔을 도는 응집 파동으로 대체:
+    //  - mode-1: 벽을 타고 오르는 크레스트(rp² · cos(θ-φ)), φ=스월 방향.
+    //  - mode-2,3: 그 위를 천천히 도는 회전 로브(rp · cos(mθ-φ-w·t)).
+    // 정지(waveAct=0)=평면. 위상 트리그는 render 에서 프레임마다 갱신.
+    const WAMP1 = 0.08; // 벽 크레스트(mode-1)
+    const WAMP2 = 0.024; // mode-2 로브
+    const WAMP3 = 0.014; // mode-3 로브
+    const W2SPD = 3.0; // mode-2 회전 속도
+    const W3SPD = 4.2; // mode-3 회전 속도
+    let crC = 1; // cosφ (크레스트 방향)
+    let crS = 0; // sinφ
+    let l2c = 1; // cos(φ+w2·t) (mode-2 로브)
+    let l2s = 0;
+    let l3c = 1; // cos(φ+w3·t) (mode-3 로브)
+    let l3s = 0;
+    // 표면 파동 높이. c,s=cosθ,sinθ(컬럼각), c2..s3=2θ·3θ 트리그, rp=r/rw(0중심~1벽).
+    function surfWaveH(
+      c: number,
+      s: number,
+      c2: number,
+      s2: number,
+      c3: number,
+      s3: number,
+      rp: number,
+    ) {
+      if (waveAct <= 1e-4) return 0;
+      const m1 = c * crC + s * crS; // cos(θ-φ)
+      const m2 = c2 * l2c + s2 * l2s; // cos(2θ-φ-w2·t)
+      const m3 = c3 * l3c + s3 * l3s; // cos(3θ-φ-w3·t)
+      return (
+        waveAct * (WAMP1 * rp * rp * m1 + WAMP2 * rp * m2 + WAMP3 * rp * m3)
+      );
     }
     // biome-ignore lint/suspicious/noExplicitAny: BufferAttribute
     let liquidPosAttr: any;
@@ -976,23 +969,27 @@ export default function FluidLab({
       const arr = liquidPosAttr.array as Float32Array;
       const m5s = m5 || 1;
       const dPhi = (Math.PI * 2) / L_SEG;
-      const wg = [0, 0]; // 잔물결 기울기 스크래치
       let foot = 0;
       for (let i = 0; i <= L_SEG; i++) {
         const c = L_COS[i];
         const s = L_SIN[i];
-        // 수위선 py_w: 벽(r=innerRadiusAt(py))이 표면(평면+포물)과 만나는 높이.
+        const c2 = c * c - s * s; // cos2θ
+        const s2 = 2 * c * s; // sin2θ
+        const c3 = c2 * c - s2 * s; // cos3θ
+        const s3 = c2 * s + s2 * c; // sin3θ
+        // 벽(r=rw)에서의 파동값 = 크레스트가 벽을 타고 오른 높이(rp=1).
+        const wWall = surfWaveH(c, s, c2, s2, c3, s3, 1);
+        // 수위선 py_w: 벽(r=innerRadiusAt(py))이 표면(평면+포물+파동)과 만나는 높이.
         let pw = H0 / m5s;
         for (let it = 0; it < 5; it++) {
           const rr = Math.max(
             innerRadiusAt(Math.max(GLASS_WINE_BOTTOM, Math.min(pw, 2.91))),
             0.0006,
           );
-          pw = (H0 - m1 * rr * c - m9 * rr * s) / m5s + K * rr * rr;
+          pw = (H0 - m1 * rr * c - m9 * rr * s) / m5s + K * rr * rr + wWall;
         }
         pw = Math.max(GLASS_WINE_BOTTOM + 0.02, Math.min(pw, 2.91));
         const rw = Math.max(innerRadiusAt(pw), 0.0006);
-        rwCol[i] = rw; // 법선 루프의 잔물결 taper 용
         if (i < L_SEG) foot += 0.5 * rw * rw * dPhi; // 수면 수평 단면적
         let base = i * L_PPC * 3;
         // 벽: 바닥(중심)→수위선
@@ -1004,12 +1001,13 @@ export default function FluidLab({
           arr[base + 2] = r * s;
           base += 3;
         }
-        // 표면: 수위선→중심(평면 + 포물면 + 잔물결)
+        // 표면: 수위선→중심(평면 + 포물면 + 회전 파동). rp=r/rw(1벽~0중심).
         for (let k = 1; k <= L_NS; k++) {
-          const r = rw * (1 - k / L_NS);
+          const rp = 1 - k / L_NS;
+          const r = rw * rp;
           const px = r * c;
           const pz = r * s;
-          const wv = waveAt(px, pz, rw, wg);
+          const wv = surfWaveH(c, s, c2, s2, c3, s3, rp);
           arr[base] = px;
           arr[base + 1] = (H0 - m1 * px - m9 * pz) / m5s + K * r * r + wv;
           arr[base + 2] = pz;
@@ -1017,31 +1015,19 @@ export default function FluidLab({
         }
       }
       liquidPosAttr.needsUpdate = true;
-      liquidGeo.computeVertexNormals();
-      // 수면 정점 법선을 해석적 평면 법선으로 덮어쓴다. computeVertexNormals 는
-      // 수위선 정점을 벽(수직)+수면(수평) 평균(~45°)으로 만들어, 그 경사 테두리
-      // 한 줄만 어두운 환경을 반사 → "원반 테" 어두운 선이 생겼다. 수면은 해석적
-      // 평면(py=(H0-m1·x-m9·z)/m5+K·r²)이므로 법선 ∝ (m1/m5-2K·x, 1, m9/m5-2K·z).
-      // 수위선(j=L_NV)~표면(k=1..L_NS) 을 이 법선으로 통일 → 테 소멸, 연속 반사.
+      liquidGeo.computeVertexNormals(); // 표면 파동 법선은 이걸로 정확히 얻음.
+      // 다만 수위선 정점(j=L_NV)은 벽(수직)+수면(수평) 평균(~45°)이 돼 그 테두리
+      // 한 줄만 어두운 환경을 반사 → "원반 테" 어두운 선. 그 정점 법선을 바로 안쪽
+      // 표면 정점(k=1)의 법선으로 덮어써 수면과 이어지게 → 테 소멸.
       {
         const narr = liquidGeo.attributes.normal.array as Float32Array;
-        const invM5 = 1 / m5s;
         for (let i = 0; i <= L_SEG; i++) {
           const cbase = i * L_PPC * 3;
-          const rw = rwCol[i];
-          for (let idx = L_NV; idx < L_PPC; idx++) {
-            const o = cbase + idx * 3;
-            const px = arr[o];
-            const pz = arr[o + 2];
-            // 평면+포물 법선에 잔물결 기울기(-∇W)를 더해 하이라이트가 일렁이게.
-            waveAt(px, pz, rw, wg);
-            const nx = m1 * invM5 - 2 * K * px - wg[0];
-            const nz = m9 * invM5 - 2 * K * pz - wg[1];
-            const inv = 1 / Math.hypot(nx, 1, nz);
-            narr[o] = nx * inv;
-            narr[o + 1] = inv;
-            narr[o + 2] = nz * inv;
-          }
+          const oW = cbase + L_NV * 3; // 수위선 정점
+          const oS = cbase + (L_NV + 1) * 3; // 안쪽 표면 정점(k=1)
+          narr[oW] = narr[oS];
+          narr[oW + 1] = narr[oS + 1];
+          narr[oW + 2] = narr[oS + 2];
         }
         liquidGeo.attributes.normal.needsUpdate = true;
       }
@@ -1237,9 +1223,19 @@ export default function FluidLab({
         // 회전 오목 포물면: 스월 세기(수면 기울기 크기)에 비례해 벽 쪽 차오름.
         const swirlMag = Math.hypot(sloshX, sloshZ);
         const K = swirlMag * 1.1;
-        // 잔물결: 정지=평면, 흔들면 활성. 파동 위상 진행 + 활성도(스월 세기).
+        // 회전 파동: 정지=평면, 흔들면 활성. 크레스트 방향 φ=슬로싱 벡터각(스월
+        // 방향) → 마루가 잔을 돈다. mode-2,3 은 그 위를 시간에 따라 더 돈다.
         simT += dt;
         waveAct = Math.min(1, swirlMag * 3.5);
+        const phi = Math.atan2(sloshZ, sloshX);
+        crC = Math.cos(phi);
+        crS = Math.sin(phi);
+        const a2 = phi + W2SPD * simT;
+        l2c = Math.cos(a2);
+        l2s = Math.sin(a2);
+        const a3 = phi + W3SPD * simT;
+        l3c = Math.cos(a3);
+        l3s = Math.sin(a3);
         for (let it = 0; it < 4; it++) {
           rebuildLiquid(M1, M5, M9, liqH, K);
           liqH += (liqV0 - liqVol) / (liqFoot || 1);
