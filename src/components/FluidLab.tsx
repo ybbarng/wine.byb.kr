@@ -864,9 +864,10 @@ export default function FluidLab({
     const rwCol = new Float32Array(L_SEG + 1);
     // 진행성 잔물결 성분(방향·주파수 다른 평면파 합). 벽에서 0 으로 taper.
     const WV = [
-      { kx: 8.0, kz: 3.0, w: 7.0, a: 0.026, ph: 0.0 },
-      { kx: -4.0, kz: 9.0, w: 9.0, a: 0.019, ph: 1.7 },
-      { kx: 7.0, kz: -9.0, w: 11.0, a: 0.012, ph: 3.1 },
+      { kx: 8.0, kz: 3.0, w: 7.0, a: 0.046, ph: 0.0 },
+      { kx: -4.0, kz: 9.0, w: 9.0, a: 0.034, ph: 1.7 },
+      { kx: 7.0, kz: -9.0, w: 11.0, a: 0.024, ph: 3.1 },
+      { kx: -12.0, kz: 6.0, w: 14.0, a: 0.014, ph: 0.9 }, // 잔 파동(반짝임)
     ];
     // 잔물결 변위 W(px,pz) 와 그 기울기(grad[0]=∂/∂x, grad[1]=∂/∂z) 반환.
     // waveAct(활성도)·simT(시각)은 외부 클로저 변수. 정지 시 waveAct=0 → 평면.
