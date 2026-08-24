@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatDate, formatKRW, joinDot } from "./format";
-import { wineTypeLabel } from "./wine";
+import { wineDisplayName, wineTypeLabel } from "./wine";
 
 describe("formatKRW", () => {
   it("천 단위 쉼표 + 원", () => {
@@ -35,5 +35,25 @@ describe("wineTypeLabel", () => {
   it("모르는/빈 값", () => {
     expect(wineTypeLabel(null)).toBe("기타");
     expect(wineTypeLabel("orange")).toBe("orange");
+  });
+});
+
+describe("wineDisplayName", () => {
+  it("원어가 있으면 원어가 대표, 한국어가 보조", () => {
+    expect(
+      wineDisplayName({
+        nameKo: "이기갈 꼬뜨 뒤 론 블랑",
+        nameLocal: "E. Guigal Côtes du Rhône Blanc",
+      })
+    ).toEqual({
+      primary: "E. Guigal Côtes du Rhône Blanc",
+      alias: "이기갈 꼬뜨 뒤 론 블랑",
+    });
+  });
+  it("원어가 없으면 한국어가 대표, 보조는 없음", () => {
+    expect(wineDisplayName({ nameKo: "어떤 신상 와인", nameLocal: null })).toEqual({
+      primary: "어떤 신상 와인",
+      alias: null,
+    });
   });
 });
