@@ -1251,11 +1251,14 @@ export default function FluidLab({
         scene.background = savedBg;
         glassMesh.visible = true;
         liquidMesh.material = liquidBodyMat;
-        // 와인 뒤 장면 → bgRT (와인만 숨김, 유리·배경 유지). 와인 셰이더가 이걸
-        // 굴절 오프셋으로 샘플 + Beer–Lambert 흡수 → 투과(화이트와인 비침).
+        // 와인 뒤 장면 → bgRT (와인·유리 모두 숨김 → 배경만). 와인 셰이더가 이걸
+        // 굴절 오프셋으로 샘플 + Beer–Lambert 흡수 → 투과(화이트와인 비침). 유리를
+        // 빼는 이유: 빈 잔의 스템·원뿔 바닥이 굴절돼 X자로 비치던 것을 없애 깔끔하게.
         liquidMesh.visible = false;
+        glassMesh.visible = false;
         renderer.setRenderTarget(bgRT);
         renderer.render(scene, camera);
+        glassMesh.visible = true;
         liquidMesh.visible = true;
         frameCount++;
         renderer.setRenderTarget(null);
