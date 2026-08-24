@@ -970,7 +970,7 @@ export default function FluidLab() {
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.09; // 표면 광택(은은히)
+      bodyMat.envMapIntensity = 0.0; // 반사 끔 — 순수 Beer–Lambert 색(수면 blue 제거)
       bodyMat.emissiveNode = Fn(() => {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
