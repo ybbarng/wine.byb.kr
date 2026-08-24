@@ -772,10 +772,10 @@ export default function FluidLab({
         const yl = positionLocal.y.toVar(); // 프로파일 높이(0~2.92)
         const up = yl.sub(glassWlU).toVar(); // 수위선 위 높이
         const th = atan(positionLocal.z, positionLocal.x).toVar(); // -π..π
-        // 이 방위(θ)에서 와인이 실제 도달한 최고점을 텍스처에서 읽는다. 오르지
-        // 않은 방향은 top≈0 → 자국 없음(왕관 방지, 오른 쪽에만).
-        const u = th.div(Math.PI * 2).add(0.5).toVar();
-        const top = texture(legTex, vec2(u, 0.5)).x.toVar();
+        // 이 방위(θ)에서 와인이 실제 도달한 최고점(절대 프로파일 y)을 텍스처에서
+        // 읽고, 수위선 위 높이로 변환. 오르지 않은 방향은 top≈0 → 자국 없음.
+        const u = th.div(Math.PI * 2).toVar(); // 컬럼 인덱싱(RepeatWrapping)
+        const top = texture(legTex, vec2(u, 0.5)).x.sub(glassWlU).max(0).toVar();
         // 자국은 "그 방위의 도달점 ~ 수위선" 범위에만.
         const band = smoothstep(float(-0.01), float(0.02), up)
           .mul(smoothstep(top, top.sub(0.05), up))
@@ -929,6 +929,8 @@ export default function FluidLab({
       L_COS.push(Math.cos(ang));
       L_SIN.push(Math.sin(ang));
     }
+    // 방위별 수위선(벽∩와인표면 높이) — legs 가 실제 젖은 높이로 생기게(rebuildLiquid 채움).
+    const pwCol = new Float32Array(L_SEG + 1);
     // 스월 회전 파동(자연스러운 스월). 고정 방향 평면파(연못 물결처럼 교차 →
     // 부자연)를 버리고, 잔을 도는 응집 파동으로 대체:
     //  - mode-1: 벽을 타고 오르는 크레스트(rp² · cos(θ-φ)), φ=스월 방향.
@@ -1065,6 +1067,7 @@ export default function FluidLab({
           pw = (H0 - m1 * rr * c - m9 * rr * s) / m5s + K * rr * rr + wWall;
         }
         pw = Math.max(GLASS_WINE_BOTTOM + 0.02, Math.min(pw, 2.91));
+        pwCol[i] = pw; // legs: 이 방위에서 와인이 벽과 만난 높이
         const rw = Math.max(innerRadiusAt(pw), 0.0006);
         if (i < L_SEG) foot += 0.5 * rw * rw * dPhi; // 수면 수평 단면적
         let base = i * L_PPC * 3;
@@ -1309,32 +1312,25 @@ export default function FluidLab({
         l3s = Math.sin(a3);
         // legs: 스월 중엔 벽이 젖고(빠르게↑, 흘러내림 리셋), 멈추면 서서히 마르며
         // 줄기가 아래로 흘러내린다(dripT↑). 유리 감쇠 필름 uniform 갱신.
-        const swirling = autoSwirl || swirlMag > 0.15;
-        // 와인이 실제 도달한 최고점(수위선 위) ≈ 벽 크레스트 상승 = 슬로싱×벽반경
-        // + 파동. 크레스트는 방위 φ(슬로싱 벡터각) 쪽에만 오른다 → 그 방위의 bin 만
-        // 갱신(cos(θ-φ)>0). 왼쪽으로 기울이면 왼쪽 bin 만 차오름 → 자국도 왼쪽만.
-        const reach = swirlMag * 0.6 + waveAct * 0.08;
-        if (swirling) {
+        // 벽 젖음(legs): 각 방위에서 와인이 벽과 만난 높이(pwCol)가 정착 수위보다
+        // 높으면 그 자리 벽이 젖는다. 방위별 최고점(절대 y)을 wetTopArr 에 누적 —
+        // 느리게 기울여도 pw 가 오르면 기록되므로 자국이 생긴다(속도 무관).
+        let curMax = 0;
+        for (let b = 0; b < LEG_NA; b++) {
+          const pw = pwCol[b];
+          if (pw > wetTopArr[b]) wetTopArr[b] = pw;
+          const rr = pw - GLASS_WINE_FILL; // 정착 수위 위로 얼마나 올랐나
+          if (rr > curMax) curMax = rr;
+        }
+        if (legTex) legTex.needsUpdate = true;
+        // 지금 어딘가 정착보다 높으면(기울어 젖는 중) wetness↑, 아니면 서서히 마름.
+        if (curMax > 0.02) {
           wetness = Math.min(1, wetness + dt * 2.5);
           dripT = 0;
-          for (let b = 0; b < LEG_NA; b++) {
-            const ang = (b / LEG_NA) * Math.PI * 2 - Math.PI; // 셰이더 θ 매핑과 일치
-            const cd = Math.cos(ang - phi);
-            // 크레스트 방위(cd>0)만, cd^3 로 좁게 집중 → 오른 쪽에만 자국. 반대쪽
-            // (cd<0)은 갱신 안 함(cos²처럼 대칭되지 않게 부호 유지).
-            if (cd > 0) {
-              const r = reach * cd * cd * cd;
-              if (r > wetTopArr[b]) wetTopArr[b] = r;
-            }
-          }
-          if (legTex) legTex.needsUpdate = true;
         } else {
           wetness = Math.max(0, wetness - dt * 0.12);
           dripT = Math.min(1, dripT + dt * 0.35);
-          if (wetness <= 0.001) {
-            wetTopArr.fill(0); // 완전히 마르면 초기화
-            if (legTex) legTex.needsUpdate = true;
-          }
+          if (wetness <= 0.001) wetTopArr.fill(0); // 완전히 마르면 초기화
         }
         if (glassWetU) {
           glassWetU.value = wetness;
