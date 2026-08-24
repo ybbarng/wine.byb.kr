@@ -19,6 +19,7 @@ import {
   slugify,
   splitName,
 } from "./lib/normalize";
+import { countryCoord } from "./lib/region-coords";
 import { originalNameFor } from "./lib/wine-name-overrides";
 
 const SEED_DIR = path.join(process.cwd(), "data", "seed");
@@ -88,12 +89,15 @@ async function main() {
     if (!key) return null;
     const cached = countryCache.get(key);
     if (cached) return cached;
+    const coord = countryCoord(key);
     const region = await db.region.create({
       data: {
         slug: uniqueSlug(COUNTRY_SLUG[key] ?? key),
         nameKo: key,
         country: key,
         level: "country",
+        latitude: coord?.lat ?? null,
+        longitude: coord?.lng ?? null,
       },
     });
     countryCache.set(key, region.id);
