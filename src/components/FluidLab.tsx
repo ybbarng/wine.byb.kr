@@ -973,14 +973,18 @@ export default function FluidLab() {
       bodyMat.emissiveNode = Fn(() => {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
-        void frontDist;
-        return vec3(backDist.mul(0.2)); // [진단] backDist 회색조
+        const t = backDist.sub(frontDist).max(0.0).toVar();
+        return vec3(
+          t.mul(9.0).negate().exp(),
+          t.mul(40.0).negate().exp(),
+          t.mul(33.0).negate().exp(),
+        );
       })();
       liquidBodyMat = bodyMat;
       // 뒷면 거리 재질(두께 계산용) — 뒷면만, view 거리 R 채널에.
       wineBackMat = new A.MeshBasicNodeMaterial();
       wineBackMat.colorNode = Fn(() => vec4(positionView.z.negate(), 0, 0, 1))();
-      wineBackMat.side = THREE.BackSide;
+      wineBackMat.side = THREE.FrontSide; // winding 상 이쪽이 먼 면(두께 계산용)
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
       liquidMesh.frustumCulled = false;
