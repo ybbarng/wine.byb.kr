@@ -975,11 +975,12 @@ export default function FluidLab() {
         const backDist = texture(wineThickRT.texture, screenUV).x;
         // 최소 두께 0.045 — 아주 얇은 테두리도 흰색 대신 루비빛(exp→1 방지).
         const t = backDist.sub(frontDist).max(0.045).toVar();
-        // 흡수계수 → 더 깊은 와인(얇은 곳도 루비, 두꺼운 곳 검붉게).
+        // 흡수계수: R 적게, G·B 많이. B 를 G 보다 더 흡수해야 파랑이 덜 남아
+        // 보라 대신 붉은(가넷) 와인색이 된다.
         return vec3(
-          t.mul(17.0).negate().exp(),
-          t.mul(80.0).negate().exp(),
-          t.mul(66.0).negate().exp(),
+          t.mul(16.0).negate().exp(),
+          t.mul(78.0).negate().exp(),
+          t.mul(98.0).negate().exp(),
         );
       })();
       liquidBodyMat = bodyMat;
