@@ -26,12 +26,22 @@ const WINE_PRESETS: Preset[] = [
   { name: "소비뇽 블랑", absorb: [1.3, 2.4, 11], color: "#e7e0a6" },
 ];
 
+// 대표 와인잔 형태(FluidLab 의 GLASSES 순서와 일치). 나중에 와인→잔 자동 매핑에 사용.
+const GLASS_OPTIONS: { label: string; desc: string }[] = [
+  { label: "표준", desc: "만능형" },
+  { label: "보르도", desc: "풀바디 레드" },
+  { label: "부르고뉴", desc: "피노 누아" },
+  { label: "화이트", desc: "샤르도네·소비뇽블랑" },
+  { label: "플루트", desc: "샴페인·스파클링" },
+];
+
 export default function FluidLabMount() {
   const [idx, setIdx] = useState(1); // 메를로 기본
+  const [glassIdx, setGlassIdx] = useState(0); // 표준 잔 기본
 
   return (
     <div className="relative h-full w-full">
-      <FluidLab wineAbsorb={WINE_PRESETS[idx].absorb} />
+      <FluidLab wineAbsorb={WINE_PRESETS[idx].absorb} glassType={glassIdx} />
       {/* 와인 프리셋 컨트롤러 (lab) */}
       <div className="absolute left-3 top-3 z-10 flex max-w-[92vw] flex-wrap gap-1.5">
         {WINE_PRESETS.map((w, i) => (
@@ -50,6 +60,24 @@ export default function FluidLabMount() {
               style={{ background: w.color }}
             />
             {w.name}
+          </button>
+        ))}
+      </div>
+      {/* 와인잔 형태 컨트롤러 (lab) */}
+      <div className="absolute bottom-3 left-3 z-10 flex max-w-[92vw] flex-wrap gap-1.5">
+        {GLASS_OPTIONS.map((g, i) => (
+          <button
+            type="button"
+            key={g.label}
+            onClick={() => setGlassIdx(i)}
+            title={g.desc}
+            className={`rounded-full border px-2.5 py-1 text-xs backdrop-blur transition-colors ${
+              i === glassIdx
+                ? "border-white/70 bg-black/50 text-white"
+                : "border-white/20 bg-black/25 text-white/70 hover:text-white"
+            }`}
+          >
+            {g.label}
           </button>
         ))}
       </div>
