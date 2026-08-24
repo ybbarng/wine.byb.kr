@@ -777,18 +777,30 @@ export default function FluidLab({
         const u = th.div(Math.PI * 2).toVar(); // 컬럼 인덱싱(RepeatWrapping)
         const top = texture(legTex, vec2(u, 0.5)).x.sub(glassWlU).max(0).toVar();
         // 자국은 "그 방위의 도달점 ~ 수위선" 범위에만.
-        const band = smoothstep(float(-0.01), float(0.02), up)
-          .mul(smoothstep(top, top.sub(0.05), up))
-          .mul(smoothstep(float(0.02), float(0.05), top)) // 거의 안 오른 방위 제외
+        const topGate = smoothstep(float(0.02), float(0.05), top).toVar(); // 오른 방위만
+        const bandGate = smoothstep(float(-0.01), float(0.02), up)
+          .mul(smoothstep(top.add(0.02), top.sub(0.04), up)) // [수위선, 최고점]
           .toVar();
+        // 밴드 내 정규화 높이(0=수위선, 1=최고점).
+        const frac = up.div(top.max(0.001)).clamp(0, 1).toVar();
         // 아치 선: 도달 최고점의 진한 가는 선(와인이 고였던 자리).
         const dTop = up.sub(top).div(0.03).toVar();
-        const archLine = dTop.mul(dTop).negate().exp().mul(band).toVar();
-        // 줄기(legs): 둘레로 좁은 봉우리 여러 개(도달점→수위선 사이로 흘러내림).
+        const archLine = dTop.mul(dTop).negate().exp().toVar();
+        // ── 흘러내림 애니메이션 ── 방울 머리가 최고점(frac=1)→수위선(0)으로 내려간다.
+        // 줄기마다 시차(phase)를 둬 동시에 안 내려감. dripT(glassDripU) 진행.
+        const phase = sin(th.mul(7.0)).mul(0.5).add(0.5).mul(0.4).toVar();
+        const prog = glassDripU.sub(phase).clamp(0, 1).toVar();
+        const head = float(1).sub(prog).toVar(); // 내려가는 아래 끝
         const stripe = pow(sin(th.mul(11.0)).max(0), float(8.0)).toVar();
-        const leg = stripe.mul(band).toVar();
+        // 자취: 머리 위쪽(frac>head)이 젖어 있다. 머리: 밝은 방울.
+        const trail = smoothstep(head.sub(0.03), head.add(0.03), frac).toVar();
+        const dH = frac.sub(head).div(0.05).toVar();
+        const bead = dH.mul(dH).negate().exp().toVar();
+        const leg = stripe.mul(trail.mul(0.35).add(bead.mul(0.85))).toVar();
         return glassWetU
-          .mul(band.mul(0.3).add(archLine.mul(0.4)).add(leg.mul(0.8)))
+          .mul(topGate)
+          .mul(bandGate)
+          .mul(archLine.mul(0.4).add(leg.mul(0.9)))
           .clamp(0, 1);
       });
       // 실제 와인 눈물은 색이 거의 없는 투명한 물줄기 — 색 흡수 대신 "그 자리만
