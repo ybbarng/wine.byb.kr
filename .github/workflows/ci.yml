@@ -1,6 +1,6 @@
 name: CI
 
-# 코드 변경마다 린트·타입체크·테스트를 돈다. 배포는 deploy.yml이 담당한다.
+# 코드 변경마다 린트·타입체크·테스트·빌드를 돈다. 배포는 deploy.yml이 담당한다.
 on:
   push:
     branches: [main]
@@ -26,3 +26,4 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm build # 렌더·CSS·라우트 오류를 조기에 잡는다(DB 조회 페이지는 force-dynamic)

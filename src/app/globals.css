@@ -1,5 +1,7 @@
-@import "tailwindcss";
+/* 외부 폰트 @import는 반드시 맨 앞에 온다. @import "tailwindcss"가 인라인 확장되면
+   그 아래 @import는 "모든 규칙보다 앞서야 한다" 규칙을 위반해 CSS 파싱이 깨진다. */
 @import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css");
+@import "tailwindcss";
 
 :root {
   /* 와인셀러 톤: 딥 버건디 배경 + 골드/로제 액센트 */
