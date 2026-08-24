@@ -714,6 +714,8 @@ export default function FluidLab({
     let glassWlU: any = null; // 수위선(프로파일 y)
     // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
     let glassDripU: any = null; // 흘러내림 진행(0→1)
+    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
+    let glassTopU: any = null; // 와인이 실제 도달한 최고점(수위선 위 높이, 프로파일)
 
     function setupGlass() {
       const curve = new THREE.CatmullRomCurve3(
@@ -750,30 +752,24 @@ export default function FluidLab({
       glassWetU = uniform(0);
       glassWlU = uniform(GLASS_WINE_FILL);
       glassDripU = uniform(0);
+      glassTopU = uniform(0.2);
       const filmMask = Fn(() => {
         const yl = positionLocal.y.toVar(); // 프로파일 높이(0~2.92)
         const up = yl.sub(glassWlU).toVar(); // 수위선 위 높이
         const th = atan(positionLocal.z, positionLocal.x).toVar();
-        const gate = smoothstep(float(0.0), float(0.02), up); // 수위선 위만
-        // 막이 도달한 높이(스월 세게=높이). 볼 벽을 꽤 타고 오른다.
-        const filmTop = glassWetU.mul(0.9).add(0.06).toVar();
-        // 막 밴드: 수위선~막꼭대기. 위 가장자리(아치)에서 진해짐(와인이 고임).
-        const inFilm = smoothstep(filmTop, filmTop.sub(0.04), up)
-          .mul(smoothstep(float(-0.02), float(0.03), up))
+        // 자국은 "와인이 닿은 최고점(glassTopU) ~ 수위선" 범위에만. 그 위는 없음.
+        const top = glassTopU.toVar();
+        const band = smoothstep(float(-0.01), float(0.02), up) // 수위선 위
+          .mul(smoothstep(top, top.sub(0.05), up)) // 도달 최고점 아래
           .toVar();
-        // 아치 선: 막 꼭대기의 진한 가는 선.
-        const dTop = up.sub(filmTop).div(0.035).toVar();
+        // 아치 선: 도달 최고점의 진한 가는 선(와인이 고였던 자리).
+        const dTop = up.sub(top).div(0.03).toVar();
         const archLine = dTop.mul(dTop).negate().exp().toVar();
-        // 줄기(legs): 둘레로 좁은 봉우리. 막 꼭대기에서 아래로 뻗고, drip 만큼 길어짐.
+        // 줄기(legs): 둘레로 좁은 봉우리 여러 개(도달점→수위선 사이로 흘러내림).
         const stripe = pow(sin(th.mul(11.0)).max(0), float(8.0)).toVar();
-        const legBot = filmTop.sub(filmTop.mul(float(0.25).add(glassDripU.mul(0.8))));
-        const legBand = smoothstep(legBot, legBot.add(0.03), up)
-          .mul(smoothstep(filmTop.add(0.02), filmTop.sub(0.01), up))
-          .toVar();
-        const leg = stripe.mul(legBand).toVar();
+        const leg = stripe.mul(band).toVar();
         return glassWetU
-          .mul(gate)
-          .mul(inFilm.mul(0.22).add(archLine.mul(0.5)).add(leg.mul(0.9)))
+          .mul(band.mul(0.3).add(archLine.mul(0.4)).add(leg.mul(0.8)))
           .clamp(0, 1);
       });
       // 실제 와인 눈물은 색이 거의 없는 투명한 물줄기 — 색 흡수 대신 "그 자리만
@@ -976,9 +972,11 @@ export default function FluidLab({
     // 진행성 잔물결: 정지=평면, 흔들면 활성. simT=파동 위상용 시각, waveAct=활성도.
     let simT = 0;
     let waveAct = 0;
-    // legs(눈물): wetness=벽 젖음(스월 시↑, 이후 서서히↓), dripT=줄기 흘러내림 진행.
+    // legs(눈물): wetness=벽 젖음(스월 시↑, 이후 서서히↓), dripT=줄기 흘러내림 진행,
+    // wetTop=와인이 실제 도달한 최고점(수위선 위) — 자국은 이 아래로만 생긴다.
     let wetness = 0;
     let dripT = 0;
+    let wetTop = 0;
     // 마우스 = 잔 제어. 잔은 마우스 오프셋을 추종해 기울고, 놓으면 세워진다.
     // 와인 슬로싱은 잔의 움직임(속도)에 구동 → 놓으면 잔은 멈추고 와인만 출렁.
     let mStartX = 0;
@@ -1294,17 +1292,23 @@ export default function FluidLab({
         // legs: 스월 중엔 벽이 젖고(빠르게↑, 흘러내림 리셋), 멈추면 서서히 마르며
         // 줄기가 아래로 흘러내린다(dripT↑). 유리 감쇠 필름 uniform 갱신.
         const swirling = autoSwirl || swirlMag > 0.15;
+        // 와인이 실제 도달한 최고점(수위선 위, 프로파일 단위) ≈ 벽에서의 크레스트
+        // 상승 = 슬로싱 기울기×벽반경 + 회전파동. 젖은 동안 그 최고점을 유지·추적.
+        const reach = swirlMag * 0.5 + waveAct * 0.08;
         if (swirling) {
           wetness = Math.min(1, wetness + dt * 2.5);
           dripT = 0;
+          wetTop = Math.max(wetTop, reach);
         } else {
           wetness = Math.max(0, wetness - dt * 0.12);
           dripT = Math.min(1, dripT + dt * 0.35);
+          if (wetness <= 0.001) wetTop = 0; // 완전히 마르면 초기화
         }
         if (glassWetU) {
           glassWetU.value = wetness;
           glassDripU.value = dripT;
           glassWlU.value = liqH;
+          glassTopU.value = wetTop;
         }
         for (let it = 0; it < 4; it++) {
           rebuildLiquid(M1, M5, M9, liqH, K);
