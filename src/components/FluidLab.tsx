@@ -899,6 +899,9 @@ export default function FluidLab({
     // Beer–Lambert: 와인 뒷면 거리 버퍼(두께=back−front) + 뒷면 재질 + 본 재질.
     // biome-ignore lint/suspicious/noExplicitAny: TSL RT/Material
     let wineThickRT: any;
+    // 와인 뒤 장면(와인만 숨김) — 와인이 이걸 굴절+흡수로 샘플 → 투과(화이트와인 비침).
+    // biome-ignore lint/suspicious/noExplicitAny: TSL RT
+    let bgRT: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL material
     let wineBackMat: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL material
@@ -1063,27 +1066,22 @@ export default function FluidLab({
       });
       bodyMat.envMapIntensity = 0.18; // 반사 약하게 — 와인색이 드러나고 하이라이트만
       bodyMat.emissiveNode = Fn(() => {
+        // 시선이 와인을 통과하는 실제 두께 t = 뒷면거리 − 앞면거리.
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
-        // 벽 두께(back−front, 최소 0.045). 수면(윗면)은 FrontSide 로 두께가 0 이
-        // 되므로, 아래로 깊은 시선을 반영해 큰 두께(0.28)로 강제 → 어두운 수면.
-        const tWall = backDist.sub(frontDist).max(0.045);
-        // 수면 마스크: 수위선 정점은 법선이 벽+수면 평균(~45°)이라 중간값이 되면
-        // 색 다른 "원반 테"가 생긴다. 임계를 낮춰(0.2~0.55) 그 경사 테두리를 수면
-        // 쪽(어두움)으로 흡수 → 테 고리 소멸. 진짜 벽(n.y≈0)만 벽 두께로.
-        const surfaceMask = smoothstep(0.2, 0.55, normalWorld.y.abs());
-        const t = mix(tWall, float(0.28), surfaceMask).toVar();
-        // Beer–Lambert exp(-k·d). 흡수계수는 uniform(프리셋 버튼으로 실시간 변경).
-        const col = vec3(
+        const t = backDist.sub(frontDist).max(0.02).toVar();
+        // 굴절: 표면 법선(뷰)의 화면 투영 방향으로 배경(bgRT)을 민다. 두께가
+        // 클수록 더 굴절. 화이트와인이 잔 기둥·배경을 휘어 비추게 하는 핵심.
+        const refr = normalView.xy.mul(t.mul(0.35).add(0.02)).toVar();
+        const bg = texture(bgRT.texture, screenUV.add(refr)).xyz.toVar();
+        // Beer–Lambert 투과율 exp(−absorb·t) (0~1). 배경이 와인을 통과하며 흡수돼
+        // 물든다: 화이트(흡수 작음)=뒤 비침, 레드(흡수 큼)=깊은 붉은색. absorbU=프리셋.
+        const trans = vec3(
           t.mul(absorbU.x).negate().exp(),
           t.mul(absorbU.y).negate().exp(),
           t.mul(absorbU.z).negate().exp(),
         ).toVar();
-        // 밝은(옅은 와인) 값을 강하게 압축 + 살짝 탈채도 → 자체발광 형광 완화
-        // (어두운 레드는 거의 그대로). 옅은 와인이 네온처럼 빛나지 않게.
-        const comp = col.div(col.add(1.35)).toVar();
-        const lum = comp.dot(vec3(0.35, 0.5, 0.15));
-        return mix(comp, vec3(lum), 0.14);
+        return bg.mul(trans);
       })();
       liquidBodyMat = bodyMat;
       // 뒷면(먼 면) 거리 — winding 상 FrontSide 가 먼 면. view 거리 R 채널에.
@@ -1253,6 +1251,12 @@ export default function FluidLab({
         scene.background = savedBg;
         glassMesh.visible = true;
         liquidMesh.material = liquidBodyMat;
+        // 와인 뒤 장면 → bgRT (와인만 숨김, 유리·배경 유지). 와인 셰이더가 이걸
+        // 굴절 오프셋으로 샘플 + Beer–Lambert 흡수 → 투과(화이트와인 비침).
+        liquidMesh.visible = false;
+        renderer.setRenderTarget(bgRT);
+        renderer.render(scene, camera);
+        liquidMesh.visible = true;
         frameCount++;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
@@ -1495,6 +1499,9 @@ export default function FluidLab({
       // 와인 뒷면 거리(Beer–Lambert 두께 계산)
       wineThickRT = new THREE.RenderTarget(rtW, rtH);
       wineThickRT.texture.type = THREE.FloatType;
+      // 와인 뒤 장면(와인만 숨김) — 굴절+흡수 투과 샘플용
+      bgRT = new THREE.RenderTarget(rtW, rtH);
+      bgRT.texture.type = THREE.HalfFloatType;
       blurRT = new THREE.RenderTarget(rtW, rtH);
       blurRT.texture.type = THREE.FloatType;
       blurRT2 = new THREE.RenderTarget(rtW, rtH);
