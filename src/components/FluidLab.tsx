@@ -1010,11 +1010,14 @@ export default function FluidLab({
         const surfaceMask = normalWorld.y.abs();
         const t = mix(tWall, float(0.28), surfaceMask).toVar();
         // Beer–Lambert exp(-k·d). 흡수계수는 uniform(프리셋 버튼으로 실시간 변경).
-        return vec3(
+        const col = vec3(
           t.mul(absorbU.x).negate().exp(),
           t.mul(absorbU.y).negate().exp(),
           t.mul(absorbU.z).negate().exp(),
-        );
+        ).toVar();
+        // 밝은(옅은 와인) 값을 압축 → 자체발광 형광 느낌 완화(어두운 레드는 거의
+        // 그대로). 옅은 와인은 빛나기보다 은은히 비치게.
+        return col.div(col.add(0.85));
       })();
       liquidBodyMat = bodyMat;
       // 뒷면(먼 면) 거리 — winding 상 FrontSide 가 먼 면. view 거리 R 채널에.
