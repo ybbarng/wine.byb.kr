@@ -2,6 +2,14 @@ import { db } from "@/lib/db";
 
 // 셀러(내가 마신 기록) 조회. 작성은 관리자만, 조회는 누구나(§4.5).
 
+/** 작성 폼의 와인 선택용 목록 — 원어 이름 순. */
+export function getWineOptions() {
+  return db.wine.findMany({
+    select: { id: true, nameKo: true, nameLocal: true },
+    orderBy: { nameLocal: "asc" },
+  });
+}
+
 /** 시음 기록 타임라인 — 최근 음용일 순. 와인·생산자·지역을 함께 싣는다. */
 export function getCellarEntries() {
   return db.tastingNote.findMany({
