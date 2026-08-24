@@ -972,8 +972,13 @@ export default function FluidLab() {
       });
       bodyMat.envMapIntensity = 0.09; // 표면 광택(은은히)
       bodyMat.emissiveNode = Fn(() => {
-        // wineThickRT = 부호 있는 거리 가산 합 = backDist − frontDist = 시선 두께.
-        const t = texture(wineThickRT.texture, screenUV).x.max(0.045).toVar();
+        const frontDist = positionView.z.negate();
+        const backDist = texture(wineThickRT.texture, screenUV).x;
+        // 벽 두께(back−front, 최소 0.045). 수면(윗면)은 FrontSide 로 두께가 0 이
+        // 되므로, 아래로 깊은 시선을 반영해 큰 두께(0.28)로 강제 → 어두운 수면.
+        const tWall = backDist.sub(frontDist).max(0.045);
+        const surfaceMask = normalWorld.y.abs();
+        const t = mix(tWall, float(0.28), surfaceMask).toVar();
         // Beer–Lambert exp(-k·d): R 적게, G·B 많이(B≥G → 보라 대신 붉은 가넷).
         return vec3(
           t.mul(16.0).negate().exp(),
@@ -982,18 +987,11 @@ export default function FluidLab() {
         );
       })();
       liquidBodyMat = bodyMat;
-      // 두께 = Σ(부호 있는 view 거리): 앞면 −d, 뒷면 +d 를 가산 블렌딩 → back−front.
-      // winding·깊이테스트 무관하게 견고. (수면·벽 부위별 winding 차이 문제 없음.)
+      // 뒷면(먼 면) 거리 — winding 상 FrontSide 가 먼 면. view 거리 R 채널에.
       wineBackMat = new A.MeshBasicNodeMaterial();
-      wineBackMat.colorNode = Fn(() => {
-        const d = positionView.z.negate();
-        return vec4(frontFacing.select(d.negate(), d), 0, 0, 1);
-      })();
-      wineBackMat.side = THREE.DoubleSide;
-      wineBackMat.transparent = true;
-      wineBackMat.depthTest = false;
-      wineBackMat.depthWrite = false;
-      wineBackMat.blending = THREE.AdditiveBlending;
+      wineBackMat.colorNode = Fn(() => vec4(positionView.z.negate(), 0, 0, 1))();
+      wineBackMat.side = THREE.FrontSide;
+      void frontFacing;
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
       liquidMesh.frustumCulled = false;
