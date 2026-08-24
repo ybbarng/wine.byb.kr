@@ -100,6 +100,7 @@ type GlassDef = {
   bowl: [number, number][]; // 볼 곡선(바닥=0 상대높이 → 림)
   wallThickness: number;
   fillLevel: number; // 수면(볼 바닥 기준 상대높이)
+  sizeScale?: number; // 화면 크기 배율(1=표준 높이, <1=작은 잔). 기본 1.
 };
 const GLASSES: GlassDef[] = [
   {
@@ -168,6 +169,20 @@ const GLASSES: GlassDef[] = [
     ],
     wallThickness: 0.02,
     fillLevel: 1.15,
+  },
+  {
+    key: "dessert",
+    label: "디저트",
+    desc: "아이스와인·포트 (작은 잔, 소량)",
+    footR: 0.42, // 작은 발
+    stemLen: 1.35,
+    bowl: [
+      [0.035, 0.0], [0.065, 0.09], [0.11, 0.22], [0.15, 0.37], [0.17, 0.53],
+      [0.175, 0.68], [0.165, 0.82], [0.15, 0.93], [0.145, 1.0],
+    ],
+    wallThickness: 0.018,
+    fillLevel: 0.32, // 소량(디저트 와인)
+    sizeScale: 0.72, // 실제로 작은 잔 → 화면에서도 작게
   },
 ];
 
@@ -355,7 +370,8 @@ export default function FluidLab({
       bowlBottomY: gdef.wineBottom - 0.05,
       bowlTopY: gMaxY,
       // 모든 잔을 같은 화면 높이로: 기준(표준 2.92 × 0.42)을 프로파일 높이로 나눔.
-      worldScale: (0.42 * 2.92) / gMaxY,
+      // sizeScale 로 작은 잔(디저트)은 실제로 작게 보이게.
+      worldScale: ((0.42 * 2.92) / gMaxY) * (gdef.sizeScale ?? 1),
       worldY: -0.06,
     };
     const outerRadiusAt = (py: number): number => {

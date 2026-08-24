@@ -9,13 +9,21 @@ const FluidLab = dynamic(() => import("./FluidLab"), {
 });
 
 // 대표 와인잔 형태(FluidLab 의 GLASSES 순서와 일치). 와인→잔 자동 매핑의 인덱스.
-const GLASS = { universal: 0, bordeaux: 1, burgundy: 2, white: 3, flute: 4 };
+const GLASS = {
+  universal: 0,
+  bordeaux: 1,
+  burgundy: 2,
+  white: 3,
+  flute: 4,
+  dessert: 5,
+};
 const GLASS_OPTIONS: { label: string; desc: string }[] = [
   { label: "표준", desc: "만능형" },
   { label: "보르도", desc: "풀바디 레드" },
   { label: "부르고뉴", desc: "피노 누아" },
   { label: "화이트", desc: "샤르도네·소비뇽블랑" },
   { label: "플루트", desc: "샴페인·스파클링" },
+  { label: "디저트", desc: "아이스와인·포트" },
 ];
 
 // 대표 와인 프리셋. absorb = Beer–Lambert 흡수계수(R 적게·G/B 많이 → 붉은색,
@@ -36,6 +44,7 @@ const WINE_PRESETS: Preset[] = [
   { name: "샤르도네", absorb: [1.6, 3.2, 13], color: "#ecd88f", glass: GLASS.white },
   { name: "소비뇽 블랑", absorb: [1.3, 2.4, 11], color: "#e7e0a6", glass: GLASS.white },
   { name: "샴페인", absorb: [1.4, 3.0, 12], color: "#f1e7b4", glass: GLASS.flute },
+  { name: "아이스와인", absorb: [3, 7, 18], color: "#d8a13a", glass: GLASS.dessert },
 ];
 
 export default function FluidLabMount() {
