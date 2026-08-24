@@ -1009,6 +1009,7 @@ export default function FluidLab({
     // 방위별 도달 최고점은 wetTopArr(둘레 배열, setupGlass 근처) 로 추적.
     let wetness = 0;
     let dripT = 0;
+    let wasWet = false; // 젖음 에피소드 시작 감지(흘러내림을 그때만 리셋)
     // 마우스 = 잔 제어. 잔은 마우스 오프셋을 추종해 기울고, 놓으면 세워진다.
     // 와인 슬로싱은 잔의 움직임(속도)에 구동 → 놓으면 잔은 멈추고 와인만 출렁.
     let mStartX = 0;
@@ -1338,11 +1339,19 @@ export default function FluidLab({
         // 지금 어딘가 정착보다 높으면(기울어 젖는 중) wetness↑, 아니면 서서히 마름.
         if (curMax > 0.02) {
           wetness = Math.min(1, wetness + dt * 2.5);
-          dripT = 0;
         } else {
           wetness = Math.max(0, wetness - dt * 0.12);
-          dripT = Math.min(1, dripT + dt * 0.35);
           if (wetness <= 0.001) wetTopArr.fill(0); // 완전히 마르면 초기화
+        }
+        // 흘러내림: 벽이 젖는 즉시(아주 짧은 지연 후) 바로 시작. 새 젖음 에피소드가
+        // 시작될 때만(마른 상태→젖음) 리셋 → 스월이 끝날 때까지 기다리지 않음.
+        if (wetness > 0.05) {
+          if (!wasWet) dripT = -0.12; // 짧은 지연(음수 구간=대기, 셰이더서 clamp 0)
+          dripT = Math.min(1, dripT + dt * 0.4);
+          wasWet = true;
+        } else {
+          dripT = 0;
+          wasWet = false;
         }
         if (glassWetU) {
           glassWetU.value = wetness;
