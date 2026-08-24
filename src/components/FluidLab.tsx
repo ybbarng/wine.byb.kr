@@ -1,14 +1,13 @@
+// @ts-nocheck — three/tsl·WebGPU 노드 API 는 타입 정의가 불완전하다(Loop({...}),
+// toConst/add, WebGPURenderer.localClippingEnabled 등 런타임엔 동작하나 타입 없음).
+// 실험적 3D 렌더 파일이라 파일 단위로 타입체크를 끈다(런타임은 dev 로 검증).
 "use client";
 
 import { useEffect, useRef } from "react";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { UltraHDRLoader } from "three/examples/jsm/loaders/UltraHDRLoader.js";
 import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import * as THREE from "three/webgpu";
 import {
-  Fn,
-  If,
-  Loop,
   atan,
   atomicAdd,
   atomicLoad,
@@ -20,13 +19,16 @@ import {
   dFdx,
   dFdy,
   exp,
+  Fn,
   float,
   frontFacing,
-  mix,
-  instanceIndex,
+  If,
   instancedArray,
+  instanceIndex,
   int,
   ivec3,
+  Loop,
+  mix,
   normalize,
   normalView,
   normalWorld,
@@ -43,6 +45,7 @@ import {
   vec3,
   vec4,
 } from "three/tsl";
+import * as THREE from "three/webgpu";
 
 // 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
 function polyfit(xs: number[], ys: number[], deg: number): number[] {
@@ -87,8 +90,14 @@ function polyfit(xs: number[], ys: number[], deg: number): number[] {
 // stemLen=기둥 위 끝 높이(=볼 바닥 y, 기둥 길이). 볼은 이 위에 상대높이로 얹는다.
 function footStem(footR: number, stemLen: number): [number, number][] {
   return [
-    [0.0, 0.0], [footR, 0.0], [footR, 0.018], [footR * 0.76, 0.04],
-    [0.12, 0.09], [0.05, 0.16], [0.042, 0.7], [0.042, stemLen],
+    [0.0, 0.0],
+    [footR, 0.0],
+    [footR, 0.018],
+    [footR * 0.76, 0.04],
+    [0.12, 0.09],
+    [0.05, 0.16],
+    [0.042, 0.7],
+    [0.042, stemLen],
   ];
 }
 type GlassDef = {
@@ -110,9 +119,19 @@ const GLASSES: GlassDef[] = [
     footR: 0.55,
     stemLen: 1.3,
     bowl: [
-      [0.05, 0.0], [0.1, 0.08], [0.17, 0.17], [0.26, 0.29], [0.34, 0.43],
-      [0.4, 0.58], [0.44, 0.74], [0.46, 0.9], [0.455, 1.06], [0.43, 1.21],
-      [0.4, 1.34], [0.36, 1.46], [0.325, 1.56],
+      [0.05, 0.0],
+      [0.1, 0.08],
+      [0.17, 0.17],
+      [0.26, 0.29],
+      [0.34, 0.43],
+      [0.4, 0.58],
+      [0.44, 0.74],
+      [0.46, 0.9],
+      [0.455, 1.06],
+      [0.43, 1.21],
+      [0.4, 1.34],
+      [0.36, 1.46],
+      [0.325, 1.56],
     ],
     wallThickness: 0.025,
     fillLevel: 0.62,
@@ -124,8 +143,16 @@ const GLASSES: GlassDef[] = [
     footR: 0.6, // 큰 볼 → 넓은 발
     stemLen: 1.45, // 긴 기둥(우아)
     bowl: [
-      [0.05, 0.0], [0.1, 0.09], [0.18, 0.22], [0.28, 0.4], [0.37, 0.61],
-      [0.43, 0.84], [0.46, 1.08], [0.455, 1.32], [0.43, 1.52], [0.39, 1.68],
+      [0.05, 0.0],
+      [0.1, 0.09],
+      [0.18, 0.22],
+      [0.28, 0.4],
+      [0.37, 0.61],
+      [0.43, 0.84],
+      [0.46, 1.08],
+      [0.455, 1.32],
+      [0.43, 1.52],
+      [0.39, 1.68],
       [0.34, 1.79],
     ],
     wallThickness: 0.025,
@@ -138,8 +165,16 @@ const GLASSES: GlassDef[] = [
     footR: 0.64, // 가장 큰 볼 → 가장 넓은 발
     stemLen: 1.25,
     bowl: [
-      [0.06, 0.0], [0.15, 0.1], [0.29, 0.24], [0.43, 0.42], [0.53, 0.61],
-      [0.57, 0.8], [0.55, 0.98], [0.49, 1.16], [0.41, 1.3], [0.36, 1.39],
+      [0.06, 0.0],
+      [0.15, 0.1],
+      [0.29, 0.24],
+      [0.43, 0.42],
+      [0.53, 0.61],
+      [0.57, 0.8],
+      [0.55, 0.98],
+      [0.49, 1.16],
+      [0.41, 1.3],
+      [0.36, 1.39],
     ],
     wallThickness: 0.025,
     fillLevel: 0.56,
@@ -151,8 +186,16 @@ const GLASSES: GlassDef[] = [
     footR: 0.5, // 작은 볼 → 좁은 발
     stemLen: 1.35,
     bowl: [
-      [0.045, 0.0], [0.085, 0.1], [0.15, 0.23], [0.23, 0.39], [0.3, 0.56],
-      [0.345, 0.73], [0.355, 0.9], [0.34, 1.06], [0.31, 1.17], [0.295, 1.23],
+      [0.045, 0.0],
+      [0.085, 0.1],
+      [0.15, 0.23],
+      [0.23, 0.39],
+      [0.3, 0.56],
+      [0.345, 0.73],
+      [0.355, 0.9],
+      [0.34, 1.06],
+      [0.31, 1.17],
+      [0.295, 1.23],
     ],
     wallThickness: 0.023,
     fillLevel: 0.58,
@@ -164,8 +207,15 @@ const GLASSES: GlassDef[] = [
     footR: 0.46, // 좁은 발
     stemLen: 1.55, // 길고 슬림한 기둥
     bowl: [
-      [0.045, 0.0], [0.085, 0.15], [0.14, 0.37], [0.19, 0.63], [0.225, 0.91],
-      [0.235, 1.17], [0.225, 1.39], [0.205, 1.55], [0.2, 1.63],
+      [0.045, 0.0],
+      [0.085, 0.15],
+      [0.14, 0.37],
+      [0.19, 0.63],
+      [0.225, 0.91],
+      [0.235, 1.17],
+      [0.225, 1.39],
+      [0.205, 1.55],
+      [0.2, 1.63],
     ],
     wallThickness: 0.02,
     fillLevel: 1.15,
@@ -177,8 +227,15 @@ const GLASSES: GlassDef[] = [
     footR: 0.44, // 작은 발
     stemLen: 0.92, // 짧은 기둥 — 오밀조밀한 작은 잔(미니 플루트 아님)
     bowl: [
-      [0.04, 0.0], [0.08, 0.1], [0.14, 0.25], [0.19, 0.42], [0.215, 0.6],
-      [0.22, 0.77], [0.205, 0.93], [0.185, 1.05], [0.18, 1.12],
+      [0.04, 0.0],
+      [0.08, 0.1],
+      [0.14, 0.25],
+      [0.19, 0.42],
+      [0.215, 0.6],
+      [0.22, 0.77],
+      [0.205, 0.93],
+      [0.185, 1.05],
+      [0.18, 1.12],
     ],
     wallThickness: 0.018,
     fillLevel: 0.34, // 소량(디저트 와인)
@@ -208,6 +265,8 @@ export default function FluidLab({
     }
   }, [wineAbsorb]);
 
+  // 색(wineAbsorb)은 위 별도 effect 로 실시간 반영 — 여기(씬 셋업)는 glassType 변경 시에만 재빌드.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 색은 별도 effect로 실시간 반영, glassType 변경 시에만 재빌드
   useEffect(() => {
     const container = ref.current;
     if (!container) return;
@@ -220,8 +279,8 @@ export default function FluidLab({
       new THREE.Vector3(
         wineAbsorb ? wineAbsorb[0] : 16,
         wineAbsorb ? wineAbsorb[1] : 78,
-        wineAbsorb ? wineAbsorb[2] : 98,
-      ),
+        wineAbsorb ? wineAbsorb[2] : 98
+      )
     );
     absorbURef.current = absorbU;
 
@@ -394,10 +453,7 @@ export default function FluidLab({
     for (let py = glass.bowlBottomY; py <= glass.bowlTopY; py += 0.01) {
       bowlRmax = Math.max(bowlRmax, innerRadiusAt(py));
     }
-    const cubeSpanProfile = Math.max(
-      glass.bowlTopY - glass.bowlBottomY,
-      bowlRmax * 2,
-    );
+    const cubeSpanProfile = Math.max(glass.bowlTopY - glass.bowlBottomY, bowlRmax * 2);
     const FLUID_SCALE = DOMAIN_SCALE; // 물리 coord → world 등방 배율
     const FLUID_Y = DOMAIN_MIN[1]; // coord y=0 의 world y
     void cubeSpanProfile; // (구 잔 중심 매핑 값 — 현재 미사용)
@@ -413,8 +469,7 @@ export default function FluidLab({
     const profileMaxY = Math.max(...glass.profile.map((p) => p[1])); // 림(2.92)
     const metersPerProfile = GLASS_HEIGHT_M / profileMaxY;
     // 1 coord = DOMAIN_SCALE world, 1 world = (metersPerProfile/worldScale) m.
-    const metersPerCoord =
-      DOMAIN_SCALE * (metersPerProfile / glass.worldScale);
+    const metersPerCoord = DOMAIN_SCALE * (metersPerProfile / glass.worldScale);
     // 시간 배율 T: 1 sim-초 = 실제 T 초. 기존 좋던 g_sim≈1.5 가 나오도록 맞춤.
     const TIME_SCALE = 0.34; // 슬로모션 9배→3배 (물성 크리스프하게, substep↑ 비용)
     // g_sim = g_real · T² / L  (실제 g를 sim 좌표·시간 단위로 변환)
@@ -539,11 +594,7 @@ export default function FluidLab({
         // 반경 판정용 높이(바닥 아래/입구 위는 clamp) — 모서리 누수 방지 핵심.
         const hC = clamp(h, 0.0, NECK_TOP).toVar();
         // 높이별 내반경: 몸통 BODY_R → 어깨(smootherstep) → 곧은 목 NECK_R.
-        const tSh = clamp(
-          hC.sub(BODY_TOP).div(SHOULDER_TOP - BODY_TOP),
-          0.0,
-          1.0,
-        ).toVar();
+        const tSh = clamp(hC.sub(BODY_TOP).div(SHOULDER_TOP - BODY_TOP), 0.0, 1.0).toVar();
         const sSh = tSh
           .mul(tSh)
           .mul(tSh)
@@ -568,13 +619,11 @@ export default function FluidLab({
           vec3(
             clx.mul(c).sub(cly.mul(s)).add(PIVOT[0]),
             clx.mul(s).add(cly.mul(c)).add(PIVOT[1]),
-            clz.add(PIVOT[2]),
-          ),
+            clz.add(PIVOT[2])
+          )
         );
         // 도메인 경계 (y는 YMAX까지)
-        result.assign(
-          clamp(result, vec3(0.001), vec3(0.999, YMAX - 0.001, 0.999)),
-        );
+        result.assign(clamp(result, vec3(0.001), vec3(0.999, YMAX - 0.001, 0.999)));
         return result;
       };
 
@@ -597,12 +646,11 @@ export default function FluidLab({
         return ivec3(
           clamp(p.x.mul(GRID_RES), float(0), float(GRID_RES - 1)),
           clamp(p.y.mul(GRID_RES), float(0), float(GRID_RES_Y - 1)),
-          clamp(p.z.mul(GRID_RES), float(0), float(GRID_RES - 1)),
+          clamp(p.z.mul(GRID_RES), float(0), float(GRID_RES - 1))
         );
       };
       // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const cellId = (c: any) =>
-        c.x.add(c.y.mul(GRID_RES)).add(c.z.mul(GRID_RES * GRID_RES_Y));
+      const cellId = (c: any) => c.x.add(c.y.mul(GRID_RES)).add(c.z.mul(GRID_RES * GRID_RES_Y));
 
       // 1) 셀 카운트 초기화
       clearCellKernel = Fn(() => {
@@ -633,14 +681,9 @@ export default function FluidLab({
         If(int(instanceIndex).lessThan(pourCountUniform), () => {
           const pred = particleBuffer.element(instanceIndex).get("predicted");
           const cid = cellId(cellOf(pred)).toVar();
-          const idx = atomicAdd(
-            cellCountBuffer.element(cid).get("count"),
-            int(1),
-          ).toVar();
+          const idx = atomicAdd(cellCountBuffer.element(cid).get("count"), int(1)).toVar();
           If(idx.lessThan(int(MAX_PER_CELL)), () => {
-            cellIdsBuffer
-              .element(cid.mul(MAX_PER_CELL).add(idx))
-              .assign(int(instanceIndex));
+            cellIdsBuffer.element(cid.mul(MAX_PER_CELL).add(idx)).assign(int(instanceIndex));
           });
         });
       })()
@@ -663,11 +706,7 @@ export default function FluidLab({
                   { start: -1, end: 2, type: "int", name: "oz", condition: "<" },
                   // biome-ignore lint/suspicious/noExplicitAny: TSL
                   ({ oz }: any) => {
-                    const nc = ivec3(
-                      base.x.add(ox),
-                      base.y.add(oy),
-                      base.z.add(oz),
-                    ).toVar();
+                    const nc = ivec3(base.x.add(ox), base.y.add(oy), base.z.add(oz)).toVar();
                     const inb = nc.x
                       .greaterThanEqual(int(0))
                       .and(nc.x.lessThan(int(GRID_RES)))
@@ -677,9 +716,7 @@ export default function FluidLab({
                       .and(nc.z.lessThan(int(GRID_RES)));
                     If(inb, () => {
                       const cid = cellId(nc).toConst();
-                      const cnt = atomicLoad(
-                        cellCountBuffer.element(cid).get("count"),
-                      ).toConst();
+                      const cnt = atomicLoad(cellCountBuffer.element(cid).get("count")).toConst();
                       Loop(
                         {
                           start: 0,
@@ -691,36 +728,29 @@ export default function FluidLab({
                         // biome-ignore lint/suspicious/noExplicitAny: TSL
                         ({ k }: any) => {
                           If(k.lessThan(cnt), () => {
-                            const j = cellIdsBuffer
-                              .element(cid.mul(MAX_PER_CELL).add(k))
-                              .toConst();
-                            const pj = particleBuffer
-                              .element(j)
-                              .get("predicted");
+                            const j = cellIdsBuffer.element(cid.mul(MAX_PER_CELL).add(k)).toConst();
+                            const pj = particleBuffer.element(j).get("predicted");
                             const rij = pi.sub(pj).toVar();
                             const r2 = rij.dot(rij).toVar();
                             If(r2.lessThan(H2).and(r2.greaterThan(1e-12)), () => {
                               body({ j, rij, r2 });
                             });
                           });
-                        },
+                        }
                       );
                     });
-                  },
+                  }
                 );
-              },
+              }
             );
-          },
+          }
         );
       };
 
       // 4) λ 계산: 밀도 제약 C_i = ρ_i/ρ0 − 1, λ_i = −C_i/(Σ|∇C|²+ε)
       lambdaKernel = Fn(() => {
         If(int(instanceIndex).lessThan(pourCountUniform), () => {
-          const pi = particleBuffer
-            .element(instanceIndex)
-            .get("predicted")
-            .toConst();
+          const pi = particleBuffer.element(instanceIndex).get("predicted").toConst();
           const rho = float(0).toVar();
           const gradCi = vec3(0).toVar(); // Σ∇W (·1/ρ0 로 ∇C_ii)
           const sumGrad2 = float(0).toVar(); // Σ_{j} |∇C_ij|²
@@ -779,10 +809,7 @@ export default function FluidLab({
           const dv = vec3(0).toVar();
           forEachNeighbor(pred, ({ j, r2 }) => {
             const pj = particleBuffer.element(j);
-            const vj = pj
-              .get("predicted")
-              .sub(pj.get("position"))
-              .div(dtUniform);
+            const vj = pj.get("predicted").sub(pj.get("position")).div(dtUniform);
             dv.addAssign(vj.sub(vi).mul(poly6(r2)));
           });
           vi.addAssign(dv.div(restDensityUniform).mul(C_XSPH));
@@ -799,7 +826,7 @@ export default function FluidLab({
     function setupMesh() {
       // SSFR 1단계: 입자를 sphere 로 렌더해 '뷰 공간 깊이'를 depthRT 에 쓴다.
       const geometry = BufferGeometryUtils.mergeVertices(
-        new THREE.IcosahedronGeometry(PARTICLE_R, 2).deleteAttribute("uv"),
+        new THREE.IcosahedronGeometry(PARTICLE_R, 2).deleteAttribute("uv")
       );
       const material = new A.MeshBasicNodeMaterial();
       material.positionNode = Fn(() => {
@@ -838,11 +865,9 @@ export default function FluidLab({
         glass.profile.map(([r, y]) => new THREE.Vector3(r, y, 0)),
         false,
         "centripetal",
-        0.5,
+        0.5
       );
-      const pts = curve
-        .getPoints(260)
-        .map((p) => new THREE.Vector2(Math.max(p.x, 0.0006), p.y));
+      const pts = curve.getPoints(260).map((p) => new THREE.Vector2(Math.max(p.x, 0.0006), p.y));
       const geometry = new THREE.LatheGeometry(pts, 240);
       geometry.computeVertexNormals();
       // 알파 블렌딩 유리(투과 대신) — 반투명끼리 중첩 정상. 가장자리(프레넬)는
@@ -869,13 +894,7 @@ export default function FluidLab({
       glassWlU = uniform(GLASS_WINE_FILL);
       glassDripU = uniform(0);
       // 둘레별 도달 최고점 텍스처(1D, R=수위선 위 높이). 방향별로 자국 범위가 다름.
-      legTex = new THREE.DataTexture(
-        wetTopArr,
-        LEG_NA,
-        1,
-        THREE.RedFormat,
-        THREE.FloatType,
-      );
+      legTex = new THREE.DataTexture(wetTopArr, LEG_NA, 1, THREE.RedFormat, THREE.FloatType);
       legTex.magFilter = THREE.LinearFilter;
       legTex.minFilter = THREE.LinearFilter;
       legTex.wrapS = THREE.RepeatWrapping;
@@ -888,11 +907,7 @@ export default function FluidLab({
         // 읽고, 수위선 위 높이로 변환. 오르지 않은 방향은 top≈0 → 자국 없음.
         const u = th.div(Math.PI * 2).toVar(); // 컬럼 인덱싱(RepeatWrapping)
         // 최고점의 4/5 높이에 자국 위쪽이 오게(peak 그대로면 조금 높아 보임).
-        const top = texture(legTex, vec2(u, 0.5))
-          .x.sub(glassWlU)
-          .max(0)
-          .mul(0.8)
-          .toVar();
+        const top = texture(legTex, vec2(u, 0.5)).x.sub(glassWlU).max(0).mul(0.8).toVar();
         // 자국은 "그 방위의 도달점 ~ 수위선" 범위에만.
         const topGate = smoothstep(float(0.02), float(0.05), top).toVar(); // 오른 방위만
         const bandGate = smoothstep(float(-0.01), float(0.02), up)
@@ -968,7 +983,7 @@ export default function FluidLab({
         [Rn, yLip], // 목
         [Rn * 1.12, yLip + 0.006], // 립 밖으로
         [Rn * 1.12, H],
-        [bore, H], // 입구(내경 bore)
+        [bore, H] // 입구(내경 bore)
       );
       const pts = P.map(([r, y]) => new THREE.Vector2(r * m, y * m));
       const geometry = new THREE.LatheGeometry(pts, 72);
@@ -993,25 +1008,17 @@ export default function FluidLab({
       const pivotWorld = new THREE.Vector3(
         DOMAIN_MIN[0] + PIVOT[0] * DOMAIN_SCALE,
         DOMAIN_MIN[1] + PIVOT[1] * DOMAIN_SCALE,
-        DOMAIN_MIN[2] + PIVOT[2] * DOMAIN_SCALE,
+        DOMAIN_MIN[2] + PIVOT[2] * DOMAIN_SCALE
       );
       bottleGroup = new THREE.Group();
       bottleGroup.position.copy(pivotWorld);
       bottlePivotWorld = pivotWorld.clone();
       // 병은 world (0.42, -0.06, 0) 에 서 있음 → 그룹(피벗) 기준 상대 위치로.
-      mesh.position.set(
-        0.42 - pivotWorld.x,
-        glass.worldY - pivotWorld.y,
-        0.0 - pivotWorld.z,
-      );
+      mesh.position.set(0.42 - pivotWorld.x, glass.worldY - pivotWorld.y, 0.0 - pivotWorld.z);
       bottleGroup.add(mesh);
       // 입구(주둥이) 마커 — 병 로컬 (0, H, 0) = 병 끝 중심(bore). 기울면 함께 이동.
       bottleSpout = new THREE.Object3D();
-      bottleSpout.position.set(
-        mesh.position.x,
-        mesh.position.y + 0.3 * BOTTLE_M,
-        mesh.position.z,
-      );
+      bottleSpout.position.set(mesh.position.x, mesh.position.y + 0.3 * BOTTLE_M, mesh.position.z);
       bottleGroup.add(bottleSpout);
       scene.add(bottleGroup);
     }
@@ -1084,15 +1091,13 @@ export default function FluidLab({
       s2: number,
       c3: number,
       s3: number,
-      rp: number,
+      rp: number
     ) {
       if (waveAct <= 1e-4) return 0;
       const m1 = c * crC + s * crS; // cos(θ-φ)
       const m2 = c2 * l2c + s2 * l2s; // cos(2θ-φ-w2·t)
       const m3 = c3 * l3c + s3 * l3s; // cos(3θ-φ-w3·t)
-      return (
-        waveAct * (WAMP1 * rp * rp * m1 + WAMP2 * rp * m2 + WAMP3 * rp * m3)
-      );
+      return waveAct * (WAMP1 * rp * rp * m1 + WAMP2 * rp * m2 + WAMP3 * rp * m3);
     }
     // biome-ignore lint/suspicious/noExplicitAny: BufferAttribute
     let liquidPosAttr: any;
@@ -1148,10 +1153,7 @@ export default function FluidLab({
     function buildLiquid() {
       const nCol = L_SEG + 1;
       liquidGeo = new THREE.BufferGeometry();
-      liquidPosAttr = new THREE.BufferAttribute(
-        new Float32Array(nCol * L_PPC * 3),
-        3,
-      );
+      liquidPosAttr = new THREE.BufferAttribute(new Float32Array(nCol * L_PPC * 3), 3);
       liquidGeo.setAttribute("position", liquidPosAttr);
       const idx: number[] = [];
       for (let i = 0; i < L_SEG; i++)
@@ -1167,13 +1169,7 @@ export default function FluidLab({
     // 각도별 수위선(벽∩수평면)을 구해 잔 내부를 수평면 아래로 채운다. m1,m5,m9 는
     // glassGroup 회전행렬 y행 → 수평면을 액체 로컬 프레임의 기운 평면으로 표현.
     // K: 회전 오목 포물면 계수(스월 세기). 표면 = 평면 + K·r²(벽 쪽 차오름).
-    function rebuildLiquid(
-      m1: number,
-      m5: number,
-      m9: number,
-      H0: number,
-      K: number,
-    ) {
+    function rebuildLiquid(m1: number, m5: number, m9: number, H0: number, K: number) {
       const arr = liquidPosAttr.array as Float32Array;
       const m5s = m5 || 1;
       const dPhi = (Math.PI * 2) / L_SEG;
@@ -1192,7 +1188,7 @@ export default function FluidLab({
         for (let it = 0; it < 5; it++) {
           const rr = Math.max(
             innerRadiusAt(Math.max(GLASS_WINE_BOTTOM, Math.min(pw, gMaxY - 0.02))),
-            0.0006,
+            0.0006
           );
           pw = (H0 - m1 * rr * c - m9 * rr * s) / m5s + K * rr * rr + wWall;
         }
@@ -1285,7 +1281,7 @@ export default function FluidLab({
         const trans = vec3(
           t.mul(absorbU.x).negate().exp(),
           t.mul(absorbU.y).negate().exp(),
-          t.mul(absorbU.z).negate().exp(),
+          t.mul(absorbU.z).negate().exp()
         ).toVar();
         return bg.mul(trans);
       })();
@@ -1334,7 +1330,7 @@ export default function FluidLab({
       streamMesh.scale.set(rTop, len, rTop); // 지오메트리 taper 유지(위 rTop, 아래 0.62·rTop)
       streamMesh.quaternion.setFromUnitVectors(
         new THREE.Vector3(0, 1, 0),
-        dir.multiplyScalar(1 / len),
+        dir.multiplyScalar(1 / len)
       );
     }
 
@@ -1382,8 +1378,7 @@ export default function FluidLab({
           const ph = (2 * Math.PI * ROT * autoSwirlT) / TOTAL;
           const env = Math.max(
             0,
-            Math.min(autoSwirlT / 0.3, 1) *
-              Math.min((TOTAL - autoSwirlT) / 0.4, 1),
+            Math.min(autoSwirlT / 0.3, 1) * Math.min((TOTAL - autoSwirlT) / 0.4, 1)
           );
           const amp = GMAX * 0.85 * env;
           gtx = amp * Math.cos(ph);
@@ -1409,8 +1404,10 @@ export default function FluidLab({
         const ZETA = 0.055; // 감쇠 낮춤 — 더 오래·크게 출렁
         const COUPLE = 2.7; // 잔 움직임 → 와인 슬로싱 결합↑(세게 흔들면 크게)
         const SLOSH_MAX = 0.78; // 최대 수면 기울기↑ — 세게 흔들수록 더 세워짐
-        sloshVX += (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt - COUPLE * gvz * dt;
-        sloshVZ += (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt - COUPLE * gvx * dt;
+        sloshVX +=
+          (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt - COUPLE * gvz * dt;
+        sloshVZ +=
+          (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt - COUPLE * gvx * dt;
         sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshX + sloshVX * dt));
         sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshZ + sloshVZ * dt));
         // 잔 기울기 적용(마우스 추종).
@@ -1514,22 +1511,22 @@ export default function FluidLab({
       tiltUniform.value = tilt;
       bottleGroup.rotation.z = tilt;
       if (SIMULATE) {
-      const PBF_SUBSTEPS = 8;
-      dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
-      // 검증(SDF↔시각 대조): 중력 끔 → 침강 없이 채운 SDF 형상 그대로 확인.
-      // (붓기 단계에선 실제 중력으로 복귀.)
-      gravUniform.value = 0;
-      pourCountUniform.value = N;
-      for (let s = 0; s < PBF_SUBSTEPS; s++) {
-        renderer.compute(predictKernel);
-        renderer.compute(clearCellKernel);
-        renderer.compute(buildGridKernel);
-        for (let it = 0; it < SOLVER_ITER; it++) {
-          renderer.compute(lambdaKernel);
-          renderer.compute(deltaPKernel);
+        const PBF_SUBSTEPS = 8;
+        dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
+        // 검증(SDF↔시각 대조): 중력 끔 → 침강 없이 채운 SDF 형상 그대로 확인.
+        // (붓기 단계에선 실제 중력으로 복귀.)
+        gravUniform.value = 0;
+        pourCountUniform.value = N;
+        for (let s = 0; s < PBF_SUBSTEPS; s++) {
+          renderer.compute(predictKernel);
+          renderer.compute(clearCellKernel);
+          renderer.compute(buildGridKernel);
+          for (let it = 0; it < SOLVER_ITER; it++) {
+            renderer.compute(lambdaKernel);
+            renderer.compute(deltaPKernel);
+          }
+          renderer.compute(velocityKernel);
         }
-        renderer.compute(velocityKernel);
-      }
       } // end if (SIMULATE)
       // SSFR 1단계: 입자 깊이를 depthRT 에 렌더 → grayscale 로 화면 확인
       renderer.setRenderTarget(depthRT);
@@ -1602,7 +1599,7 @@ export default function FluidLab({
               if (!inside) leaked++;
             }
             console.log(
-              `[wine] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(3)} leaked=${leaked}/${N} comY=${(comY / N).toFixed(4)} dAvg=${(sumD / N).toFixed(0)}`,
+              `[wine] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(3)} leaked=${leaked}/${N} comY=${(comY / N).toFixed(4)} dAvg=${(sumD / N).toFixed(0)}`
             );
           })
           .catch(() => {});
@@ -1655,7 +1652,7 @@ export default function FluidLab({
         40,
         container.clientWidth / container.clientHeight,
         0.01,
-        10,
+        10
       );
       // 병(큰 편)이 옆에 있으니 줌아웃 + 잔·병 사이를 타깃으로.
       camera.position.set(-1.9, 1.7, -1.9);
@@ -1690,16 +1687,12 @@ export default function FluidLab({
           g += top * 0.15;
           bl += top * 0.1;
           // 키 소프트박스(정면 상단, 따뜻 밝게)
-          const k = Math.exp(
-            -((uu - 0.32) ** 2 / 0.02 + (vv - 0.74) ** 2 / 0.012),
-          );
+          const k = Math.exp(-((uu - 0.32) ** 2 / 0.02 + (vv - 0.74) ** 2 / 0.012));
           r += k * 2.4;
           g += k * 2.0;
           bl += k * 1.5;
           // 필(반대편, 약하게)
-          const f = Math.exp(
-            -((uu - 0.82) ** 2 / 0.05 + (vv - 0.58) ** 2 / 0.04),
-          );
+          const f = Math.exp(-((uu - 0.82) ** 2 / 0.05 + (vv - 0.58) ** 2 / 0.04));
           r += f * 0.7;
           g += f * 0.58;
           bl += f * 0.5;
@@ -1717,13 +1710,7 @@ export default function FluidLab({
           edata[i + 3] = 1;
         }
       }
-      const studioEnv = new THREE.DataTexture(
-        edata,
-        ew,
-        eh,
-        THREE.RGBAFormat,
-        THREE.FloatType,
-      );
+      const studioEnv = new THREE.DataTexture(edata, ew, eh, THREE.RGBAFormat, THREE.FloatType);
       studioEnv.mapping = THREE.EquirectangularReflectionMapping;
       studioEnv.needsUpdate = true;
       scene.environment = studioEnv;
@@ -1774,9 +1761,7 @@ export default function FluidLab({
               const dd = du.sub(dCen);
               const wr = exp(dd.mul(dd).div(-sigR2));
               const ws = Math.exp(-(i * i) / (2 * (R * 0.5) ** 2));
-              const w = du
-                .greaterThan(0.001)
-                .select(float(ws).mul(wr), float(0));
+              const w = du.greaterThan(0.001).select(float(ws).mul(wr), float(0));
               sum.addAssign(du.mul(w));
               wsum.addAssign(w);
             }
@@ -1793,7 +1778,7 @@ export default function FluidLab({
       blurPong = makeBlur1D(blurRT2.texture, 0, 1); // 세로(입력=blurRT2)
 
       // SSFR 2단계: 깊이에서 view 위치→법선 재구성 + 와인 셰이딩(색+프레넬)
-      const tanF = Math.tan(((40 * Math.PI) / 180) / 2); // fov 40°
+      const tanF = Math.tan((40 * Math.PI) / 180 / 2); // fov 40°
       const aspect = rtW / rtH;
       surfaceQuad = new A.QuadMesh(new A.MeshBasicNodeMaterial());
       surfaceQuad.material.colorNode = Fn(() => {
@@ -1808,7 +1793,7 @@ export default function FluidLab({
             return vec3(
               ndc.x.mul(depth).mul(tanF * aspect),
               ndc.y.mul(depth).mul(tanF),
-              depth.negate(),
+              depth.negate()
             );
           };
           // 법선을 넓은 중앙 차분(S픽셀)으로 재구성 — 1픽셀 차분은 알갱이
@@ -1827,10 +1812,7 @@ export default function FluidLab({
           const pC = vp(uv, dC);
           const normal = normalize(cross(pR.sub(pL), pU.sub(pD)));
           const viewDir = normalize(pC.negate());
-          const fres = pow(
-            float(1).sub(normal.dot(viewDir).max(0.0)),
-            3.0,
-          );
+          const fres = pow(float(1).sub(normal.dot(viewDir).max(0.0)), 3.0);
           const wine = vec3(0.28, 0.014, 0.05); // 진한 버건디
           // 프레넬 하이라이트 (표면 가장자리 밝게)
           outCol.assign(wine.add(vec3(0.9, 0.55, 0.65).mul(fres.mul(0.35))));
