@@ -60,7 +60,9 @@ export function RegionMap({ country, regionName, fallback, label }: Props) {
       map = m;
       m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
-      m.on("load", () => {
+      // 스타일 JSON이 파싱되면 레이어를 얹는다("load"는 sprite/glyphs까지 기다리므로
+      // 더 이른 "style.load"에서 추가한다. 글자 라벨은 glyphs 로드 후 자연히 나타난다).
+      m.once("style.load", () => {
         // 1) 국가 영역 채색(전세계 경계에서 이 나라만 필터)
         if (enName) {
           m.addSource("countries", { type: "geojson", data: "/geo/countries.geojson" });
