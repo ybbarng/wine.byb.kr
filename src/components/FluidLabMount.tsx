@@ -44,7 +44,7 @@ const WINE_PRESETS: Preset[] = [
   { name: "샤르도네", absorb: [1.6, 3.2, 13], color: "#ecd88f", glass: GLASS.white },
   { name: "소비뇽 블랑", absorb: [1.3, 2.4, 11], color: "#e7e0a6", glass: GLASS.white },
   { name: "샴페인", absorb: [1.4, 3.0, 12], color: "#f1e7b4", glass: GLASS.flute },
-  { name: "아이스와인", absorb: [3, 7, 18], color: "#d8a13a", glass: GLASS.dessert },
+  { name: "아이스와인", absorb: [5, 12, 27], color: "#cf8f2a", glass: GLASS.dessert },
 ];
 
 export default function FluidLabMount() {
