@@ -287,6 +287,7 @@ export default function FluidLab({
     let renderer: THREE.WebGPURenderer;
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
+    let ro: ResizeObserver | undefined; // 컨테이너 크기 관찰
     let controls: OrbitControls;
     let disposed = false;
     let frameCount = 0;
@@ -1826,6 +1827,9 @@ export default function FluidLab({
       setupParticles();
 
       window.addEventListener("resize", onWindowResize);
+      // 컨테이너 크기 변화(레이아웃 전환 등)에도 캔버스를 맞춘다.
+      ro = new ResizeObserver(() => onWindowResize());
+      ro.observe(container);
       controls.update();
       if (!disposed) renderer.setAnimationLoop(render);
     }
@@ -1835,6 +1839,7 @@ export default function FluidLab({
     return () => {
       disposed = true;
       window.removeEventListener("resize", onWindowResize);
+      if (ro) ro.disconnect();
       if (renderer) {
         renderer.setAnimationLoop(null);
         renderer.dispose();
@@ -1845,5 +1850,5 @@ export default function FluidLab({
     };
   }, [glassType]);
 
-  return <div ref={ref} style={{ width: "100vw", height: "100vh" }} />;
+  return <div ref={ref} style={{ width: "100%", height: "100%" }} />;
 }
