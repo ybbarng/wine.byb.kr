@@ -974,10 +974,11 @@ export default function FluidLab() {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
         const t = backDist.sub(frontDist).max(0.0).toVar();
+        // 흡수계수 키움 → 더 깊은 와인(얇은 곳도 루비, 두꺼운 곳 검붉게).
         return vec3(
-          t.mul(9.0).negate().exp(),
-          t.mul(40.0).negate().exp(),
-          t.mul(33.0).negate().exp(),
+          t.mul(17.0).negate().exp(),
+          t.mul(80.0).negate().exp(),
+          t.mul(66.0).negate().exp(),
         );
       })();
       liquidBodyMat = bodyMat;
