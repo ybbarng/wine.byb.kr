@@ -1025,7 +1025,7 @@ export default function FluidLab({
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.55; // 반사↑ — 수면 하이라이트로 "젖은 액체" 느낌
+      bodyMat.envMapIntensity = 0.35; // 반사 — 수면 하이라이트만, 와인색은 유지
       bodyMat.emissiveNode = Fn(() => {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
@@ -1406,12 +1406,13 @@ export default function FluidLab({
           r += f * 0.7;
           g += f * 0.58;
           bl += f * 0.5;
-          // 가로 스트립 조명(모든 방위, 상단): 수평인 수면이 방위와 무관하게
-          // 이 밝은 띠를 카메라로 반사 → 젖은 하이라이트. 스튜디오 천장광 느낌.
-          const band = Math.exp(-((vv - 0.64) ** 2) / 0.004);
-          r += band * 0.95;
-          g += band * 0.82;
-          bl += band * 0.64;
+          // 가는 가로 스트립 조명(모든 방위, 상단): 수평 수면의 일부 픽셀만 이
+          // 좁은 띠를 반사 → 와인색 위에 또렷한 하이라이트 "줄"(젖은 액체 신호).
+          // 폭을 넓히면 표면 전체가 반사돼 흰 원반이 되므로 좁게 유지한다.
+          const band = Math.exp(-((vv - 0.64) ** 2) / 0.0008);
+          r += band * 0.8;
+          g += band * 0.68;
+          bl += band * 0.52;
           const i = (y * ew + x) * 4;
           edata[i] = r;
           edata[i + 1] = g;
