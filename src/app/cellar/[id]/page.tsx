@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { getTastingNote } from "@/features/cellar/queries";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
-import { wineTypeLabel } from "@/lib/wine";
+import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
 // DB를 요청 시점에 읽는다. 빌드 때 정적 생성하지 않는다.
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export async function generateMetadata({ params }: PageProps<"/cellar/[id]">): P
   const { id } = await params;
   const data = await getTastingNote(id);
   if (!data) return { title: "기록을 찾을 수 없음" };
-  return { title: `${data.note.wine.nameKo} 시음 기록` };
+  return { title: `${wineDisplayName(data.note.wine).primary} 시음 기록` };
 }
 
 function Badge({ children }: { children: React.ReactNode }) {
@@ -37,6 +37,7 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
 
   const { note, others } = data;
   const { wine } = note;
+  const name = wineDisplayName(wine);
   const country = wine.region?.country ?? wine.region?.parent?.nameKo ?? null;
 
   return (
@@ -54,9 +55,9 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
         {/* 와인 히어로 */}
         <header className="mt-4">
           <h1 className="font-serif text-3xl leading-tight tracking-tight text-foreground sm:text-4xl">
-            {wine.nameKo}
+            {name.primary}
           </h1>
-          {wine.nameLocal ? <p className="mt-1 text-rose/50">{wine.nameLocal}</p> : null}
+          {name.alias ? <p className="mt-1 text-rose/50">{name.alias}</p> : null}
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Badge>{wineTypeLabel(wine.type)}</Badge>
             {note.vintageYear ? <Badge>{note.vintageYear} 빈티지</Badge> : null}

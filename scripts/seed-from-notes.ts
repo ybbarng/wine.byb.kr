@@ -19,6 +19,7 @@ import {
   slugify,
   splitName,
 } from "./lib/normalize";
+import { originalNameFor } from "./lib/wine-name-overrides";
 
 const SEED_DIR = path.join(process.cwd(), "data", "seed");
 const CSV_PATH = path.join(SEED_DIR, "와인_all.csv");
@@ -165,7 +166,10 @@ async function main() {
 
   for (const row of rows.slice(1)) {
     if (!row[iNom]?.trim()) continue;
-    const { nameKo, nameLocal } = splitName(row[iNom]);
+    const split = splitName(row[iNom]);
+    const nameKo = split.nameKo;
+    // 원어 이름은 교정본을 우선 쓰고, 없으면 시드가 나눈 라틴 표기를 쓴다.
+    const nameLocal = originalNameFor(nameKo) ?? split.nameLocal;
     const countryKo = (row[iCountry] ?? "").trim();
     const regionId = await ensureRegion(row[iLocation] ?? "", countryKo);
     const producerId = await ensureProducer(row[iProducer] ?? "", regionId);

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { getCellarEntries, getCellarStats } from "@/features/cellar/queries";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
-import { wineTypeLabel } from "@/lib/wine";
+import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
 export const metadata: Metadata = {
   title: "셀러",
@@ -59,6 +59,7 @@ export default async function CellarPage() {
         <section className="mt-10">
           <ol className="flex flex-col">
             {entries.map((e) => {
+              const name = wineDisplayName(e.wine);
               const country = e.wine.region?.country ?? e.wine.region?.parent?.nameKo ?? null;
               const meta = joinDot(
                 wineTypeLabel(e.wine.type),
@@ -77,8 +78,9 @@ export default async function CellarPage() {
                     </time>
                     <div className="min-w-0 flex-1">
                       <div className="font-serif text-lg text-foreground group-hover:text-rose">
-                        {e.wine.nameKo}
+                        {name.primary}
                       </div>
+                      {name.alias ? <div className="text-xs text-rose/40">{name.alias}</div> : null}
                       <div className="mt-0.5 text-sm text-rose/60">{meta}</div>
                       {e.bodyText ? (
                         <p className="mt-1 line-clamp-1 text-sm text-muted">{e.bodyText}</p>
