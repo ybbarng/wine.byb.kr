@@ -973,10 +973,13 @@ export default function FluidLab() {
       bodyMat.emissiveNode = Fn(() => {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
-        const thickness = backDist.sub(frontDist).max(0.0);
-        // 흡수계수(world 단위): R 적게, G/B 많이 → 두꺼울수록 검붉게.
-        const absorb = vec3(9.0, 40.0, 33.0);
-        return exp(absorb.mul(thickness).negate());
+        const t = backDist.sub(frontDist).max(0.0).toVar();
+        // Beer–Lambert exp(-k·d) 채널별(R 적게 흡수, G/B 많이) → 두꺼울수록 검붉게.
+        return vec3(
+          t.mul(9.0).negate().exp(),
+          t.mul(40.0).negate().exp(),
+          t.mul(33.0).negate().exp(),
+        );
       })();
       liquidBodyMat = bodyMat;
       // 뒷면 거리 재질(두께 계산용) — 뒷면만, view 거리 R 채널에.
