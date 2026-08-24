@@ -18,6 +18,7 @@ import {
   cross,
   exp,
   float,
+  frontFacing,
   mix,
   instanceIndex,
   instancedArray,
@@ -969,14 +970,11 @@ export default function FluidLab() {
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.0; // [진단] 반사 완전 끔 — 보라가 반사 탓인지 확인
+      bodyMat.envMapIntensity = 0.09; // 표면 광택(은은히)
       bodyMat.emissiveNode = Fn(() => {
-        const frontDist = positionView.z.negate();
-        const backDist = texture(wineThickRT.texture, screenUV).x;
-        // 최소 두께 0.045 — 아주 얇은 테두리도 흰색 대신 루비빛(exp→1 방지).
-        const t = backDist.sub(frontDist).max(0.045).toVar();
-        // 흡수계수: R 적게, G·B 많이. B 를 G 보다 더 흡수해야 파랑이 덜 남아
-        // 보라 대신 붉은(가넷) 와인색이 된다.
+        // wineThickRT = 부호 있는 거리 가산 합 = backDist − frontDist = 시선 두께.
+        const t = texture(wineThickRT.texture, screenUV).x.max(0.045).toVar();
+        // Beer–Lambert exp(-k·d): R 적게, G·B 많이(B≥G → 보라 대신 붉은 가넷).
         return vec3(
           t.mul(16.0).negate().exp(),
           t.mul(78.0).negate().exp(),
@@ -984,10 +982,18 @@ export default function FluidLab() {
         );
       })();
       liquidBodyMat = bodyMat;
-      // 뒷면 거리 재질(두께 계산용) — 뒷면만, view 거리 R 채널에.
+      // 두께 = Σ(부호 있는 view 거리): 앞면 −d, 뒷면 +d 를 가산 블렌딩 → back−front.
+      // winding·깊이테스트 무관하게 견고. (수면·벽 부위별 winding 차이 문제 없음.)
       wineBackMat = new A.MeshBasicNodeMaterial();
-      wineBackMat.colorNode = Fn(() => vec4(positionView.z.negate(), 0, 0, 1))();
-      wineBackMat.side = THREE.FrontSide; // winding 상 이쪽이 먼 면(두께 계산용)
+      wineBackMat.colorNode = Fn(() => {
+        const d = positionView.z.negate();
+        return vec4(frontFacing.select(d.negate(), d), 0, 0, 1);
+      })();
+      wineBackMat.side = THREE.DoubleSide;
+      wineBackMat.transparent = true;
+      wineBackMat.depthTest = false;
+      wineBackMat.depthWrite = false;
+      wineBackMat.blending = THREE.AdditiveBlending;
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
       liquidMesh.frustumCulled = false;
@@ -1119,7 +1125,7 @@ export default function FluidLab() {
         renderer.clear();
         renderer.render(scene, camera);
         scene.background = savedBg;
-        glassMesh.visible = false; // [진단] 유리 숨김 — 보라가 유리 탓인지
+        glassMesh.visible = true;
         liquidMesh.material = liquidBodyMat;
         frameCount++;
         renderer.setRenderTarget(null);
