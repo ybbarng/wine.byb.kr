@@ -34,7 +34,8 @@
         "noSvgWithoutTitle": "off",
         "useButtonType": "off",
         "useMediaCaption": "off",
-        "useKeyWithClickEvents": "off"
+        "useKeyWithClickEvents": "off",
+        "noLabelWithoutControl": "off"
       },
       "performance": {
         "noImgElement": "off"

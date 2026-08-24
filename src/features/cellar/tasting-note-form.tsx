@@ -1,0 +1,192 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { wineDisplayName } from "@/lib/wine";
+import {
+  type TastingNoteFormInput,
+  type TastingNoteInput,
+  tastingNoteSchema,
+} from "./tasting-note-schema";
+
+export interface WineOption {
+  id: string;
+  nameKo: string;
+  nameLocal: string | null;
+}
+
+const inputClass =
+  "w-full rounded-lg border border-rose/20 bg-white/5 px-3 py-2 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="flex flex-col gap-1.5">
+      <span className="text-sm text-rose/70">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+export function TastingNoteForm({ wines }: { wines: WineOption[] }) {
+  const router = useRouter();
+  const logout = useAuthStore((s) => s.logout);
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors, isSubmitting },
+  } = useForm<TastingNoteFormInput, unknown, TastingNoteInput>({
+    resolver: zodResolver(tastingNoteSchema),
+  });
+
+  // 스키마 입력 타입상 느슨하게 나오므로 별점 계산을 위해 number로 좁힌다.
+  const rating = watch("rating") as number | undefined;
+
+  async function onSubmit(data: TastingNoteInput) {
+    setServerError(null);
+    const res = await fetch("/api/tasting-notes", {
+      method: "POST",
+      headers: { "content-type": "application/json", ...adminHeaders() },
+      body: JSON.stringify(data),
+    });
+    if (res.status === 401) {
+      logout();
+      router.push("/admin/login");
+      return;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      setServerError(body?.error ?? "저장에 실패했습니다.");
+      return;
+    }
+    router.push("/cellar");
+    router.refresh();
+  }
+
+  return (
+    <form onSubmit={handleSubmit(onSubmit)} className="mt-8 flex flex-col gap-5">
+      <Field label="와인">
+        <select className={inputClass} defaultValue="" {...register("wineId")}>
+          <option value="" disabled>
+            와인 선택
+          </option>
+          {wines.map((w) => {
+            const name = wineDisplayName(w);
+            return (
+              <option key={w.id} value={w.id}>
+                {name.primary}
+                {name.alias ? ` (${name.alias})` : ""}
+              </option>
+            );
+          })}
+        </select>
+        {errors.wineId ? (
+          <span className="text-xs text-wine-bright">{errors.wineId.message}</span>
+        ) : null}
+      </Field>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="음용일">
+          <input type="date" className={inputClass} {...register("drankOn")} />
+        </Field>
+        <Field label="구매일">
+          <input type="date" className={inputClass} {...register("purchasedOn")} />
+        </Field>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="빈티지">
+          <input
+            type="number"
+            inputMode="numeric"
+            placeholder="예: 2021"
+            className={inputClass}
+            {...register("vintageYear")}
+          />
+        </Field>
+        <Field label="구매가격(원)">
+          <input
+            type="number"
+            inputMode="numeric"
+            placeholder="예: 31920"
+            className={inputClass}
+            {...register("purchasePrice")}
+          />
+        </Field>
+      </div>
+
+      <Field label="구매처">
+        <input
+          type="text"
+          placeholder="예: 세븐일레븐"
+          className={inputClass}
+          {...register("purchasePlace")}
+        />
+      </Field>
+
+      <Field label="평점">
+        <div className="flex items-center gap-1">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() =>
+                setValue("rating", n === rating ? undefined : n, { shouldValidate: true })
+              }
+              className={`text-2xl transition-colors ${
+                rating != null && n <= rating ? "text-gold" : "text-rose/25 hover:text-rose/50"
+              }`}
+              aria-label={`${n}점`}
+            >
+              ★
+            </button>
+          ))}
+          {rating != null ? <span className="ml-2 text-sm text-rose/60">{rating}점</span> : null}
+        </div>
+      </Field>
+
+      <Field label="감상">
+        <textarea
+          rows={5}
+          placeholder="맛·향·인상, 안주 등"
+          className={`${inputClass} resize-y`}
+          {...register("bodyText")}
+        />
+      </Field>
+
+      <Field label="페어링">
+        <input
+          type="text"
+          placeholder="예: 추어탕, 스테이크"
+          className={inputClass}
+          {...register("foodPaired")}
+        />
+      </Field>
+
+      {serverError ? <p className="text-sm text-wine-bright">{serverError}</p> : null}
+
+      <div className="mt-2 flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="rounded-xl bg-wine px-5 py-3 font-medium text-foreground transition-colors hover:bg-wine-bright disabled:opacity-40"
+        >
+          {isSubmitting ? "저장 중…" : "기록 저장"}
+        </button>
+        <button
+          type="button"
+          onClick={() => router.push("/cellar")}
+          className="text-sm text-rose/50 transition-colors hover:text-foreground"
+        >
+          취소
+        </button>
+      </div>
+    </form>
+  );
+}

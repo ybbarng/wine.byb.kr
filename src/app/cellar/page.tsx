@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
+import { NewEntryButton } from "@/features/cellar/new-entry-button";
 import { getCellarEntries, getCellarStats } from "@/features/cellar/queries";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
 import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
@@ -30,9 +31,14 @@ export default async function CellarPage() {
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 pb-24">
-        <header className="mt-6">
-          <h1 className="font-serif text-4xl tracking-tight text-foreground">셀러</h1>
-          <p className="mt-2 text-rose/70">그동안 마신 와인 기록.</p>
+        <header className="mt-6 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-serif text-4xl tracking-tight text-foreground">셀러</h1>
+            <p className="mt-2 text-rose/70">그동안 마신 와인 기록.</p>
+          </div>
+          <div className="mt-2">
+            <NewEntryButton />
+          </div>
         </header>
 
         {/* 통계 */}

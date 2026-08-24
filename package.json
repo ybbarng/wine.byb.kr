@@ -20,6 +20,7 @@
     "prepare": "command -v git >/dev/null 2>&1 && lefthook install || true"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.9.1",
     "@libsql/client": "^0.17.4",
     "@prisma/adapter-libsql": "^7.9.1",
     "@prisma/client": "^7.9.1",
@@ -28,7 +29,9 @@
     "next": "16.3.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-hook-form": "7.85.0",
     "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
