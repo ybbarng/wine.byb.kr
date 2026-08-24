@@ -775,7 +775,12 @@ export default function FluidLab({
         // 이 방위(θ)에서 와인이 실제 도달한 최고점(절대 프로파일 y)을 텍스처에서
         // 읽고, 수위선 위 높이로 변환. 오르지 않은 방향은 top≈0 → 자국 없음.
         const u = th.div(Math.PI * 2).toVar(); // 컬럼 인덱싱(RepeatWrapping)
-        const top = texture(legTex, vec2(u, 0.5)).x.sub(glassWlU).max(0).toVar();
+        // 최고점의 4/5 높이에 자국 위쪽이 오게(peak 그대로면 조금 높아 보임).
+        const top = texture(legTex, vec2(u, 0.5))
+          .x.sub(glassWlU)
+          .max(0)
+          .mul(0.8)
+          .toVar();
         // 자국은 "그 방위의 도달점 ~ 수위선" 범위에만.
         const topGate = smoothstep(float(0.02), float(0.05), top).toVar(); // 오른 방위만
         const bandGate = smoothstep(float(-0.01), float(0.02), up)
