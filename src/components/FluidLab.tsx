@@ -851,7 +851,7 @@ export default function FluidLab({
     // 각도별 수위선을 구해 "기운 잔 안 + 수평면 아래"로 다시 채운다(강체 아님).
     const L_SEG = 96;
     const L_NV = 20; // 벽(바닥→수위선) 세로 분할
-    const L_NS = 8; // 표면(수위선→중심) 분할
+    const L_NS = 14; // 표면(수위선→중심) 분할 — 잔물결이 각지지 않게 촘촘히
     const L_PPC = L_NV + 1 + L_NS; // 컬럼당 정점 수
     const L_COS: number[] = [];
     const L_SIN: number[] = [];
@@ -859,6 +859,46 @@ export default function FluidLab({
       const ang = (i / L_SEG) * Math.PI * 2;
       L_COS.push(Math.cos(ang));
       L_SIN.push(Math.sin(ang));
+    }
+    // 컬럼별 수위선 반경 캐시(법선 루프에서 잔물결 taper 에 필요).
+    const rwCol = new Float32Array(L_SEG + 1);
+    // 진행성 잔물결 성분(방향·주파수 다른 평면파 합). 벽에서 0 으로 taper.
+    const WV = [
+      { kx: 8.0, kz: 3.0, w: 7.0, a: 0.026, ph: 0.0 },
+      { kx: -4.0, kz: 9.0, w: 9.0, a: 0.019, ph: 1.7 },
+      { kx: 7.0, kz: -9.0, w: 11.0, a: 0.012, ph: 3.1 },
+    ];
+    // 잔물결 변위 W(px,pz) 와 그 기울기(grad[0]=∂/∂x, grad[1]=∂/∂z) 반환.
+    // waveAct(활성도)·simT(시각)은 외부 클로저 변수. 정지 시 waveAct=0 → 평면.
+    function waveAt(px: number, pz: number, rw: number, grad: number[]) {
+      if (waveAct <= 1e-4) {
+        grad[0] = 0;
+        grad[1] = 0;
+        return 0;
+      }
+      const rw2 = rw * rw || 1e-6;
+      const tp = 1 - (px * px + pz * pz) / rw2; // 벽(r=rw)에서 0
+      if (tp <= 0) {
+        grad[0] = 0;
+        grad[1] = 0;
+        return 0;
+      }
+      const dtpx = (-2 * px) / rw2;
+      const dtpz = (-2 * pz) / rw2;
+      let sumSin = 0;
+      let sx = 0;
+      let sz = 0;
+      for (const wv of WV) {
+        const th = wv.kx * px + wv.kz * pz - wv.w * simT + wv.ph;
+        const sn = Math.sin(th);
+        const cs = Math.cos(th);
+        sumSin += wv.a * sn;
+        sx += wv.a * wv.kx * cs;
+        sz += wv.a * wv.kz * cs;
+      }
+      grad[0] = waveAct * (dtpx * sumSin + tp * sx);
+      grad[1] = waveAct * (dtpz * sumSin + tp * sz);
+      return waveAct * tp * sumSin;
     }
     // biome-ignore lint/suspicious/noExplicitAny: BufferAttribute
     let liquidPosAttr: any;
@@ -882,6 +922,9 @@ export default function FluidLab({
     let sloshZ = 0;
     let sloshVX = 0;
     let sloshVZ = 0;
+    // 진행성 잔물결: 정지=평면, 흔들면 활성. simT=파동 위상용 시각, waveAct=활성도.
+    let simT = 0;
+    let waveAct = 0;
     // 마우스 = 잔 제어. 잔은 마우스 오프셋을 추종해 기울고, 놓으면 세워진다.
     // 와인 슬로싱은 잔의 움직임(속도)에 구동 → 놓으면 잔은 멈추고 와인만 출렁.
     let mStartX = 0;
@@ -932,6 +975,7 @@ export default function FluidLab({
       const arr = liquidPosAttr.array as Float32Array;
       const m5s = m5 || 1;
       const dPhi = (Math.PI * 2) / L_SEG;
+      const wg = [0, 0]; // 잔물결 기울기 스크래치
       let foot = 0;
       for (let i = 0; i <= L_SEG; i++) {
         const c = L_COS[i];
@@ -947,6 +991,7 @@ export default function FluidLab({
         }
         pw = Math.max(GLASS_WINE_BOTTOM + 0.02, Math.min(pw, 2.91));
         const rw = Math.max(innerRadiusAt(pw), 0.0006);
+        rwCol[i] = rw; // 법선 루프의 잔물결 taper 용
         if (i < L_SEG) foot += 0.5 * rw * rw * dPhi; // 수면 수평 단면적
         let base = i * L_PPC * 3;
         // 벽: 바닥(중심)→수위선
@@ -958,13 +1003,14 @@ export default function FluidLab({
           arr[base + 2] = r * s;
           base += 3;
         }
-        // 표면: 수위선→중심(평면 + 포물면)
+        // 표면: 수위선→중심(평면 + 포물면 + 잔물결)
         for (let k = 1; k <= L_NS; k++) {
           const r = rw * (1 - k / L_NS);
           const px = r * c;
           const pz = r * s;
+          const wv = waveAt(px, pz, rw, wg);
           arr[base] = px;
-          arr[base + 1] = (H0 - m1 * px - m9 * pz) / m5s + K * r * r;
+          arr[base + 1] = (H0 - m1 * px - m9 * pz) / m5s + K * r * r + wv;
           arr[base + 2] = pz;
           base += 3;
         }
@@ -981,12 +1027,15 @@ export default function FluidLab({
         const invM5 = 1 / m5s;
         for (let i = 0; i <= L_SEG; i++) {
           const cbase = i * L_PPC * 3;
+          const rw = rwCol[i];
           for (let idx = L_NV; idx < L_PPC; idx++) {
             const o = cbase + idx * 3;
             const px = arr[o];
             const pz = arr[o + 2];
-            const nx = m1 * invM5 - 2 * K * px;
-            const nz = m9 * invM5 - 2 * K * pz;
+            // 평면+포물 법선에 잔물결 기울기(-∇W)를 더해 하이라이트가 일렁이게.
+            waveAt(px, pz, rw, wg);
+            const nx = m1 * invM5 - 2 * K * px - wg[0];
+            const nz = m9 * invM5 - 2 * K * pz - wg[1];
             const inv = 1 / Math.hypot(nx, 1, nz);
             narr[o] = nx * inv;
             narr[o + 1] = inv;
@@ -1187,6 +1236,9 @@ export default function FluidLab({
         // 회전 오목 포물면: 스월 세기(수면 기울기 크기)에 비례해 벽 쪽 차오름.
         const swirlMag = Math.hypot(sloshX, sloshZ);
         const K = swirlMag * 1.1;
+        // 잔물결: 정지=평면, 흔들면 활성. 파동 위상 진행 + 활성도(스월 세기).
+        simT += dt;
+        waveAct = Math.min(1, swirlMag * 3.5);
         for (let it = 0; it < 4; it++) {
           rebuildLiquid(M1, M5, M9, liqH, K);
           liqH += (liqV0 - liqVol) / (liqFoot || 1);
