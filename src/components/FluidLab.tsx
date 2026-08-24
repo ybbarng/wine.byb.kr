@@ -1000,7 +1000,7 @@ export default function FluidLab({
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.25; // 광택(이제 따뜻한 스튜디오 반사라 자연스러움)
+      bodyMat.envMapIntensity = 0.4; // 광택↑ — 옅은 와인이 "빛 받는" 느낌(형광 완화)
       bodyMat.emissiveNode = Fn(() => {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
@@ -1015,9 +1015,11 @@ export default function FluidLab({
           t.mul(absorbU.y).negate().exp(),
           t.mul(absorbU.z).negate().exp(),
         ).toVar();
-        // 밝은(옅은 와인) 값을 압축 → 자체발광 형광 느낌 완화(어두운 레드는 거의
-        // 그대로). 옅은 와인은 빛나기보다 은은히 비치게.
-        return col.div(col.add(0.85));
+        // 밝은(옅은 와인) 값을 강하게 압축 + 살짝 탈채도 → 자체발광 형광 완화
+        // (어두운 레드는 거의 그대로). 옅은 와인이 네온처럼 빛나지 않게.
+        const comp = col.div(col.add(1.35)).toVar();
+        const lum = comp.dot(vec3(0.35, 0.5, 0.15));
+        return mix(comp, vec3(lum), 0.14);
       })();
       liquidBodyMat = bodyMat;
       // 뒷면(먼 면) 거리 — winding 상 FrontSide 가 먼 면. view 거리 R 채널에.
