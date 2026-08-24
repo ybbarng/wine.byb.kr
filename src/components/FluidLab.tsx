@@ -969,7 +969,7 @@ export default function FluidLab() {
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.09; // 표면 광택(은은히 — 푸른 반사가 보랏빛 만드는 것 완화)
+      bodyMat.envMapIntensity = 0.0; // [진단] 반사 완전 끔 — 보라가 반사 탓인지 확인
       bodyMat.emissiveNode = Fn(() => {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
