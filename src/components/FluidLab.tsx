@@ -1068,8 +1068,8 @@ export default function FluidLab() {
         // ── 스월링 ── 드래그로 잔(그룹)을 기울이고, 액체 수면은 월드 수평 유지.
         const dt = 1 / 60;
         // 잔 = 마우스 추종. 드래그 시작점 기준 오프셋으로 기울고, 놓으면 세워진다.
-        const GAMP = 0.006; // px → rad
-        const GMAX = 0.26;
+        const GAMP = 0.007; // px → rad
+        const GMAX = 0.32;
         let gtx = 0;
         let gtz = 0;
         if (swDragging) {
@@ -1077,7 +1077,7 @@ export default function FluidLab() {
           gtx = Math.max(-GMAX, Math.min(GMAX, (mStartY - mCurY) * GAMP));
           gtz = Math.max(-GMAX, Math.min(GMAX, (mCurX - mStartX) * GAMP));
         }
-        const gEase = swDragging ? 0.3 : 0.14; // 놓으면 부드럽게 세워짐(안 흔들림)
+        const gEase = swDragging ? 0.38 : 0.14; // 놓으면 부드럽게 세워짐(안 흔들림)
         gTiltX += (gtx - gTiltX) * gEase;
         gTiltZ += (gtz - gTiltZ) * gEase;
         // 잔 기울기 속도 → 와인 슬로싱 구동. 잔을 움직이면 와인이 출렁이고,
@@ -1087,9 +1087,9 @@ export default function FluidLab() {
         gPrevX = gTiltX;
         gPrevZ = gTiltZ;
         const OMEGA = 8.0;
-        const ZETA = 0.08;
-        const COUPLE = 1.7; // 잔 움직임 → 와인 슬로싱 결합
-        const SLOSH_MAX = 0.5; // 최대 수면 기울기↑ — 세게 흔들면 더 세워짐(역동성)
+        const ZETA = 0.055; // 감쇠 낮춤 — 더 오래·크게 출렁
+        const COUPLE = 2.7; // 잔 움직임 → 와인 슬로싱 결합↑(세게 흔들면 크게)
+        const SLOSH_MAX = 0.78; // 최대 수면 기울기↑ — 세게 흔들수록 더 세워짐
         sloshVX += (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt - COUPLE * gvz * dt;
         sloshVZ += (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt - COUPLE * gvx * dt;
         sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshX + sloshVX * dt));
