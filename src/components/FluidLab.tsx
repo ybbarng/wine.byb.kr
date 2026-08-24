@@ -971,6 +971,30 @@ export default function FluidLab({
       }
       liquidPosAttr.needsUpdate = true;
       liquidGeo.computeVertexNormals();
+      // 수면 정점 법선을 해석적 평면 법선으로 덮어쓴다. computeVertexNormals 는
+      // 수위선 정점을 벽(수직)+수면(수평) 평균(~45°)으로 만들어, 그 경사 테두리
+      // 한 줄만 어두운 환경을 반사 → "원반 테" 어두운 선이 생겼다. 수면은 해석적
+      // 평면(py=(H0-m1·x-m9·z)/m5+K·r²)이므로 법선 ∝ (m1/m5-2K·x, 1, m9/m5-2K·z).
+      // 수위선(j=L_NV)~표면(k=1..L_NS) 을 이 법선으로 통일 → 테 소멸, 연속 반사.
+      {
+        const narr = liquidGeo.attributes.normal.array as Float32Array;
+        const invM5 = 1 / m5s;
+        for (let i = 0; i <= L_SEG; i++) {
+          const cbase = i * L_PPC * 3;
+          for (let idx = L_NV; idx < L_PPC; idx++) {
+            const o = cbase + idx * 3;
+            const px = arr[o];
+            const pz = arr[o + 2];
+            const nx = m1 * invM5 - 2 * K * px;
+            const nz = m9 * invM5 - 2 * K * pz;
+            const inv = 1 / Math.hypot(nx, 1, nz);
+            narr[o] = nx * inv;
+            narr[o + 1] = inv;
+            narr[o + 2] = nz * inv;
+          }
+        }
+        liquidGeo.attributes.normal.needsUpdate = true;
+      }
       liqFoot = foot;
       // 부피(닫힌 메쉬 signed volume) — 중심이 r=0 로 공유돼 닫힘.
       const ix = liquidGeo.index.array as ArrayLike<number>;
