@@ -970,7 +970,7 @@ export default function FluidLab() {
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.0; // 반사 끔 — 순수 Beer–Lambert 색(수면 blue 제거)
+      bodyMat.envMapIntensity = 0.25; // 광택(이제 따뜻한 스튜디오 반사라 자연스러움)
       bodyMat.emissiveNode = Fn(() => {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
@@ -1286,9 +1286,55 @@ export default function FluidLab() {
       const hdrLoader = new UltraHDRLoader().setPath("/textures/equirectangular/");
       const hdrTexture = await hdrLoader.loadAsync("royal_esplanade_2k.hdr.jpg");
       hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
-      scene.background = hdrTexture;
+      scene.background = hdrTexture; // 배경은 따뜻한 블러 유지
       scene.backgroundBlurriness = 0.5;
-      scene.environment = hdrTexture;
+      // 반사(IBL)는 와인잔용 따뜻한 스튜디오 환경을 절차적으로 생성 — 파란 하늘
+      // 대신 따뜻한 소프트박스가 비쳐 수면·유리 반사가 자연스럽다.
+      const ew = 256;
+      const eh = 128;
+      const edata = new Float32Array(ew * eh * 4);
+      for (let y = 0; y < eh; y++) {
+        const vv = y / (eh - 1); // 0 아래 ~ 1 위
+        for (let x = 0; x < ew; x++) {
+          const uu = x / (ew - 1);
+          let r = 0.05;
+          let g = 0.035;
+          let bl = 0.028; // 따뜻한 어두운 base
+          const top = Math.max(0, vv - 0.5) * 2; // 상단 따뜻한 글로우(하늘 대신)
+          r += top * 0.22;
+          g += top * 0.15;
+          bl += top * 0.1;
+          // 키 소프트박스(정면 상단, 따뜻 밝게)
+          const k = Math.exp(
+            -((uu - 0.32) ** 2 / 0.02 + (vv - 0.74) ** 2 / 0.012),
+          );
+          r += k * 2.4;
+          g += k * 2.0;
+          bl += k * 1.5;
+          // 필(반대편, 약하게)
+          const f = Math.exp(
+            -((uu - 0.82) ** 2 / 0.05 + (vv - 0.58) ** 2 / 0.04),
+          );
+          r += f * 0.7;
+          g += f * 0.58;
+          bl += f * 0.5;
+          const i = (y * ew + x) * 4;
+          edata[i] = r;
+          edata[i + 1] = g;
+          edata[i + 2] = bl;
+          edata[i + 3] = 1;
+        }
+      }
+      const studioEnv = new THREE.DataTexture(
+        edata,
+        ew,
+        eh,
+        THREE.RGBAFormat,
+        THREE.FloatType,
+      );
+      studioEnv.mapping = THREE.EquirectangularReflectionMapping;
+      studioEnv.needsUpdate = true;
+      scene.environment = studioEnv;
 
       // SSFR: 유체 입자만 담는 씬 + 깊이 RenderTarget + 화면 표면 quad
       fluidScene = new THREE.Scene();
