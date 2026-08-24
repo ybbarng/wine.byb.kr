@@ -867,7 +867,7 @@ export default function FluidLab({
       { kx: 8.0, kz: 3.0, w: 7.0, a: 0.046, ph: 0.0 },
       { kx: -4.0, kz: 9.0, w: 9.0, a: 0.034, ph: 1.7 },
       { kx: 7.0, kz: -9.0, w: 11.0, a: 0.024, ph: 3.1 },
-      { kx: -12.0, kz: 6.0, w: 14.0, a: 0.014, ph: 0.9 }, // 잔 파동(반짝임)
+      { kx: -12.0, kz: 6.0, w: 14.0, a: 0.007, ph: 0.9 }, // 잔 파동(과하면 반짝임 튐)
     ];
     // 잔물결 변위 W(px,pz) 와 그 기울기(grad[0]=∂/∂x, grad[1]=∂/∂z) 반환.
     // waveAct(활성도)·simT(시각)은 외부 클로저 변수. 정지 시 waveAct=0 → 평면.
@@ -1071,7 +1071,7 @@ export default function FluidLab({
       // 밝게가 물리적으로 나온다. 두께 = 뒷면거리(wineThickRT) − 앞면거리.
       const bodyMat = new A.MeshPhysicalNodeMaterial({
         color: new THREE.Color(0x080103), // 디퓨즈 최소(색은 흡수가 담당)
-        roughness: 0.09, // 더 매끈 → 젖은 수면의 또렷한 스펙큘러(액체 신호)
+        roughness: 0.18, // 부드러운 젖은 광택 — 너무 낮으면 날카롭게 반짝임
         metalness: 0,
         side: THREE.DoubleSide,
       });
@@ -1463,9 +1463,9 @@ export default function FluidLab({
           // 좁은 띠를 반사 → 와인색 위에 또렷한 하이라이트 "줄"(젖은 액체 신호).
           // 폭을 넓히면 표면 전체가 반사돼 흰 원반이 되므로 좁게 유지한다.
           const band = Math.exp(-((vv - 0.64) ** 2) / 0.0008);
-          r += band * 1.7;
-          g += band * 1.45;
-          bl += band * 1.12;
+          r += band * 1.15;
+          g += band * 0.98;
+          bl += band * 0.76;
           const i = (y * ew + x) * 4;
           edata[i] = r;
           edata[i + 1] = g;
@@ -1485,7 +1485,7 @@ export default function FluidLab({
       scene.environment = studioEnv;
       // 노드 재질은 envMapIntensity 대신 scene.environmentIntensity 로 IBL 세기를
       // 제어한다(수면이 밝은 천장을 통째로 반사해 흰 원반이 되는 것을 억제).
-      scene.environmentIntensity = 0.35;
+      scene.environmentIntensity = 0.28;
 
       // SSFR: 유체 입자만 담는 씬 + 깊이 RenderTarget + 화면 표면 quad
       fluidScene = new THREE.Scene();
