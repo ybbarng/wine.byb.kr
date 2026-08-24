@@ -1,6 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -61,9 +62,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 export function TastingNoteForm({
   wines,
   existing,
+  defaultWineId,
 }: {
   wines: WineOption[];
   existing?: ExistingNote;
+  defaultWineId?: string;
 }) {
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
@@ -79,7 +82,7 @@ export function TastingNoteForm({
     formState: { errors, isSubmitting },
   } = useForm<TastingNoteFormInput, unknown, TastingNoteInput>({
     resolver: zodResolver(tastingNoteSchema),
-    defaultValues: existing ? toDefaults(existing) : undefined,
+    defaultValues: existing ? toDefaults(existing) : { wineId: defaultWineId ?? "" },
   });
 
   // 스키마 입력 타입상 느슨하게 나오므로 별점 계산을 위해 number로 좁힌다.
@@ -127,7 +130,7 @@ export function TastingNoteForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="mt-8 flex flex-col gap-5">
       <Field label="와인">
-        <select className={inputClass} defaultValue="" {...register("wineId")}>
+        <select className={inputClass} {...register("wineId")}>
           <option value="" disabled>
             와인 선택
           </option>
@@ -141,9 +144,16 @@ export function TastingNoteForm({
             );
           })}
         </select>
-        {errors.wineId ? (
-          <span className="text-xs text-wine-bright">{errors.wineId.message}</span>
-        ) : null}
+        <div className="flex items-center justify-between">
+          {errors.wineId ? (
+            <span className="text-xs text-wine-bright">{errors.wineId.message}</span>
+          ) : (
+            <span />
+          )}
+          <Link href="/wine/new" className="text-xs text-gold/80 hover:text-gold">
+            목록에 없어요? 새 와인 추가
+          </Link>
+        </div>
       </Field>
 
       <div className="grid grid-cols-2 gap-4">
