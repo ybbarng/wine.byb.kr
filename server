@@ -34,6 +34,12 @@ git pull
 echo "📦 Installing dependencies..."
 pnpm install
 
+# 스키마를 서버 DB에 반영한다. 클라이언트 생성은 build 스크립트가 함께 한다.
+# data/ 가 없을 수 있으니 먼저 만든다(첫 배포).
+echo "🗄  Syncing DB schema..."
+mkdir -p data
+pnpm db:push
+
 echo "🔨 Building..."
 pnpm run build
 
