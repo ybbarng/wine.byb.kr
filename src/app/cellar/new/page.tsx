@@ -11,8 +11,9 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function NewTastingNotePage() {
-  const wines = await getWineOptions();
+export default async function NewTastingNotePage({ searchParams }: PageProps<"/cellar/new">) {
+  const [wines, sp] = await Promise.all([getWineOptions(), searchParams]);
+  const wineId = typeof sp.wineId === "string" ? sp.wineId : undefined;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -23,7 +24,7 @@ export default async function NewTastingNotePage() {
           <p className="mt-2 text-sm text-rose/60">마신 와인을 기록합니다.</p>
         </header>
         <AdminGuard>
-          <TastingNoteForm wines={wines} />
+          <TastingNoteForm wines={wines} defaultWineId={wineId} />
         </AdminGuard>
       </main>
     </div>
