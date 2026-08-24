@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { getWineBySlug } from "@/features/wine/queries";
+import { RegionMap } from "@/features/wine/region-map";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
 import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
@@ -37,6 +38,15 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
   const name = wineDisplayName(wine);
   const country = wine.region?.country ?? wine.region?.parent?.nameKo ?? null;
 
+  // fly-to 목표: 지역 좌표가 있으면 그걸, 없으면 국가(부모) 좌표를 쓴다.
+  const region = wine.region;
+  const target =
+    region?.latitude != null && region?.longitude != null
+      ? { lat: region.latitude, lng: region.longitude }
+      : region?.parent?.latitude != null && region?.parent?.longitude != null
+        ? { lat: region.parent.latitude, lng: region.parent.longitude }
+        : null;
+
   return (
     <div className="flex flex-1 flex-col">
       <SiteHeader />
@@ -56,6 +66,13 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
             {joinDot(wine.producer?.nameKo, wine.region?.nameKo, country) || "정보 준비 중"}
           </p>
         </header>
+
+        {/* 산지 지도 — 진입 시 해당 산지로 날아간다 */}
+        {target ? (
+          <div className="mt-8">
+            <RegionMap lat={target.lat} lng={target.lng} label={country ?? name.primary} />
+          </div>
+        ) : null}
 
         {/* 품종 */}
         {wine.grapes.length > 0 ? (
