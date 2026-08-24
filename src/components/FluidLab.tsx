@@ -973,8 +973,9 @@ export default function FluidLab() {
       bodyMat.emissiveNode = Fn(() => {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
-        const t = backDist.sub(frontDist).max(0.0).toVar();
-        // 흡수계수 키움 → 더 깊은 와인(얇은 곳도 루비, 두꺼운 곳 검붉게).
+        // 최소 두께 0.045 — 아주 얇은 테두리도 흰색 대신 루비빛(exp→1 방지).
+        const t = backDist.sub(frontDist).max(0.045).toVar();
+        // 흡수계수 → 더 깊은 와인(얇은 곳도 루비, 두꺼운 곳 검붉게).
         return vec3(
           t.mul(17.0).negate().exp(),
           t.mul(80.0).negate().exp(),
