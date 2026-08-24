@@ -976,7 +976,8 @@ export default function FluidLab() {
         const thickness = backDist.sub(frontDist).max(0.0);
         // 흡수계수(world 단위): R 적게, G/B 많이 → 두꺼울수록 검붉게.
         const absorb = vec3(9.0, 40.0, 33.0);
-        return exp(absorb.mul(thickness).negate());
+        void absorb;
+        return vec3(thickness.mul(4.0)); // [진단] 두께 회색조
       })();
       liquidBodyMat = bodyMat;
       // 뒷면 거리 재질(두께 계산용) — 뒷면만, view 거리 R 채널에.
