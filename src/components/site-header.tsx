@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { AdminBadge } from "@/features/admin/admin-badge";
 
 const NAV = [
   { href: "/explore", label: "탐험" },
@@ -22,6 +23,7 @@ export function SiteHeader() {
             {item.label}
           </Link>
         ))}
+        <AdminBadge />
       </nav>
     </header>
   );
