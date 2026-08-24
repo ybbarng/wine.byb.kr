@@ -83,81 +83,91 @@ function polyfit(xs: number[], ys: number[], deg: number): number[] {
 // 채움 높이(바닥/수면, 프로파일 y)를 갖는다. 발+기둥은 공통, 볼(bowl)만 형태별.
 // worldScale 은 setup 에서 프로파일 높이로 자동 계산해 모두 같은 화면 높이로 맞춘다.
 // 나중에 와인 선택 → 어울리는 잔 자동 표시에 이 인덱스를 매핑한다.
-const GLASS_FOOT_STEM: [number, number][] = [
-  [0.0, 0.0], [0.55, 0.0], [0.55, 0.018], [0.42, 0.04],
-  [0.12, 0.09], [0.05, 0.16], [0.042, 0.7], [0.042, 1.25],
-];
+// 발(foot)+기둥(stem) 을 잔별 값으로 생성. footR=발 반경(큰 볼일수록 넓게),
+// stemLen=기둥 위 끝 높이(=볼 바닥 y, 기둥 길이). 볼은 이 위에 상대높이로 얹는다.
+function footStem(footR: number, stemLen: number): [number, number][] {
+  return [
+    [0.0, 0.0], [footR, 0.0], [footR, 0.018], [footR * 0.76, 0.04],
+    [0.12, 0.09], [0.05, 0.16], [0.042, 0.7], [0.042, stemLen],
+  ];
+}
 type GlassDef = {
   key: string;
   label: string;
   desc: string;
-  bowl: [number, number][]; // 볼 곡선(기둥 위→림)
+  footR: number; // 발 반경
+  stemLen: number; // 기둥 길이(=볼 바닥 높이)
+  bowl: [number, number][]; // 볼 곡선(바닥=0 상대높이 → 림)
   wallThickness: number;
-  wineBottom: number; // 와인 바닥(프로파일 y)
-  wineFill: number; // 수면(프로파일 y)
+  fillLevel: number; // 수면(볼 바닥 기준 상대높이)
 };
 const GLASSES: GlassDef[] = [
   {
     key: "universal",
     label: "표준",
     desc: "만능형",
+    footR: 0.55,
+    stemLen: 1.3,
     bowl: [
-      [0.05, 1.36], [0.1, 1.44], [0.17, 1.53], [0.26, 1.65], [0.34, 1.79],
-      [0.4, 1.94], [0.44, 2.1], [0.46, 2.26], [0.455, 2.42], [0.43, 2.57],
-      [0.4, 2.7], [0.36, 2.82], [0.325, 2.92],
+      [0.05, 0.0], [0.1, 0.08], [0.17, 0.17], [0.26, 0.29], [0.34, 0.43],
+      [0.4, 0.58], [0.44, 0.74], [0.46, 0.9], [0.455, 1.06], [0.43, 1.21],
+      [0.4, 1.34], [0.36, 1.46], [0.325, 1.56],
     ],
     wallThickness: 0.025,
-    wineBottom: 1.36,
-    wineFill: 1.98,
+    fillLevel: 0.62,
   },
   {
     key: "bordeaux",
     label: "보르도",
     desc: "풀바디 레드 (카베르네·메를로)",
+    footR: 0.6, // 큰 볼 → 넓은 발
+    stemLen: 1.45, // 긴 기둥(우아)
     bowl: [
-      [0.05, 1.34], [0.1, 1.43], [0.18, 1.56], [0.28, 1.74], [0.37, 1.95],
-      [0.43, 2.18], [0.46, 2.42], [0.455, 2.66], [0.43, 2.86], [0.39, 3.02],
-      [0.34, 3.13],
+      [0.05, 0.0], [0.1, 0.09], [0.18, 0.22], [0.28, 0.4], [0.37, 0.61],
+      [0.43, 0.84], [0.46, 1.08], [0.455, 1.32], [0.43, 1.52], [0.39, 1.68],
+      [0.34, 1.79],
     ],
     wallThickness: 0.025,
-    wineBottom: 1.34,
-    wineFill: 2.02,
+    fillLevel: 0.68,
   },
   {
     key: "burgundy",
     label: "부르고뉴",
     desc: "피노 누아 (넓은 볼)",
+    footR: 0.64, // 가장 큰 볼 → 가장 넓은 발
+    stemLen: 1.25,
     bowl: [
-      [0.06, 1.34], [0.15, 1.44], [0.29, 1.58], [0.43, 1.76], [0.53, 1.95],
-      [0.57, 2.14], [0.55, 2.32], [0.49, 2.5], [0.41, 2.64], [0.36, 2.73],
+      [0.06, 0.0], [0.15, 0.1], [0.29, 0.24], [0.43, 0.42], [0.53, 0.61],
+      [0.57, 0.8], [0.55, 0.98], [0.49, 1.16], [0.41, 1.3], [0.36, 1.39],
     ],
     wallThickness: 0.025,
-    wineBottom: 1.34,
-    wineFill: 1.9,
+    fillLevel: 0.56,
   },
   {
     key: "white",
     label: "화이트",
     desc: "샤르도네·소비뇽 블랑",
+    footR: 0.5, // 작은 볼 → 좁은 발
+    stemLen: 1.35,
     bowl: [
-      [0.045, 1.4], [0.085, 1.5], [0.15, 1.63], [0.23, 1.79], [0.3, 1.96],
-      [0.345, 2.13], [0.355, 2.3], [0.34, 2.46], [0.31, 2.57], [0.295, 2.63],
+      [0.045, 0.0], [0.085, 0.1], [0.15, 0.23], [0.23, 0.39], [0.3, 0.56],
+      [0.345, 0.73], [0.355, 0.9], [0.34, 1.06], [0.31, 1.17], [0.295, 1.23],
     ],
     wallThickness: 0.023,
-    wineBottom: 1.4,
-    wineFill: 1.98,
+    fillLevel: 0.58,
   },
   {
     key: "flute",
     label: "플루트",
     desc: "샴페인·스파클링 (튤립형)",
+    footR: 0.46, // 좁은 발
+    stemLen: 1.55, // 길고 슬림한 기둥
     bowl: [
-      [0.045, 1.35], [0.085, 1.5], [0.14, 1.72], [0.19, 1.98], [0.225, 2.26],
-      [0.235, 2.52], [0.225, 2.74], [0.205, 2.9], [0.2, 2.98],
+      [0.045, 0.0], [0.085, 0.15], [0.14, 0.37], [0.19, 0.63], [0.225, 0.91],
+      [0.235, 1.17], [0.225, 1.39], [0.205, 1.55], [0.2, 1.63],
     ],
     wallThickness: 0.02,
-    wineBottom: 1.35,
-    wineFill: 2.5,
+    fillLevel: 1.15,
   },
 ];
 
@@ -333,7 +343,11 @@ export default function FluidLab({
     // ── 잔 데이터 + 경계 SDF (MLS-MPM 에서 재활용) ────────────────────
     // 선택된 잔(glassType)으로 프로파일·채움을 구성. 발+기둥 공통 + 볼 형태별.
     const gdef = GLASSES[Math.min(Math.max(glassType ?? 0, 0), GLASSES.length - 1)];
-    const gProfile = [...GLASS_FOOT_STEM, ...gdef.bowl] as [number, number][];
+    // 발+기둥(잔별 footR·stemLen) 위에 볼(상대높이)을 stemLen 만큼 올려 붙인다.
+    const gProfile = [
+      ...footStem(gdef.footR, gdef.stemLen),
+      ...gdef.bowl.map(([r, y]) => [r, y + gdef.stemLen] as [number, number]),
+    ];
     const gMaxY = Math.max(...gProfile.map((p) => p[1])); // 림 높이(프로파일)
     const glass = {
       profile: gProfile,
@@ -1010,8 +1024,8 @@ export default function FluidLab({
     // 잔 속 와인 — 표면·부피 기반. 잔 내벽 프로파일 lathe 를 "수면까지만" 생성
     // (클립은 WebGPU 노드머티리얼에서 안 먹어 지오메트리로 제한) + 수면 disc.
     // 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
-    const GLASS_WINE_BOTTOM = gdef.wineBottom; // 컵 내부 바닥(프로파일 y, 잔별)
-    const GLASS_WINE_FILL = gdef.wineFill; // 수면(프로파일 y, 잔별 적정 채움)
+    const GLASS_WINE_BOTTOM = gdef.stemLen; // 컵 내부 바닥(=볼 바닥, 프로파일 y)
+    const GLASS_WINE_FILL = gdef.stemLen + gdef.fillLevel; // 수면(잔별 적정 채움)
     let liquidMesh: THREE.Mesh;
     let liquidGeo: THREE.BufferGeometry;
     let glassGroup: THREE.Group; // 유리+액체를 함께 기울이는 그룹(드래그 스월)
