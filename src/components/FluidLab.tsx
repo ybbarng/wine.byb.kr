@@ -1119,7 +1119,7 @@ export default function FluidLab() {
         renderer.clear();
         renderer.render(scene, camera);
         scene.background = savedBg;
-        glassMesh.visible = true;
+        glassMesh.visible = false; // [진단] 유리 숨김 — 보라가 유리 탓인지
         liquidMesh.material = liquidBodyMat;
         frameCount++;
         renderer.setRenderTarget(null);
