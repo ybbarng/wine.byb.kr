@@ -867,6 +867,11 @@ export default function FluidLab() {
     let gPrevX = 0; // 이전 프레임 잔 기울기(속도 계산)
     let gPrevZ = 0;
     let swDragging = false;
+    // 클릭(거의 안 움직임) → 자동 스월 3바퀴(일관된 동작 보기용).
+    let autoSwirl = false;
+    let autoSwirlT = 0;
+    let downX = 0;
+    let downY = 0;
 
     // 고정 토폴로지 그리드 생성(정점 위치는 rebuildLiquid 가 매 프레임 채움).
     function buildLiquid() {
@@ -1072,12 +1077,28 @@ export default function FluidLab() {
         const GMAX = 0.32;
         let gtx = 0;
         let gtz = 0;
-        if (swDragging) {
+        if (autoSwirl) {
+          // 자동 스월: 잔 기울기를 원으로 3바퀴(진폭 ramp in/out).
+          const TOTAL = 2.0;
+          const ROT = 3;
+          const ph = (2 * Math.PI * ROT * autoSwirlT) / TOTAL;
+          const env = Math.max(
+            0,
+            Math.min(autoSwirlT / 0.3, 1) *
+              Math.min((TOTAL - autoSwirlT) / 0.4, 1),
+          );
+          const amp = GMAX * 0.85 * env;
+          gtx = amp * Math.cos(ph);
+          gtz = amp * Math.sin(ph);
+          autoSwirlT += dt;
+          if (autoSwirlT >= TOTAL) autoSwirl = false;
+        } else if (swDragging) {
           // 마우스 위=잔 먼쪽, 아래=가까운쪽(더 자연스러움) → Y 부호 반전.
           gtx = Math.max(-GMAX, Math.min(GMAX, (mStartY - mCurY) * GAMP));
           gtz = Math.max(-GMAX, Math.min(GMAX, (mCurX - mStartX) * GAMP));
         }
-        const gEase = swDragging ? 0.38 : 0.14; // 놓으면 부드럽게 세워짐(안 흔들림)
+        // 자동 스월 중엔 잔이 프로그램대로 돌게 빠르게 추종.
+        const gEase = swDragging || autoSwirl ? 0.5 : 0.14;
         gTiltX += (gtx - gTiltX) * gEase;
         gTiltZ += (gtz - gTiltZ) * gEase;
         // 잔 기울기 속도 → 와인 슬로싱 구동. 잔을 움직이면 와인이 출렁이고,
@@ -1247,14 +1268,22 @@ export default function FluidLab() {
 
       // 스월링 입력: 드래그로 잔을 기울인다(WineGlass.tsx 방식).
       const onSwDown = (e: PointerEvent) => {
+        autoSwirl = false; // 새 조작이 자동 스월 중단
         swDragging = true;
         mStartX = e.clientX;
         mStartY = e.clientY;
         mCurX = e.clientX;
         mCurY = e.clientY;
+        downX = e.clientX;
+        downY = e.clientY;
       };
       const onSwUp = () => {
         swDragging = false;
+        // 거의 안 움직였으면 클릭 → 자동 스월 3바퀴.
+        if (Math.hypot(mCurX - downX, mCurY - downY) < 6) {
+          autoSwirl = true;
+          autoSwirlT = 0;
+        }
       };
       const onSwMove = (e: PointerEvent) => {
         if (!swDragging) return;
