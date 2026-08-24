@@ -835,6 +835,13 @@ export default function FluidLab() {
     }
     // biome-ignore lint/suspicious/noExplicitAny: BufferAttribute
     let liquidPosAttr: any;
+    // Beer–Lambert: 와인 뒷면 거리 버퍼(두께=back−front) + 뒷면 재질 + 본 재질.
+    // biome-ignore lint/suspicious/noExplicitAny: TSL RT/Material
+    let wineThickRT: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL material
+    let wineBackMat: any;
+    // biome-ignore lint/suspicious/noExplicitAny: TSL material
+    let liquidBodyMat: any;
     let liqV0 = 0; // 목표 부피(upright 기준) — 기울여도 이만큼 유지
     let liqH = GLASS_WINE_FILL; // 현재 수면 높이(부피 보존으로 조절)
     let liqVol = 0; // 이번 rebuild 의 부피
@@ -952,29 +959,30 @@ export default function FluidLab() {
       buildLiquid();
       liqV0 = liqVol; // upright 부피를 목표로(기울여도 유지)
       liqH = GLASS_WINE_FILL;
-      // 액체 재질: 불투명(유리 뒤로 확실히 보임) + 반투명 "흉내".
-      //  - 깊은 중심(정면, fres 낮음): 거의 검은 버건디
-      //  - 얇은 가장자리(fres 높음): 루비빛 발광(빛이 통과하는 듯) = emissive
-      //  - 표면: 광택 반사(환경) = 젖은 액체 하이라이트
-      // 와인색은 "빛이 통과해 빛나는" 색(에미시브)으로 직접 칠한다(HDR·하늘 반사에
-      // 오염 안 되게). 디퓨즈는 최소, 광택 반사만 은은히. 두꺼운 중심=깊은 크림슨,
-      // 얇은 가장자리=밝은 루비(단 수면=윗면엔 가장자리 밝기 안 걸리게 sideMask).
+      // 액체 재질: 불투명(유리 뒤로 확실히 보임) + 물리적 Beer–Lambert 흡수.
+      // 색을 프레넬로 흉내내지 않고, 시선이 와인을 실제로 통과하는 두께 d 로부터
+      // exp(−absorb·d) 로 계산 → 두꺼운 곳(수면 아래·중심) 검붉게, 얇은 가장자리
+      // 밝게가 물리적으로 나온다. 두께 = 뒷면거리(wineThickRT) − 앞면거리.
       const bodyMat = new A.MeshPhysicalNodeMaterial({
-        color: new THREE.Color(0x0a0205), // 디퓨즈 최소(색은 emissive 가 담당)
-        roughness: 0.22,
+        color: new THREE.Color(0x080103), // 디퓨즈 최소(색은 흡수가 담당)
+        roughness: 0.15, // 매끈 → 젖은 표면 광택
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.07; // 광택 최소(푸른 반사가 레드와 섞여 마젠타 방지)
+      bodyMat.envMapIntensity = 0.2; // 표면 광택(환경 반사)
       bodyMat.emissiveNode = Fn(() => {
-        const vd = normalize(positionView.negate());
-        const fres = pow(float(1).sub(normalView.dot(vd).abs()), 2.2);
-        const sideMask = float(1).sub(normalWorld.y.abs());
-        // 순수 레드(크림슨) — B>G 면 마젠타로 뜨므로 G≈B 로. 값 낮게(ACES 분홍 방지).
-        const deep = vec3(0.11, 0.009, 0.011); // 깊은 크림슨(두꺼운 중심)
-        const edge = vec3(0.32, 0.04, 0.045); // 루비(얇은 가장자리)
-        return mix(deep, edge, fres.mul(sideMask));
+        const frontDist = positionView.z.negate();
+        const backDist = texture(wineThickRT.texture, screenUV).x;
+        const thickness = backDist.sub(frontDist).max(0.0);
+        // 흡수계수(world 단위): R 적게, G/B 많이 → 두꺼울수록 검붉게.
+        const absorb = vec3(9.0, 40.0, 33.0);
+        return exp(absorb.mul(thickness).negate());
       })();
+      liquidBodyMat = bodyMat;
+      // 뒷면 거리 재질(두께 계산용) — 뒷면만, view 거리 R 채널에.
+      wineBackMat = new A.MeshBasicNodeMaterial();
+      wineBackMat.colorNode = Fn(() => vec4(positionView.z.negate(), 0, 0, 1))();
+      wineBackMat.side = THREE.BackSide;
       liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
       liquidMesh.frustumCulled = false;
@@ -1096,6 +1104,18 @@ export default function FluidLab() {
           liqH += (liqV0 - liqVol) / (liqFoot || 1);
           liqH = Math.max(GLASS_WINE_BOTTOM + 0.1, Math.min(liqH, 2.7));
         }
+        // 와인 뒷면 거리 → wineThickRT (Beer–Lambert 두께용). 유리·병·배경 끔.
+        const savedBg = scene.background;
+        scene.background = null;
+        glassMesh.visible = false;
+        liquidMesh.material = wineBackMat;
+        renderer.setRenderTarget(wineThickRT);
+        renderer.setClearColor(0x000000, 1);
+        renderer.clear();
+        renderer.render(scene, camera);
+        scene.background = savedBg;
+        glassMesh.visible = true;
+        liquidMesh.material = liquidBodyMat;
         frameCount++;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
@@ -1270,6 +1290,9 @@ export default function FluidLab() {
       depthRT.texture.type = THREE.FloatType;
       // 잔 뺀 장면(배경+병+와인) — 잔이 이걸 굴절해서 샘플(직접 굴절)
       sceneRT = new THREE.RenderTarget(rtW, rtH);
+      // 와인 뒷면 거리(Beer–Lambert 두께 계산)
+      wineThickRT = new THREE.RenderTarget(rtW, rtH);
+      wineThickRT.texture.type = THREE.FloatType;
       blurRT = new THREE.RenderTarget(rtW, rtH);
       blurRT.texture.type = THREE.FloatType;
       blurRT2 = new THREE.RenderTarget(rtW, rtH);
