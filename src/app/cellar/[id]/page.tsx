@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
+import { NoteActions } from "@/features/cellar/note-actions";
 import { getTastingNote } from "@/features/cellar/queries";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
 import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
@@ -45,12 +46,12 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
       <SiteHeader />
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 pb-24">
-        <Link
-          href="/cellar"
-          className="mt-6 inline-block text-sm text-rose/60 hover:text-foreground"
-        >
-          ← 셀러
-        </Link>
+        <div className="mt-6 flex items-center justify-between gap-4">
+          <Link href="/cellar" className="text-sm text-rose/60 hover:text-foreground">
+            ← 셀러
+          </Link>
+          <NoteActions id={note.id} />
+        </div>
 
         {/* 와인 히어로 */}
         <header className="mt-4">
