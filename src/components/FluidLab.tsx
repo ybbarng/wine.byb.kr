@@ -31,6 +31,7 @@ import {
   pow,
   screenUV,
   sin,
+  smoothstep,
   struct,
   texture,
   uniform,
@@ -996,18 +997,21 @@ export default function FluidLab({
       // 밝게가 물리적으로 나온다. 두께 = 뒷면거리(wineThickRT) − 앞면거리.
       const bodyMat = new A.MeshPhysicalNodeMaterial({
         color: new THREE.Color(0x080103), // 디퓨즈 최소(색은 흡수가 담당)
-        roughness: 0.15, // 매끈 → 젖은 표면 광택
+        roughness: 0.09, // 더 매끈 → 젖은 수면의 또렷한 스펙큘러(액체 신호)
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.4; // 광택↑ — 옅은 와인이 "빛 받는" 느낌(형광 완화)
+      bodyMat.envMapIntensity = 0.55; // 반사↑ — 수면 하이라이트로 "젖은 액체" 느낌
       bodyMat.emissiveNode = Fn(() => {
         const frontDist = positionView.z.negate();
         const backDist = texture(wineThickRT.texture, screenUV).x;
         // 벽 두께(back−front, 최소 0.045). 수면(윗면)은 FrontSide 로 두께가 0 이
         // 되므로, 아래로 깊은 시선을 반영해 큰 두께(0.28)로 강제 → 어두운 수면.
         const tWall = backDist.sub(frontDist).max(0.045);
-        const surfaceMask = normalWorld.y.abs();
+        // 수면 마스크: 수위선 정점은 법선이 벽+수면 평균(~45°)이라 중간값이 되면
+        // 색 다른 "원반 테"가 생긴다. 임계를 낮춰(0.2~0.55) 그 경사 테두리를 수면
+        // 쪽(어두움)으로 흡수 → 테 고리 소멸. 진짜 벽(n.y≈0)만 벽 두께로.
+        const surfaceMask = smoothstep(0.2, 0.55, normalWorld.y.abs());
         const t = mix(tWall, float(0.28), surfaceMask).toVar();
         // Beer–Lambert exp(-k·d). 흡수계수는 uniform(프리셋 버튼으로 실시간 변경).
         const col = vec3(
@@ -1378,6 +1382,12 @@ export default function FluidLab({
           r += f * 0.7;
           g += f * 0.58;
           bl += f * 0.5;
+          // 가로 스트립 조명(모든 방위, 상단): 수평인 수면이 방위와 무관하게
+          // 이 밝은 띠를 카메라로 반사 → 젖은 하이라이트. 스튜디오 천장광 느낌.
+          const band = Math.exp(-((vv - 0.64) ** 2) / 0.004);
+          r += band * 0.95;
+          g += band * 0.82;
+          bl += band * 0.64;
           const i = (y * ew + x) * 4;
           edata[i] = r;
           edata[i + 1] = g;
