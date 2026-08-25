@@ -6,11 +6,16 @@ import { useEffect, useRef, useState } from "react";
 import { BrandLogo } from "./BrandLogo";
 
 type SearchResult = {
-  slug: string;
+  kind: "region" | "grape" | "wine";
+  href: string;
   name: string;
-  nameKo: string;
   sub: string;
-  type: string;
+};
+
+const KIND_LABEL: Record<SearchResult["kind"], string> = {
+  region: "산지",
+  grape: "품종",
+  wine: "와인",
 };
 
 // 홈·와인 상세·검색 결과 페이지가 공유하는 상단 헤더.
@@ -51,10 +56,10 @@ export function ShowcaseHeader() {
     return () => window.removeEventListener("pointerdown", onDown);
   }, []);
 
-  const go = (slug: string) => {
+  const go = (href: string) => {
     setQuery("");
     setResults([]);
-    router.push(`/wine/${slug}`);
+    router.push(href);
   };
 
   return (
@@ -83,14 +88,15 @@ export function ShowcaseHeader() {
         {results.length > 0 && (
           <ul className="absolute left-0 right-0 mt-2 overflow-hidden rounded-2xl border border-foreground/10 bg-card/95 p-1 shadow-lg shadow-foreground/10 backdrop-blur">
             {results.map((r) => (
-              <li key={r.slug}>
+              <li key={`${r.kind}:${r.href}`}>
                 <button
                   type="button"
-                  onClick={() => go(r.slug)}
+                  onClick={() => go(r.href)}
                   className="flex w-full items-baseline gap-2 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/8"
                 >
+                  <span className="w-8 shrink-0 text-[11px] text-gold">{KIND_LABEL[r.kind]}</span>
                   <span className="truncate">{r.name}</span>
-                  {r.sub ? <span className="shrink-0 text-muted">· {r.sub}</span> : null}
+                  {r.sub ? <span className="shrink-0 truncate text-muted">· {r.sub}</span> : null}
                 </button>
               </li>
             ))}
