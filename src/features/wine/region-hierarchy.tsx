@@ -1,6 +1,8 @@
-// 와인 산지의 계층(국가 → 지역 → 마을 → 밭)을 단계별로 짙어지는 색으로 보여주고,
-// 각 레벨이 무엇을 뜻하는지 설명한다. 좁아질수록 떼루아가 구체적이다.
+// 와인 산지의 계층(국가 → 지역 → 마을 → 밭)을 단계별로 짙어지는 색으로 보여준다.
+// 각 레벨이 무엇을 뜻하는지(일반 설명)와, 실제 그 곳이 어떤 산지인지(구체 설명)를 함께.
 // 이 와인은 국가·지역까지 기록돼 있고, 마을·밭은 개념으로 설명한다.
+
+import { countryInfo, regionInfo } from "./region-info";
 
 interface Level {
   key: string;
@@ -56,11 +58,15 @@ export function RegionHierarchy({
 }) {
   // 국가·지역에는 이 와인의 실제 값을, 마을·밭에는 "개념"을 채운다.
   const values = [country, regionName, null, null];
+  // 실제 그 곳에 대한 구체 설명(국가·지역만).
+  const region = regionInfo(regionName);
+  const details = [countryInfo(country), region?.desc ?? null, null, null];
 
   return (
     <div className="flex flex-col gap-1.5">
       {LEVELS.map((lv, i) => {
         const value = values[i];
+        const detail = details[i];
         return (
           <div
             key={lv.key}
@@ -75,7 +81,10 @@ export function RegionHierarchy({
                 <span className="text-sm text-rose/40">개념</span>
               )}
             </div>
-            <p className="mt-1 text-xs leading-relaxed text-rose/60">{lv.desc}</p>
+            {detail ? (
+              <p className="mt-1.5 text-sm leading-relaxed text-foreground/85">{detail}</p>
+            ) : null}
+            <p className="mt-1 text-xs leading-relaxed text-rose/50">{lv.desc}</p>
           </div>
         );
       })}
