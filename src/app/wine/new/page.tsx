@@ -15,7 +15,7 @@ export default function NewWinePage() {
       <main className="mx-auto w-full max-w-xl flex-1 px-6 pb-24">
         <header className="mt-6">
           <h1 className="font-serif text-3xl tracking-tight text-foreground">새 와인</h1>
-          <p className="mt-2 text-sm text-rose/60">
+          <p className="mt-2 text-sm text-muted/60">
             목록에 없는 와인을 등록합니다. 이름만 있으면 되고, 나머지는 나중에 채워도 됩니다.
           </p>
         </header>

@@ -18,14 +18,14 @@ export async function generateMetadata({ params }: PageProps<"/cellar/[id]">): P
 }
 
 function Badge({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-md bg-wine/40 px-2 py-1 text-xs text-rose/80">{children}</span>;
+  return <span className="rounded-md bg-wine/40 px-2 py-1 text-xs text-muted/80">{children}</span>;
 }
 
 function DetailRow({ label, value }: { label: string; value: string | null }) {
   if (!value) return null;
   return (
-    <div className="flex gap-3 border-t border-rose/10 py-2.5 text-sm first:border-t-0">
-      <dt className="w-20 shrink-0 text-rose/50">{label}</dt>
+    <div className="flex gap-3 border-t border-foreground/10 py-2.5 text-sm first:border-t-0">
+      <dt className="w-20 shrink-0 text-muted/50">{label}</dt>
       <dd className="text-foreground">{value}</dd>
     </div>
   );
@@ -47,7 +47,7 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 pb-24">
         <div className="mt-6 flex items-center justify-between gap-4">
-          <Link href="/cellar" className="text-sm text-rose/60 hover:text-foreground">
+          <Link href="/cellar" className="text-sm text-muted/60 hover:text-foreground">
             ← 셀러
           </Link>
           <NoteActions id={note.id} />
@@ -58,13 +58,13 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
           <h1 className="font-serif text-3xl leading-tight tracking-tight text-foreground sm:text-4xl">
             {name.primary}
           </h1>
-          {name.alias ? <p className="mt-1 text-rose/50">{name.alias}</p> : null}
+          {name.alias ? <p className="mt-1 text-muted/50">{name.alias}</p> : null}
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <Badge>{wineTypeLabel(wine.type)}</Badge>
             {note.vintageYear ? <Badge>{note.vintageYear} 빈티지</Badge> : null}
             {wine.abv != null ? <Badge>{wine.abv}%</Badge> : null}
           </div>
-          <p className="mt-3 text-sm text-rose/70">
+          <p className="mt-3 text-sm text-muted/70">
             {joinDot(wine.producer?.nameKo, wine.region?.nameKo, country)}
           </p>
           <Link
@@ -85,16 +85,16 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
                   <span className="w-32 shrink-0 text-foreground">{g.grape.nameKo}</span>
                   {g.percent != null ? (
                     <div className="flex flex-1 items-center gap-2">
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-card/60">
                         <div
                           className="h-full rounded-full bg-wine-bright"
                           style={{ width: `${g.percent}%` }}
                         />
                       </div>
-                      <span className="w-10 shrink-0 text-right text-rose/60">{g.percent}%</span>
+                      <span className="w-10 shrink-0 text-right text-muted/60">{g.percent}%</span>
                     </div>
                   ) : (
-                    <span className="text-rose/40">비율 미상</span>
+                    <span className="text-muted/40">비율 미상</span>
                   )}
                 </li>
               ))}
@@ -127,7 +127,7 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
                 <li key={o.id}>
                   <Link
                     href={`/cellar/${o.id}`}
-                    className="flex items-baseline justify-between gap-3 py-1.5 text-sm text-rose/70 hover:text-foreground"
+                    className="flex items-baseline justify-between gap-3 py-1.5 text-sm text-muted/70 hover:text-foreground"
                   >
                     <span className="font-mono text-gold/70">{formatDate(o.drankOn)}</span>
                     <span>{formatKRW(o.purchasePrice)}</span>

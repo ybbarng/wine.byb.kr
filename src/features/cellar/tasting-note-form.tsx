@@ -48,12 +48,12 @@ function toDefaults(n: ExistingNote): TastingNoteFormInput {
 }
 
 const inputClass =
-  "w-full rounded-lg border border-rose/20 bg-white/5 px-3 py-2 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";
+  "w-full rounded-lg border border-foreground/20 bg-card/60 px-3 py-2 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-sm text-rose/70">{label}</span>
+      <span className="text-sm text-muted/70">{label}</span>
       {children}
     </label>
   );
@@ -205,14 +205,14 @@ export function TastingNoteForm({
                 setValue("rating", n === rating ? undefined : n, { shouldValidate: true })
               }
               className={`text-2xl transition-colors ${
-                rating != null && n <= rating ? "text-gold" : "text-rose/25 hover:text-rose/50"
+                rating != null && n <= rating ? "text-gold" : "text-muted/25 hover:text-muted/50"
               }`}
               aria-label={`${n}점`}
             >
               ★
             </button>
           ))}
-          {rating != null ? <span className="ml-2 text-sm text-rose/60">{rating}점</span> : null}
+          {rating != null ? <span className="ml-2 text-sm text-muted/60">{rating}점</span> : null}
         </div>
       </Field>
 
@@ -240,14 +240,14 @@ export function TastingNoteForm({
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-xl bg-wine px-5 py-3 font-medium text-foreground transition-colors hover:bg-wine-bright disabled:opacity-40"
+          className="rounded-xl bg-wine px-5 py-3 font-medium text-on-accent transition-colors hover:bg-wine-bright disabled:opacity-40"
         >
           {isSubmitting ? "저장 중…" : isEdit ? "수정 저장" : "기록 저장"}
         </button>
         <button
           type="button"
           onClick={() => router.push(isEdit && existing ? `/cellar/${existing.id}` : "/cellar")}
-          className="text-sm text-rose/50 transition-colors hover:text-foreground"
+          className="text-sm text-muted/50 transition-colors hover:text-foreground"
         >
           취소
         </button>

@@ -21,7 +21,7 @@ export default async function NewTastingNotePage({ searchParams }: PageProps<"/c
       <main className="mx-auto w-full max-w-xl flex-1 px-6 pb-24">
         <header className="mt-6">
           <h1 className="font-serif text-3xl tracking-tight text-foreground">새 기록</h1>
-          <p className="mt-2 text-sm text-rose/60">마신 와인을 기록합니다.</p>
+          <p className="mt-2 text-sm text-muted/60">마신 와인을 기록합니다.</p>
         </header>
         <AdminGuard>
           <TastingNoteForm wines={wines} defaultWineId={wineId} />

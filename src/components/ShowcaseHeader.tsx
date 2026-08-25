@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { WineMark } from "./WineMark";
+import { BrandLogo } from "./BrandLogo";
 
 type SearchResult = {
   slug: string;
@@ -59,12 +59,7 @@ export function ShowcaseHeader() {
 
   return (
     <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-4 px-6 py-3">
-      <Link href="/" aria-label="wine.byb.kr 홈" className="group flex shrink-0 items-center gap-2">
-        <WineMark className="h-6 w-6 text-wine transition-colors group-hover:text-wine-bright" />
-        <span className="-translate-y-[2px] font-logo text-[1.7rem] font-semibold lowercase leading-none tracking-tight text-foreground">
-          wine
-        </span>
-      </Link>
+      <BrandLogo />
 
       <div ref={boxRef} className="relative w-full max-w-md">
         <svg
