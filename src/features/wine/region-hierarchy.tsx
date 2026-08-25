@@ -2,6 +2,7 @@
 // 각 레벨이 무엇을 뜻하는지(일반 설명)와, 실제 그 곳이 어떤 산지인지(구체 설명)를 함께.
 // 이 와인은 국가·지역까지 기록돼 있고, 마을·밭은 개념으로 설명한다.
 
+import Link from "next/link";
 import { countryInfo, regionInfo } from "./region-info";
 
 interface Level {
@@ -78,12 +79,18 @@ const TEXT = {
 export function RegionHierarchy({
   country,
   regionName,
+  countryHref = null,
+  regionHref = null,
 }: {
   country: string | null;
   regionName: string | null;
+  /** 국가·지역 단계에서 클릭 시 이동할 지역 페이지 경로(있을 때만). */
+  countryHref?: string | null;
+  regionHref?: string | null;
 }) {
   // 국가·지역에는 이 와인의 실제 값을, 마을·밭에는 "개념"을 채운다.
   const values = [country, regionName, null, null];
+  const hrefs = [countryHref, regionHref, null, null];
   // 실제 그 곳에 대한 구체 설명(국가·지역만).
   const region = regionInfo(regionName);
   const details = [countryInfo(country), region?.desc ?? null, null, null];
@@ -92,6 +99,7 @@ export function RegionHierarchy({
     <div className="flex flex-col gap-1.5">
       {LEVELS.map((lv, i) => {
         const value = values[i];
+        const href = hrefs[i];
         const detail = details[i];
         const t = lv.dark ? TEXT.dark : TEXT.light;
         return (
@@ -103,7 +111,16 @@ export function RegionHierarchy({
               <span className={`text-xs tracking-wide ${t.label}`}>{lv.key}</span>
               <span className={`text-[10px] uppercase tracking-wider ${t.en}`}>{lv.en}</span>
               {value ? (
-                <span className={`font-serif ${t.value}`}>{value}</span>
+                href ? (
+                  <Link
+                    href={href}
+                    className={`font-serif underline decoration-1 underline-offset-2 transition-opacity hover:opacity-75 ${t.value}`}
+                  >
+                    {value}
+                  </Link>
+                ) : (
+                  <span className={`font-serif ${t.value}`}>{value}</span>
+                )
               ) : (
                 <span className={`text-sm ${t.hint}`}>개념</span>
               )}

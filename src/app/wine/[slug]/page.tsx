@@ -65,7 +65,16 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
         country || wine.region ? (
           <div>
             <h2 className="mb-2 text-xs uppercase tracking-wide text-muted">산지 계층</h2>
-            <RegionHierarchy country={country} regionName={wine.region?.nameKo ?? null} />
+            <RegionHierarchy
+              country={country}
+              regionName={wine.region?.nameKo ?? null}
+              regionHref={region ? `/region/${region.slug}` : null}
+              countryHref={
+                region?.parent && region.parent.nameKo === country
+                  ? `/region/${region.parent.slug}`
+                  : null
+              }
+            />
           </div>
         ) : null
       }
@@ -79,7 +88,31 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
       <h1 className="mt-1 font-serif text-2xl leading-tight text-foreground">{name.primary}</h1>
       {name.alias ? <p className="text-sm text-muted">{name.alias}</p> : null}
       <p className="mt-2 text-sm text-foreground/80">
-        {joinDot(wine.producer?.nameKo, wine.region?.nameKo, country) || "정보 준비 중"}
+        {(() => {
+          const parts: React.ReactNode[] = [];
+          if (wine.producer?.nameKo) parts.push(wine.producer.nameKo);
+          if (region) {
+            parts.push(
+              <Link
+                key="region"
+                href={`/region/${region.slug}`}
+                className="underline decoration-foreground/25 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/60"
+              >
+                {region.nameKo}
+              </Link>
+            );
+          } else if (wine.region?.nameKo) {
+            parts.push(wine.region.nameKo);
+          }
+          if (country) parts.push(country);
+          if (parts.length === 0) return "정보 준비 중";
+          return parts.map((p, i) => (
+            <span key={i}>
+              {i > 0 ? " · " : ""}
+              {p}
+            </span>
+          ));
+        })()}
       </p>
       {wine.classification ? (
         <div className="mt-2">
