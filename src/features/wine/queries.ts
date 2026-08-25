@@ -1,9 +1,11 @@
 import { db } from "@/lib/db";
+import { decodeSlug } from "@/lib/slug";
 
 // 와인 상세(탐험의 핵심 화면)용 조회.
 
 /** slug로 와인 + 생산자·지역·품종·내 기록, 그리고 유사 와인을 가져온다. */
-export async function getWineBySlug(slug: string) {
+export async function getWineBySlug(rawSlug: string) {
+  const slug = decodeSlug(rawSlug);
   const wine = await db.wine.findUnique({
     where: { slug },
     include: {

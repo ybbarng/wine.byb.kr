@@ -1,8 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { buildSearchResults } from "@/features/wine/search";
 import { db } from "@/lib/db";
-import { joinDot } from "@/lib/format";
-import { wineTypeLabel } from "@/lib/wine";
 
 export const dynamic = "force-dynamic";
 
@@ -36,27 +35,5 @@ export async function GET(request: NextRequest) {
     }),
   ]);
 
-  // 산지·품종을 먼저(넓은 분류), 그다음 와인. 전체 8개로 자른다.
-  const results = [
-    ...regions.map((r) => ({
-      kind: "region" as const,
-      href: `/region/${r.slug}`,
-      name: r.nameKo,
-      sub: r.country ?? r.parent?.nameKo ?? "산지",
-    })),
-    ...grapes.map((g) => ({
-      kind: "grape" as const,
-      href: `/grape/${g.slug}`,
-      name: g.nameKo,
-      sub: g.nameLocal ?? "",
-    })),
-    ...wines.map((w) => ({
-      kind: "wine" as const,
-      href: `/wine/${w.slug}`,
-      name: w.nameLocal ?? w.nameKo,
-      sub: joinDot(w.region?.nameKo, wineTypeLabel(w.type)),
-    })),
-  ].slice(0, 8);
-
-  return NextResponse.json({ results });
+  return NextResponse.json({ results: buildSearchResults({ regions, grapes, wines }) });
 }

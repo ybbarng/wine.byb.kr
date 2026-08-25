@@ -4,7 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { NewEntryButton } from "@/features/cellar/new-entry-button";
 import { getCellarEntries, getCellarStats } from "@/features/cellar/queries";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
-import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
+import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
 export const metadata: Metadata = {
   title: "셀러",
@@ -56,7 +56,11 @@ export default async function CellarPage() {
         <section className="mt-4 flex flex-wrap gap-x-8 gap-y-3 text-sm">
           <DistRow
             label="종류"
-            items={stats.byType.map((t) => ({ ...t, label: wineTypeLabel(t.label) }))}
+            items={stats.byType.map((t) => ({
+              label: wineTypeLabel(t.label),
+              count: t.count,
+              href: WINE_TYPE_LABELS[t.label] ? `/type/${t.label}` : undefined,
+            }))}
           />
           <DistRow label="국가" items={stats.byCountry} />
         </section>
@@ -114,13 +118,33 @@ export default async function CellarPage() {
   );
 }
 
-function DistRow({ label, items }: { label: string; items: { label: string; count: number }[] }) {
+function DistRow({
+  label,
+  items,
+}: {
+  label: string;
+  items: { label: string; count: number; href?: string }[];
+}) {
   if (items.length === 0) return null;
   return (
     <div className="flex items-baseline gap-2">
       <span className="text-muted/50">{label}</span>
       <span className="text-muted/80">
-        {items.map((it) => `${it.label} ${it.count}`).join(" · ")}
+        {items.map((it, i) => (
+          <span key={it.label}>
+            {i > 0 ? " · " : ""}
+            {it.href ? (
+              <Link
+                href={it.href}
+                className="underline-offset-2 transition-colors hover:text-foreground hover:underline"
+              >
+                {it.label} {it.count}
+              </Link>
+            ) : (
+              `${it.label} ${it.count}`
+            )}
+          </span>
+        ))}
       </span>
     </div>
   );

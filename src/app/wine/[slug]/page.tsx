@@ -8,7 +8,7 @@ import { getWineBySlug } from "@/features/wine/queries";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 import { formatDate, formatKRW } from "@/lib/format";
-import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
+import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
 export const dynamic = "force-dynamic";
 
@@ -102,7 +102,16 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
       {/* 헤더: 이름·타입 */}
       <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
         <span className="h-3 w-3 rounded-full border border-foreground/20 bg-wine" />
-        {wineTypeLabel(wine.type)}
+        {wine.type && WINE_TYPE_LABELS[wine.type] ? (
+          <Link
+            href={`/type/${wine.type}`}
+            className="underline decoration-transparent underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/50"
+          >
+            {wineTypeLabel(wine.type)}
+          </Link>
+        ) : (
+          wineTypeLabel(wine.type)
+        )}
         {wine.abv != null ? <span>· {wine.abv}%</span> : null}
       </div>
       <h1 className="mt-1 font-serif text-2xl leading-tight text-foreground">{name.primary}</h1>
@@ -129,10 +138,13 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
           <ul className="flex flex-col gap-2">
             {wine.grapes.map((g) => (
               <li key={g.id} className="flex items-center gap-3 text-sm">
-                <span className="flex w-28 shrink-0 items-center gap-1.5 text-foreground">
+                <Link
+                  href={`/grape/${g.grape.slug}`}
+                  className="flex w-28 shrink-0 items-center gap-1.5 text-foreground underline decoration-transparent underline-offset-2 transition-colors hover:text-wine hover:decoration-wine/50"
+                >
                   <GrapeColorDot nameKo={g.grape.nameKo} />
                   {g.grape.nameKo}
-                </span>
+                </Link>
                 {g.percent != null ? (
                   <div className="flex flex-1 items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10">
