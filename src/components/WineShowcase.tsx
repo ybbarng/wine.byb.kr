@@ -106,6 +106,7 @@ export default function WineShowcase() {
           wineAbsorb={wine.absorb}
           glassType={wine.glass}
           bgColor={CANVAS_BG}
+          swirlScale={0.5}
         />
       </div>
 

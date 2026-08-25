@@ -250,10 +250,12 @@ export default function FluidLab({
   wineAbsorb,
   glassType,
   bgColor,
+  swirlScale,
 }: {
   glassType?: number;
   wineAbsorb?: [number, number, number];
   bgColor?: string; // 지정 시 배경을 이 단색으로(사이트 배경과 매끄럽게). 미지정=따뜻한 HDR.
+  swirlScale?: number; // 최대 스월 기울기 배율(기본 1). 좁은 컨테이너(홈)에선 <1 로 줄여 영역 이탈 방지.
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // 와인 흡수계수 uniform(실시간 색 변경). setup 에서 채워지고 prop 으로 갱신.
@@ -1375,7 +1377,7 @@ export default function FluidLab({
         const dt = 1 / 60;
         // 잔 = 마우스 추종. 드래그 시작점 기준 오프셋으로 기울고, 놓으면 세워진다.
         const GAMP = 0.007; // px → rad
-        const GMAX = 0.32;
+        const GMAX = 0.32 * (swirlScale ?? 1); // 최대 잔 기울기(좁은 홈은 축소)
         let gtx = 0;
         let gtz = 0;
         if (autoSwirl) {
