@@ -1,6 +1,7 @@
 "use client";
 
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { FeatureCollection } from "geojson";
 import type { FilterSpecification, LngLatBoundsLike, Map as MlMap } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 import { englishCountry } from "./country-names";
@@ -38,6 +39,21 @@ export function RegionMap({ country, regionName, fallback, label }: Props) {
 
       const geo = countryGeo(country);
       const enName = englishCountry(country);
+
+      // 이 나라의 산지 폴리곤(있으면 원형 대신 실제 경계로 채색). 없으면 null → 원형.
+      let regionShapes: FeatureCollection | null = null;
+      if (country) {
+        try {
+          const all = (await fetch("/geo/region-shapes.geojson").then((r) =>
+            r.json()
+          )) as FeatureCollection;
+          const mine = all.features.filter((f) => f.properties?.country === country);
+          if (mine.length > 0) regionShapes = { type: "FeatureCollection", features: mine };
+        } catch {
+          regionShapes = null;
+        }
+        if (cancelled || !ref.current) return;
+      }
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       // 처음부터 국가에 맞춰 열어 스케일이 어긋나지 않게 한다.
@@ -83,8 +99,46 @@ export function RegionMap({ country, regionName, fallback, label }: Props) {
           });
         }
 
-        // 2) 주요 산지를 원형 영역으로. 이 와인 산지는 gold, 다른 산지는 청록.
-        if (geo) {
+        // 2a) 산지 폴리곤이 있으면 실제 경계로 채색. 이 와인 산지=gold, 다른 산지=청록.
+        if (regionShapes) {
+          const thisKey =
+            regionShapes.features
+              .map((f) => String(f.properties?.region ?? ""))
+              .find((r) => r && regionName?.includes(r)) ?? "__none__";
+          m.addSource("region-shapes", { type: "geojson", data: regionShapes });
+          m.addLayer({
+            id: "region-fill",
+            type: "fill",
+            source: "region-shapes",
+            paint: {
+              "fill-color": ["case", ["==", ["get", "region"], thisKey], THIS_REGION, OTHER_REGION],
+              "fill-opacity": 0.42,
+            },
+          });
+          m.addLayer({
+            id: "region-line",
+            type: "line",
+            source: "region-shapes",
+            paint: {
+              "line-color": ["case", ["==", ["get", "region"], thisKey], THIS_REGION, OTHER_REGION],
+              "line-width": 1.2,
+              "line-opacity": 0.75,
+            },
+          });
+          m.addLayer({
+            id: "region-shape-label",
+            type: "symbol",
+            source: "region-shapes",
+            layout: { "text-field": ["get", "region"], "text-size": 12 },
+            paint: {
+              "text-color": "#f4e9ec",
+              "text-halo-color": "#1a0510",
+              "text-halo-width": 1.4,
+            },
+          });
+        }
+        // 2b) 폴리곤이 없으면 주요 산지를 원형 영역으로.
+        else if (geo) {
           const matched = geo.regions.find((r) => regionName?.includes(r.name));
           const fc = {
             type: "FeatureCollection" as const,
