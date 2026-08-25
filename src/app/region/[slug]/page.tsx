@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
 import { getRegionBySlug } from "@/features/wine/collection-queries";
+import { countryFlag } from "@/features/wine/country-names";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { countryInfo, regionInfo } from "@/features/wine/region-info";
 import { wineGlassFor } from "@/features/wine/wine-glass";
@@ -88,10 +89,20 @@ export default async function RegionPage({ params }: PageProps<"/region/[slug]">
       <div className="text-xs uppercase tracking-wide text-muted">
         {isCountry ? "국가" : "산지"}
       </div>
-      <h1 className="mt-1 font-serif text-2xl leading-tight text-foreground">{region.nameKo}</h1>
+      <h1 className="mt-1 font-serif text-2xl leading-tight text-foreground">
+        {isCountry && countryFlag(region.nameKo) ? (
+          <span className="mr-1.5" aria-hidden>
+            {countryFlag(region.nameKo)}
+          </span>
+        ) : null}
+        {region.nameKo}
+      </h1>
       {region.nameLocal ? <p className="text-sm text-muted">{region.nameLocal}</p> : null}
-      {region.parent || region.country ? (
-        <p className="mt-2 text-sm text-foreground/80">
+      {!isCountry && (region.parent || region.country) ? (
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-foreground/80">
+          {countryFlag(region.parent?.nameKo ?? region.country) ? (
+            <span aria-hidden>{countryFlag(region.parent?.nameKo ?? region.country)}</span>
+          ) : null}
           {parentHref ? (
             <Link
               href={parentHref}

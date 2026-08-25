@@ -3,6 +3,7 @@
 // 이 와인은 국가·지역까지 기록돼 있고, 마을·밭은 개념으로 설명한다.
 
 import Link from "next/link";
+import { countryFlag } from "./country-names";
 import { countryInfo, regionInfo } from "./region-info";
 
 interface Level {
@@ -102,6 +103,8 @@ export function RegionHierarchy({
         const href = hrefs[i];
         const detail = details[i];
         const t = lv.dark ? TEXT.dark : TEXT.light;
+        // 국가 단계에는 이름 앞에 국기를 곁들인다.
+        const flag = i === 0 ? countryFlag(value) : null;
         return (
           <div
             key={lv.key}
@@ -110,6 +113,7 @@ export function RegionHierarchy({
             <div className="flex items-baseline gap-2">
               <span className={`text-xs tracking-wide ${t.label}`}>{lv.key}</span>
               <span className={`text-[10px] uppercase tracking-wider ${t.en}`}>{lv.en}</span>
+              {flag ? <span aria-hidden>{flag}</span> : null}
               {value ? (
                 href ? (
                   <Link
