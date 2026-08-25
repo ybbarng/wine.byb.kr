@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
+import { GrapeColorDot } from "@/features/wine/grape-color";
 import { getWineBySlug } from "@/features/wine/queries";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { wineGlassFor } from "@/features/wine/wine-glass";
@@ -128,7 +129,10 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
           <ul className="flex flex-col gap-2">
             {wine.grapes.map((g) => (
               <li key={g.id} className="flex items-center gap-3 text-sm">
-                <span className="w-28 shrink-0 text-foreground">{g.grape.nameKo}</span>
+                <span className="flex w-28 shrink-0 items-center gap-1.5 text-foreground">
+                  <GrapeColorDot nameKo={g.grape.nameKo} />
+                  {g.grape.nameKo}
+                </span>
                 {g.percent != null ? (
                   <div className="flex flex-1 items-center gap-2">
                     <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10">

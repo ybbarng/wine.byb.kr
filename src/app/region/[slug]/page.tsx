@@ -5,6 +5,7 @@ import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
 import { getRegionBySlug } from "@/features/wine/collection-queries";
 import { countryFlag } from "@/features/wine/country-names";
+import { GrapeColorDot } from "@/features/wine/grape-color";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { countryInfo, regionInfo } from "@/features/wine/region-info";
 import { wineGlassFor } from "@/features/wine/wine-glass";
@@ -146,10 +147,11 @@ export default async function RegionPage({ params }: PageProps<"/region/[slug]">
               <Link
                 key={g.slug}
                 href={`/grape/${g.slug}`}
-                className="rounded-full border border-foreground/12 bg-foreground/5 px-2.5 py-1 text-xs text-foreground/80 transition-colors hover:border-foreground/25 hover:bg-foreground/10"
+                className="inline-flex items-center gap-1.5 rounded-full border border-foreground/12 bg-foreground/5 px-2.5 py-1 text-xs text-foreground/80 transition-colors hover:border-foreground/25 hover:bg-foreground/10"
               >
+                <GrapeColorDot nameKo={g.nameKo} />
                 {g.nameKo}
-                {g.n > 1 ? <span className="ml-1 text-muted">{g.n}</span> : null}
+                {g.n > 1 ? <span className="ml-0.5 text-muted">{g.n}</span> : null}
               </Link>
             ))}
           </div>
