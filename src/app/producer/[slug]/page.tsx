@@ -5,6 +5,7 @@ import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
 import { getProducerBySlug } from "@/features/wine/collection-queries";
 import { countryFlag } from "@/features/wine/country-names";
+import { producerInfo } from "@/features/wine/producer-info";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,11 @@ export default async function ProducerPage({ params }: PageProps<"/producer/[slu
     rep?.type ?? "red",
     rep?.grapes.map((g) => g.grape.nameKo) ?? []
   );
+
+  // 큐레이션 소개·홈페이지(DB 값이 있으면 설명은 그걸 우선).
+  const curated = producerInfo(producer.nameKo, producer.nameLocal);
+  const description = producer.descriptionKo ?? curated?.desc ?? null;
+  const homepage = curated?.homepage ?? null;
 
   const country = region?.country ?? region?.parent?.nameKo ?? null;
   const fallback =
@@ -70,15 +76,25 @@ export default async function ProducerPage({ params }: PageProps<"/producer/[slu
       {producer.founded != null ? (
         <p className="mt-3 text-sm text-foreground/80">설립 {producer.founded}년</p>
       ) : null}
-      {producer.descriptionKo ? (
+      {description ? (
         <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-foreground/85">
-          {producer.descriptionKo}
+          {description}
         </p>
       ) : null}
       {producer.philosophy ? (
         <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-foreground/75">
           {producer.philosophy}
         </p>
+      ) : null}
+      {homepage ? (
+        <a
+          href={homepage}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-3 inline-flex items-center gap-1 text-sm text-gold underline decoration-gold/40 underline-offset-2 transition-colors hover:decoration-gold"
+        >
+          공식 홈페이지 ↗
+        </a>
       ) : null}
 
       <section className="mt-6">
