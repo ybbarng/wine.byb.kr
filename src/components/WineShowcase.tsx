@@ -15,11 +15,11 @@ const FluidLab = dynamic(() => import("./FluidLab"), {
   loading: () => null,
 });
 
-// 글라스 캔버스에 넘길 배경색(3D 씬 배경). ACES 톤매핑을 거쳐 화면엔 더 어둡게
-// 나온다: 입력 #1a0510 → 렌더 결과 #0b0004(측정값). 그래서 페이지 컨테이너 배경은
-// 렌더 결과(CANVAS_RENDERED)에 맞춰야 이음새가 사라진다.
-const CANVAS_BG = "#1a0510";
-const CANVAS_RENDERED = "#0b0004";
+// 글라스 캔버스에 넘길 배경색(3D 씬 배경, 화면에 보이는 배경). /lab 처럼 따뜻한
+// 톤이라 글라스가 잘 보인다. ACES 톤매핑을 거쳐 화면엔 다르게 나오므로, 페이지
+// 컨테이너 배경은 렌더 결과(CANVAS_RENDERED)에 맞춰 이음새를 없앤다.
+const CANVAS_BG = "#9a8168";
+const CANVAS_RENDERED = "#bda588"; // 위 색이 ACES 톤매핑 후 화면에 나오는 실제 색(측정)
 
 export default function WineShowcase() {
   const [selected, setSelected] = useState<ShowcaseWine | null>(null);
@@ -55,7 +55,7 @@ export default function WineShowcase() {
         <button
           type="button"
           onClick={() => setSelected(null)}
-          className="shrink-0 font-serif text-lg tracking-tight text-foreground"
+          className="shrink-0 font-serif text-lg tracking-tight text-[#3a1a12]"
         >
           wine<span className="text-gold">.</span>byb.kr
         </button>
