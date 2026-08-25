@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { decodeSlug } from "@/lib/slug";
+import { regionInfo } from "./region-info";
 
 // 산지/품종/타입 "컬렉션" 페이지용 조회. (러프 — 목록 + 대표 정보)
 const WINE_LIST_INCLUDE = {
@@ -28,6 +29,48 @@ export async function getRegionBySlug(rawSlug: string) {
     orderBy: { nameKo: "asc" },
   });
   return { region, wines, stats, producers };
+}
+
+export interface SimilarRegion {
+  slug: string;
+  nameKo: string;
+  country: string | null;
+  /** 겹치는 주력 품종(추천 이유). */
+  shared: string[];
+}
+
+// 비슷한 산지 — 내 DB에 실제로 있는 지역 중 주력 품종(큐레이션)이 겹치는 곳을 고른다.
+// DB에 있는 지역만 대상이라 링크가 늘 유효하다. 겹치는 품종 수로 정렬해 상위 4곳.
+export async function getSimilarRegions(
+  keyGrapes: string[] | undefined,
+  excludeIds: string[]
+): Promise<SimilarRegion[]> {
+  if (!keyGrapes || keyGrapes.length === 0) return [];
+  const mine = new Set(keyGrapes);
+  const rows = await db.region.findMany({
+    where: { level: "region", id: { notIn: excludeIds } },
+    select: { slug: true, nameKo: true, country: true },
+  });
+  const seen = new Set<string>(); // 큐레이션 이름 기준 중복 제거(지저분한 시드에 같은 산지가 여러 행)
+  const scored: (SimilarRegion & { score: number })[] = [];
+  for (const r of rows) {
+    const info = regionInfo(r.nameKo);
+    if (!info?.keyGrapes || !info.name || seen.has(info.name)) continue;
+    const shared = info.keyGrapes.filter((g) => mine.has(g));
+    if (shared.length === 0) continue;
+    seen.add(info.name);
+    scored.push({
+      slug: r.slug,
+      nameKo: r.nameKo,
+      country: r.country,
+      shared,
+      score: shared.length,
+    });
+  }
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4)
+    .map(({ score: _score, ...rest }) => rest);
 }
 
 /** 생산자 상세 — 생산자 + 지역 + 그 생산자의 와인. */

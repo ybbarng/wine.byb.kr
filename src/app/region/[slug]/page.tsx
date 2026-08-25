@@ -3,13 +3,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
-import { getRegionBySlug } from "@/features/wine/collection-queries";
+import { getRegionBySlug, getSimilarRegions } from "@/features/wine/collection-queries";
 import { countryFlag } from "@/features/wine/country-names";
 import { GrapeColorDot } from "@/features/wine/grape-color";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { countryInfo, regionInfo } from "@/features/wine/region-info";
 import { RegionMyStats } from "@/features/wine/region-my-stats";
 import { RegionProducers } from "@/features/wine/region-producers";
+import { SimilarRegions } from "@/features/wine/region-similar";
 import { RegionTerroir } from "@/features/wine/region-terroir";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 
@@ -78,6 +79,11 @@ export default async function RegionPage({ params }: PageProps<"/region/[slug]">
   // 국가 페이지면 하위 산지로, 지역 페이지면 상위(국가) 산지로 잇는다.
   const children = region.children;
   const parentHref = region.parent ? `/region/${region.parent.slug}` : null;
+
+  // 비슷한 산지: 주력 품종이 겹치는 다른 DB 산지. 자신·하위·상위는 제외.
+  const excludeIds = [region.id, ...children.map((c) => c.id)];
+  if (region.parentId) excludeIds.push(region.parentId);
+  const similar = await getSimilarRegions(curated?.keyGrapes, excludeIds);
 
   return (
     <WineDetailView
@@ -190,6 +196,8 @@ export default async function RegionPage({ params }: PageProps<"/region/[slug]">
         </h2>
         <WineList wines={wines} />
       </section>
+
+      <SimilarRegions regions={similar} />
     </WineDetailView>
   );
 }
