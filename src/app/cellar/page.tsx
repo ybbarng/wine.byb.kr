@@ -16,8 +16,8 @@ export const dynamic = "force-dynamic";
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-rose/15 bg-white/5 px-4 py-3">
-      <div className="text-xs text-rose/60">{label}</div>
+    <div className="rounded-xl border border-foreground/15 bg-card/60 px-4 py-3">
+      <div className="text-xs text-muted/60">{label}</div>
       <div className="mt-1 font-serif text-2xl text-foreground">{value}</div>
     </div>
   );
@@ -34,7 +34,7 @@ export default async function CellarPage() {
         <header className="mt-6 flex items-start justify-between gap-4">
           <div>
             <h1 className="font-serif text-4xl tracking-tight text-foreground">셀러</h1>
-            <p className="mt-2 text-rose/70">그동안 마신 와인 기록.</p>
+            <p className="mt-2 text-muted/70">그동안 마신 와인 기록.</p>
           </div>
           <div className="mt-2">
             <NewEntryButton />
@@ -74,26 +74,28 @@ export default async function CellarPage() {
                 e.vintageYear ? `${e.vintageYear} 빈티지` : null
               );
               return (
-                <li key={e.id} className="border-t border-rose/10 first:border-t-0">
+                <li key={e.id} className="border-t border-foreground/10 first:border-t-0">
                   <Link
                     href={`/cellar/${e.id}`}
-                    className="group flex flex-col gap-1 py-4 transition-colors hover:bg-white/[0.03] sm:flex-row sm:items-baseline sm:gap-4"
+                    className="group flex flex-col gap-1 py-4 transition-colors hover:bg-foreground/5 sm:flex-row sm:items-baseline sm:gap-4"
                   >
                     <time className="w-24 shrink-0 font-mono text-sm text-gold/80">
                       {formatDate(e.drankOn)}
                     </time>
                     <div className="min-w-0 flex-1">
-                      <div className="font-serif text-lg text-foreground group-hover:text-rose">
+                      <div className="font-serif text-lg text-foreground group-hover:text-wine">
                         {name.primary}
                       </div>
-                      {name.alias ? <div className="text-xs text-rose/40">{name.alias}</div> : null}
-                      <div className="mt-0.5 text-sm text-rose/60">{meta}</div>
+                      {name.alias ? (
+                        <div className="text-xs text-muted/40">{name.alias}</div>
+                      ) : null}
+                      <div className="mt-0.5 text-sm text-muted/60">{meta}</div>
                       {e.bodyText ? (
                         <p className="mt-1 line-clamp-1 text-sm text-muted">{e.bodyText}</p>
                       ) : null}
                     </div>
                     {e.purchasePrice != null ? (
-                      <div className="shrink-0 text-sm text-rose/70">
+                      <div className="shrink-0 text-sm text-muted/70">
                         {formatKRW(e.purchasePrice)}
                       </div>
                     ) : null}
@@ -116,8 +118,8 @@ function DistRow({ label, items }: { label: string; items: { label: string; coun
   if (items.length === 0) return null;
   return (
     <div className="flex items-baseline gap-2">
-      <span className="text-rose/50">{label}</span>
-      <span className="text-rose/80">
+      <span className="text-muted/50">{label}</span>
+      <span className="text-muted/80">
         {items.map((it) => `${it.label} ${it.count}`).join(" · ")}
       </span>
     </div>

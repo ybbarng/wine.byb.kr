@@ -9,12 +9,12 @@ import { wineTypeLabel } from "@/lib/wine";
 import { WINE_TYPES, type WineFormInput, type WineInput, wineSchema } from "./wine-schema";
 
 const inputClass =
-  "w-full rounded-lg border border-rose/20 bg-white/5 px-3 py-2 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";
+  "w-full rounded-lg border border-foreground/20 bg-card/60 px-3 py-2 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="flex flex-col gap-1.5">
-      <span className="text-sm text-rose/70">{label}</span>
+      <span className="text-sm text-muted/70">{label}</span>
       {children}
     </label>
   );
@@ -145,14 +145,14 @@ export function WineForm() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="rounded-xl bg-wine px-5 py-3 font-medium text-foreground transition-colors hover:bg-wine-bright disabled:opacity-40"
+          className="rounded-xl bg-wine px-5 py-3 font-medium text-on-accent transition-colors hover:bg-wine-bright disabled:opacity-40"
         >
           {isSubmitting ? "저장 중…" : "와인 등록"}
         </button>
         <button
           type="button"
           onClick={() => router.push("/cellar/new")}
-          className="text-sm text-rose/50 transition-colors hover:text-foreground"
+          className="text-sm text-muted/50 transition-colors hover:text-foreground"
         >
           취소
         </button>
