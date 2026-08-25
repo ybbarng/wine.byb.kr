@@ -57,7 +57,7 @@ export function WineDetailView({
       className="relative h-screen w-full overflow-hidden"
       style={{ backgroundColor: CANVAS_RENDERED }}
     >
-      <ShowcaseHeader />
+      <ShowcaseHeader hairline={false} />
 
       <div className="absolute inset-x-0 bottom-0 top-16 flex gap-4 px-6 pb-6">
         {/* 왼쪽: 글라스 (배경과 이음새 없이 떠 있음) */}
