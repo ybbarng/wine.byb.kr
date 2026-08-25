@@ -28,6 +28,7 @@
   --font-sans: "Pretendard Variable", var(--font-geist-sans), system-ui,
     sans-serif;
   --font-serif: var(--font-playfair);
+  --font-logo: var(--font-logo);
   --font-mono: var(--font-geist-mono);
 }
 

@@ -53,7 +53,7 @@ export default function WineShowcase() {
       style={{ backgroundColor: CANVAS_RENDERED }}
     >
       {/* ── 상단 고정 검색바 ── */}
-      <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-4 px-6 py-4">
+      <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-4 px-6 py-3">
         <button
           type="button"
           onClick={() => setSelected(null)}
@@ -61,9 +61,10 @@ export default function WineShowcase() {
           className="group flex shrink-0 items-center gap-2"
         >
           <WineMark className="h-6 w-6 text-wine transition-colors group-hover:text-wine-bright" />
-          <span className="font-serif text-lg leading-none tracking-tight text-foreground">
+          {/* Cormorant 는 leading-none 에서 글리프가 박스 아래쪽에 앉아 살짝 낮아
+              보인다 → 약간 위로 올려 아이콘·검색문구와 시각적 중앙을 맞춤. */}
+          <span className="-translate-y-[2px] font-logo text-[1.7rem] font-semibold lowercase leading-none tracking-tight text-foreground">
             wine
-            <span className="text-sm text-muted">.byb.kr</span>
           </span>
         </button>
         <div className="relative w-full max-w-md">
@@ -72,10 +73,10 @@ export default function WineShowcase() {
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            strokeWidth={1.7}
+            strokeWidth={2}
             strokeLinecap="round"
             aria-hidden="true"
-            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+            className="pointer-events-none absolute left-4 top-1/2 z-10 h-[18px] w-[18px] -translate-y-1/2 text-foreground/55"
           >
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4.2-4.2" />
@@ -119,6 +120,15 @@ export default function WineShowcase() {
             학습
           </a>
         </nav>
+        {/* 헤더 하단 헤어라인 — 와인/버건디 톤(--wine #6e1a33), 가장자리로 사라지는
+            그라데이션(가볍고 트인 느낌 유지 + 전체 와인 테마와 연결). */}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, rgba(110,26,51,0.15) 25%, rgba(110,26,51,0.15) 75%, transparent)",
+          }}
+        />
       </header>
 
       {/* ── 글라스(유지·이동) ── 중앙(랜딩) ↔ 좌측(검색 후). transform 만 바뀜.
