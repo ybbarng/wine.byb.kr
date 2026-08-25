@@ -14,6 +14,8 @@ interface Props {
   /** 국가 지리 데이터가 없을 때 중심으로 삼을 좌표. */
   fallback: { lat: number; lng: number } | null;
   label: string;
+  /** 컨테이너 스타일 override(기본은 h-80 카드). 부모를 꽉 채우려면 "h-full w-full". */
+  className?: string;
 }
 
 const COUNTRY_FILL = "#7b1e3b"; // 국가 영역(가장 넓음·옅게)
@@ -23,7 +25,7 @@ const OTHER_REGION = "#5b9aa9"; // 그 나라의 다른 유명 산지(청록)
 // 산지를 "영역 색칠"로 보여주는 지도. 국가 영역을 옅게 칠하고, 그 위에 주요 산지를
 // 원형 영역으로 겹친다(이 와인 산지=gold, 다른 산지=청록). 좁아질수록 짙어지는 계층.
 // maplibre는 window에 의존하므로 SSR을 피해 useEffect 안에서 동적 로드한다.
-export function RegionMap({ country, regionName, fallback, label }: Props) {
+export function RegionMap({ country, regionName, fallback, label, className }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -198,7 +200,7 @@ export function RegionMap({ country, regionName, fallback, label }: Props) {
     <section
       ref={ref}
       aria-label={`${label} 산지 지도`}
-      className="h-80 w-full overflow-hidden rounded-xl border border-rose/15"
+      className={className ?? "h-80 w-full overflow-hidden rounded-xl border border-rose/15"}
     />
   );
 }
