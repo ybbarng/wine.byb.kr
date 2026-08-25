@@ -19,8 +19,10 @@ const KIND_LABEL: Record<SearchResult["kind"], string> = {
 };
 
 // 홈·와인 상세·검색 결과 페이지가 공유하는 상단 헤더.
-// 로고(와인잔 심볼 + wine) · 통합 검색(→ /wine/[slug]) · 내비. 하단 와인톤 헤어라인.
-export function ShowcaseHeader() {
+// 로고(와인잔 심볼 + wine) · 통합 검색(→ /wine/[slug]) · 내비.
+// hairline: 하단 와인톤 가로선. 홈처럼 내용이 바로 이어질 땐 켜고, 카드가 떠 있는
+// 세부 페이지에선 카드 테두리와 겹쳐 어색하므로 끈다.
+export function ShowcaseHeader({ hairline = true }: { hairline?: boolean } = {}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -116,13 +118,15 @@ export function ShowcaseHeader() {
         </Link>
       </nav>
 
-      <div
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
-        style={{
-          background:
-            "linear-gradient(90deg, transparent, rgba(110,26,51,0.15) 25%, rgba(110,26,51,0.15) 75%, transparent)",
-        }}
-      />
+      {hairline ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-px"
+          style={{
+            background:
+              "linear-gradient(90deg, transparent, rgba(110,26,51,0.15) 25%, rgba(110,26,51,0.15) 75%, transparent)",
+          }}
+        />
+      ) : null}
     </header>
   );
 }
