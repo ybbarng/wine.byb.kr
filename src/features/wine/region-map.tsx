@@ -22,15 +22,16 @@ const COUNTRY_FILL = "#7b1e3b"; // 국가 영역(가장 넓음·옅게)
 const THIS_REGION = "#d9a441"; // 이 와인의 산지(gold, 붉은/따뜻한 계열은 여기만)
 const OTHER_REGION = "#5b9aa9"; // (원형 폴백에서 쓰는 기본 청록)
 // 선택되지 않은 산지들 — 붉은색 아닌 색을 지역마다 다르게. 라벨 색도 이 색을 따른다.
+// 밝은 지도 위에서 글자가 읽히도록 진한 계열로(채색은 낮은 불투명도라 옅게 깔린다).
 const OTHER_PALETTE = [
-  "#5b9aa9", // 청록
-  "#6e9e7a", // 초록
-  "#6e86b0", // 파랑
-  "#8a9aae", // 청회색
-  "#5e8a80", // 짙은 청록
-  "#7f9a6e", // 올리브
-  "#6ea0a9", // 시안
-  "#9a9ab0", // 라벤더 회색
+  "#2f7d8c", // 청록
+  "#3f8a55", // 초록
+  "#3a5f9e", // 파랑
+  "#5a6b86", // 청회색
+  "#2f6f66", // 짙은 청록
+  "#5a7a3a", // 올리브
+  "#2f8a95", // 시안
+  "#4a6f9e", // 남색
 ];
 
 // 산지를 "영역 색칠"로 보여주는 지도. 국가 영역을 옅게 칠하고, 그 위에 주요 산지를
@@ -171,12 +172,14 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
             source: "region-labels",
             layout: {
               "text-field": ["get", "region"],
-              "text-size": ["case", ["==", ["get", "mine"], 1], 14, 11],
+              // 밝은 지도라 글씨를 키우고 흰 테두리로 또렷하게.
+              "text-size": ["case", ["==", ["get", "mine"], 1], 16, 13],
             },
             paint: {
               "text-color": ["get", "color"],
-              "text-halo-color": "#1a0510",
-              "text-halo-width": 1.6,
+              "text-halo-color": "#ffffff",
+              "text-halo-width": 2,
+              "text-halo-blur": 0.4,
             },
           });
         }
