@@ -87,7 +87,18 @@ export default function WineShowcase() {
             </ul>
           )}
         </div>
-        <div className="hidden w-24 shrink-0 sm:block" />
+        {/* 우측 내비(기존 홈과 동일). 좁은 화면에선 숨김 — 모바일 메뉴는 이후. */}
+        <nav className="hidden shrink-0 items-center gap-5 text-sm text-muted sm:flex">
+          <a href="/explore" className="transition-colors hover:text-foreground">
+            탐험
+          </a>
+          <a href="/cellar" className="transition-colors hover:text-foreground">
+            기록
+          </a>
+          <a href="/learn" className="transition-colors hover:text-foreground">
+            학습
+          </a>
+        </nav>
       </header>
 
       {/* ── 글라스(유지·이동) ── 중앙(랜딩) ↔ 좌측(검색 후). transform 만 바뀜.
