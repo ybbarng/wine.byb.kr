@@ -17,8 +17,19 @@ interface Props {
 }
 
 const COUNTRY_FILL = "#7b1e3b"; // 국가 영역(가장 넓음·옅게)
-const THIS_REGION = "#d9a441"; // 이 와인의 산지(gold)
-const OTHER_REGION = "#5b9aa9"; // 그 나라의 다른 유명 산지(청록)
+const THIS_REGION = "#d9a441"; // 이 와인의 산지(gold, 붉은/따뜻한 계열은 여기만)
+const OTHER_REGION = "#5b9aa9"; // (원형 폴백에서 쓰는 기본 청록)
+// 선택되지 않은 산지들 — 붉은색 아닌 색을 지역마다 다르게. 라벨 색도 이 색을 따른다.
+const OTHER_PALETTE = [
+  "#5b9aa9", // 청록
+  "#6e9e7a", // 초록
+  "#6e86b0", // 파랑
+  "#8a9aae", // 청회색
+  "#5e8a80", // 짙은 청록
+  "#7f9a6e", // 올리브
+  "#6ea0a9", // 시안
+  "#9a9ab0", // 라벤더 회색
+];
 
 // 산지를 "영역 색칠"로 보여주는 지도. 국가 영역을 옅게 칠하고, 그 위에 주요 산지를
 // 원형 영역으로 겹친다(이 와인 산지=gold, 다른 산지=청록). 좁아질수록 짙어지는 계층.
@@ -99,20 +110,42 @@ export function RegionMap({ country, regionName, fallback, label }: Props) {
           });
         }
 
-        // 2a) 산지 폴리곤이 있으면 실제 경계로 채색. 이 와인 산지=gold, 다른 산지=청록.
+        // 2a) 산지 폴리곤이 있으면 실제 경계로 채색.
+        // 선택된 와인 산지만 gold, 나머지는 붉은색 아닌 색을 지역마다 다르게(연하게).
+        // 지역 색·라벨 색·테두리 색을 같게 해 구별을 쉽게 한다. 라벨은 지역당 하나.
         if (regionShapes) {
-          const thisKey =
-            regionShapes.features
-              .map((f) => String(f.properties?.region ?? ""))
-              .find((r) => r && regionName?.includes(r)) ?? "__none__";
+          const geoRegions = geo?.regions ?? [];
+          const labels: {
+            type: "Feature";
+            properties: { region: string; color: string; mine: number };
+            geometry: { type: "Point"; coordinates: [number, number] };
+          }[] = [];
+          regionShapes.features.forEach((f, idx) => {
+            const key = String(f.properties?.region ?? "");
+            const mine = key && regionName?.includes(key) ? 1 : 0;
+            const color = mine ? THIS_REGION : OTHER_PALETTE[idx % OTHER_PALETTE.length];
+            if (f.properties) {
+              f.properties.color = color;
+              f.properties.mine = mine;
+            }
+            const coord = geoRegions.find((r) => r.name === key);
+            if (coord) {
+              labels.push({
+                type: "Feature",
+                properties: { region: key, color, mine },
+                geometry: { type: "Point", coordinates: [coord.lng, coord.lat] },
+              });
+            }
+          });
+
           m.addSource("region-shapes", { type: "geojson", data: regionShapes });
           m.addLayer({
             id: "region-fill",
             type: "fill",
             source: "region-shapes",
             paint: {
-              "fill-color": ["case", ["==", ["get", "region"], thisKey], THIS_REGION, OTHER_REGION],
-              "fill-opacity": 0.42,
+              "fill-color": ["get", "color"],
+              "fill-opacity": ["case", ["==", ["get", "mine"], 1], 0.5, 0.22],
             },
           });
           m.addLayer({
@@ -120,20 +153,28 @@ export function RegionMap({ country, regionName, fallback, label }: Props) {
             type: "line",
             source: "region-shapes",
             paint: {
-              "line-color": ["case", ["==", ["get", "region"], thisKey], THIS_REGION, OTHER_REGION],
-              "line-width": 1.2,
-              "line-opacity": 0.75,
+              "line-color": ["get", "color"],
+              "line-width": ["case", ["==", ["get", "mine"], 1], 1.8, 1],
+              "line-opacity": ["case", ["==", ["get", "mine"], 1], 0.9, 0.45],
             },
+          });
+          // 라벨은 지역당 한 곳(대표 좌표)에만. 색은 지역 색과 같게.
+          m.addSource("region-labels", {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: labels },
           });
           m.addLayer({
             id: "region-shape-label",
             type: "symbol",
-            source: "region-shapes",
-            layout: { "text-field": ["get", "region"], "text-size": 12 },
+            source: "region-labels",
+            layout: {
+              "text-field": ["get", "region"],
+              "text-size": ["case", ["==", ["get", "mine"], 1], 14, 11],
+            },
             paint: {
-              "text-color": "#f4e9ec",
+              "text-color": ["get", "color"],
               "text-halo-color": "#1a0510",
-              "text-halo-width": 1.4,
+              "text-halo-width": 1.6,
             },
           });
         }
