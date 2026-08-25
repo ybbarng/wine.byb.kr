@@ -57,8 +57,10 @@
     `AdminBadge`. `max-w-5xl` 정적 배치.
   - 둘 다 하단에 같은 와인톤 헤어라인(그라데이션 `rgba(110,26,51,0.15)`)을 둔다.
 - **`WineDetailView`** (`src/components/WineDetailView.tsx`) — 3칸 쇼케이스 레이아웃
-  (왼쪽 글라스 · 가운데 산지 지도 · 오른쪽 상세). 와인 상세와 산지/품종/종류
-  결과 페이지가 공유한다. `children`으로 오른쪽 패널 내용을 넘긴다.
+  (왼쪽 글라스 · 가운데 산지 지도 · **오른쪽 상세가 가장 넓다**). 와인 상세와
+  산지/품종/종류 결과 페이지가 공유한다. `children`으로 오른쪽 패널 내용을,
+  `belowMap`으로 가운데 지도 아래 내용(예: 산지 계층)을 넘긴다. `belowMap`이
+  있으면 지도가 작아지고 그 아래 칸이 스크롤된다.
 - **`WineList`** (`src/components/WineList.tsx`) — 컬렉션 상세 패널의 와인 목록.
   각 항목 → `/wine/[slug]`.
 - **글라스 색 매핑**: `wineGlassFor(type, grapeNames)`

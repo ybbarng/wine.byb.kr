@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { getWineBySlug } from "@/features/wine/queries";
+import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
 import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
@@ -60,6 +61,14 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
       regionName={wine.region?.nameKo ?? null}
       fallback={target}
       label={country ?? name.primary}
+      belowMap={
+        country || wine.region ? (
+          <div>
+            <h2 className="mb-2 text-xs uppercase tracking-wide text-muted">산지 계층</h2>
+            <RegionHierarchy country={country} regionName={wine.region?.nameKo ?? null} />
+          </div>
+        ) : null
+      }
     >
       {/* 헤더: 이름·타입 */}
       <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
