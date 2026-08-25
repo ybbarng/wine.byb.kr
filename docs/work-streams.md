@@ -35,12 +35,16 @@
 
 산지 파일만 피하면 아래는 독립적으로 진행해도 충돌이 거의 없다.
 
-### 🅔 프랑스 외 세부 경계 폴리곤 (완전 독립, 지도 세션에 적합)
-- 이탈리아·미국 등 산지 GeoJSON을 찾아 `public/geo/region-shapes.geojson` 확장.
-- 소유 파일: `public/geo/`, `scripts/`(조립 스크립트). **페이지 코드 수정 없음** —
-  `region-map.tsx`가 폴리곤이 있으면 자동으로 원형 대신 경계 채색으로 바뀐다.
-- 주의: `region-shapes.geojson`의 `properties`는 `{country, region, source}` 형식,
-  좌표는 소수점 3자리로 반올림(용량). 지금은 프랑스만 들어 있다.
+### 🅔 프랑스 외 세부 경계 폴리곤 — 진행 중(브랜치 `region-polygons`)
+- 행정구역(admin-1)이 곧 와인 지역인 나라부터 추가. **완료: 프랑스(기존) + 이탈리아
+  5개 · 아르헨티나 2개 · 뉴질랜드 2개**. 조립은 `scripts/append-admin-shapes.mjs`
+  (원본 URL은 스크립트 주석에, 원본 파일은 저장소에 안 담음).
+- **남은 원형 폴백**: 칠레·미국·독일·헝가리·남아공·호주 — 이들의 와인 지역은
+  행정구역과 안 맞아(밸리·AVA 등) admin-1로 안 되고, 산지별 GeoJSON을 따로 찾아야 함.
+- 소유 파일: `public/geo/region-shapes.geojson`, `scripts/append-admin-shapes.mjs`.
+  **페이지 코드 수정 없음** — `region-map.tsx`가 폴리곤이 있으면 자동으로 경계 채색.
+- 형식: `properties`는 `{country, region, source}`, 좌표 3자리 반올림(해안선 촘촘한
+  NZ는 2자리). `region` 키는 `wine-geo.ts`의 산지 이름과 맞춰야 라벨·강조가 붙는다.
 
 ### 그 외 도메인 (산지와 무관)
 - 홈/쇼케이스, 셀러(`/cellar`), 학습(`learn`), 관리자(`admin`), 3D(`FluidLab` 등).
