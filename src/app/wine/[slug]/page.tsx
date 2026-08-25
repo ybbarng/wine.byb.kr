@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
+import { WineList } from "@/components/WineList";
 import { getWineBySlug } from "@/features/wine/queries";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { wineGlassFor } from "@/features/wine/wine-glass";
-import { formatDate, formatKRW, joinDot } from "@/lib/format";
+import { formatDate, formatKRW } from "@/lib/format";
 import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +54,24 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
   const grapeNames = wine.grapes.map((g) => g.grape.nameKo);
   const { absorb, glass } = wineGlassFor(wine.type, grapeNames);
 
+  // 이름 아래 "생산자 · 지역 · 국가" 줄. 지역은 지역 페이지로 잇는다.
+  const identity: React.ReactNode[] = [];
+  if (wine.producer?.nameKo) identity.push(wine.producer.nameKo);
+  if (region) {
+    identity.push(
+      <Link
+        key="region"
+        href={`/region/${region.slug}`}
+        className="underline decoration-foreground/25 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/60"
+      >
+        {region.nameKo}
+      </Link>
+    );
+  } else if (wine.region?.nameKo) {
+    identity.push(wine.region.nameKo);
+  }
+  if (country) identity.push(country);
+
   return (
     <WineDetailView
       absorb={absorb}
@@ -88,31 +107,14 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
       <h1 className="mt-1 font-serif text-2xl leading-tight text-foreground">{name.primary}</h1>
       {name.alias ? <p className="text-sm text-muted">{name.alias}</p> : null}
       <p className="mt-2 text-sm text-foreground/80">
-        {(() => {
-          const parts: React.ReactNode[] = [];
-          if (wine.producer?.nameKo) parts.push(wine.producer.nameKo);
-          if (region) {
-            parts.push(
-              <Link
-                key="region"
-                href={`/region/${region.slug}`}
-                className="underline decoration-foreground/25 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/60"
-              >
-                {region.nameKo}
-              </Link>
-            );
-          } else if (wine.region?.nameKo) {
-            parts.push(wine.region.nameKo);
-          }
-          if (country) parts.push(country);
-          if (parts.length === 0) return "정보 준비 중";
-          return parts.map((p, i) => (
-            <span key={i}>
-              {i > 0 ? " · " : ""}
-              {p}
-            </span>
-          ));
-        })()}
+        {identity.length > 0
+          ? identity.map((part, i) => (
+              <span key={i}>
+                {i > 0 ? " · " : ""}
+                {part}
+              </span>
+            ))
+          : "정보 준비 중"}
       </p>
       {wine.classification ? (
         <div className="mt-2">
@@ -184,25 +186,7 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
       {/* 비슷한 와인 */}
       {similar.length > 0 ? (
         <Section title="비슷한 와인">
-          <ul className="flex flex-col gap-2">
-            {similar.map((w) => {
-              const sName = wineDisplayName(w);
-              const sCountry = w.region?.country ?? w.region?.parent?.nameKo ?? null;
-              return (
-                <li key={w.id}>
-                  <Link
-                    href={`/wine/${w.slug}`}
-                    className="flex flex-col rounded-lg border border-foreground/10 px-3 py-2 transition-colors hover:border-foreground/25 hover:bg-foreground/5"
-                  >
-                    <span className="truncate text-sm text-foreground">{sName.primary}</span>
-                    <span className="mt-0.5 truncate text-xs text-muted">
-                      {joinDot(wineTypeLabel(w.type), sCountry)}
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <WineList wines={similar} />
         </Section>
       ) : null}
     </WineDetailView>

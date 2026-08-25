@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { joinDot } from "@/lib/format";
 import { wineTypeLabel } from "@/lib/wine";
 
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ export async function GET(request: NextRequest) {
       kind: "wine" as const,
       href: `/wine/${w.slug}`,
       name: w.nameLocal ?? w.nameKo,
-      sub: [w.region?.nameKo, wineTypeLabel(w.type)].filter(Boolean).join(" · "),
+      sub: joinDot(w.region?.nameKo, wineTypeLabel(w.type)),
     })),
   ].slice(0, 8);
 
