@@ -4,19 +4,22 @@
 @import "tailwindcss";
 
 :root {
-  /* 와인셀러 톤: 딥 버건디 배경 + 골드/로제 액센트 */
-  --background: #1a0510;
-  --foreground: #f4e9ec;
-  --wine: #7b1e3b;
-  --wine-bright: #b83259;
-  --gold: #d9a441;
-  --rose: #e8b4be;
-  --muted: #9a7a83;
+  /* 웜 톤: 3D 와인잔 모듈 배경(따뜻한 타우프)에 맞춘 밝은 테마.
+     --background 는 캔버스 렌더색(#bda588)과 동일해 이음새가 없다. */
+  --background: #bda588; /* 웜 타우프 배경 */
+  --foreground: #2b1712; /* 짙은 웜 브라운 — 본문 텍스트 */
+  --card: #ece0cd; /* 살짝 밝은 크림 — 검색바·카드 등 떠 있는 표면 */
+  --wine: #6e1a33; /* 딥 와인 액센트 */
+  --wine-bright: #9d2846;
+  --gold: #8a5616; /* 웜 배경에서 읽히도록 어둡게 */
+  --rose: #8a4a54; /* 뮤트 와인로제 — 보조 액센트 */
+  --muted: #6d5a49; /* 웜 브라운그레이 — 보조 텍스트 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
   --color-wine: var(--wine);
   --color-wine-bright: var(--wine-bright);
   --color-gold: var(--gold);

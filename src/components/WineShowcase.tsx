@@ -55,7 +55,7 @@ export default function WineShowcase() {
         <button
           type="button"
           onClick={() => setSelected(null)}
-          className="shrink-0 font-serif text-lg tracking-tight text-[#3a1a12]"
+          className="shrink-0 font-serif text-lg tracking-tight text-foreground"
         >
           wine<span className="text-gold">.</span>byb.kr
         </button>
@@ -64,23 +64,23 @@ export default function WineShowcase() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="와인 검색 — 이름 · 품종 · 산지"
-            className="w-full rounded-full border border-white/15 bg-black/30 px-5 py-2.5 text-sm text-foreground backdrop-blur placeholder:text-white/40 focus:border-white/40 focus:outline-none"
+            className="w-full rounded-full border border-foreground/15 bg-card/70 px-5 py-2.5 text-sm text-foreground shadow-sm backdrop-blur placeholder:text-muted focus:border-foreground/40 focus:outline-none"
           />
           {results.length > 0 && (
-            <ul className="absolute left-0 right-0 mt-2 overflow-hidden rounded-2xl border border-white/10 bg-black/80 p-1 backdrop-blur">
+            <ul className="absolute left-0 right-0 mt-2 overflow-hidden rounded-2xl border border-foreground/10 bg-card/95 p-1 shadow-lg shadow-foreground/10 backdrop-blur">
               {results.map((w) => (
                 <li key={w.id}>
                   <button
                     type="button"
                     onClick={() => pick(w)}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-white/80 transition-colors hover:bg-white/10"
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm text-foreground transition-colors hover:bg-foreground/8"
                   >
                     <span
-                      className="h-3 w-3 shrink-0 rounded-full border border-white/20"
+                      className="h-3 w-3 shrink-0 rounded-full border border-foreground/20"
                       style={{ background: w.color }}
                     />
                     <span className="text-foreground">{w.nameKo}</span>
-                    <span className="text-white/40">· {w.regionName}</span>
+                    <span className="text-muted">· {w.regionName}</span>
                   </button>
                 </li>
               ))}
@@ -119,7 +119,7 @@ export default function WineShowcase() {
         }`}
       >
         {/* 중앙: 산지 지도 */}
-        <div className="relative flex-1 overflow-hidden rounded-3xl border border-white/10">
+        <div className="relative flex-1 overflow-hidden rounded-3xl border border-foreground/12 shadow-lg shadow-foreground/10">
           {searched && (
             <RegionMap
               key={wine.id}
@@ -133,43 +133,45 @@ export default function WineShowcase() {
         </div>
 
         {/* 오른쪽: 상세 패널 */}
-        <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto rounded-3xl border border-white/10 bg-black/25 p-6 backdrop-blur">
+        <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto rounded-3xl border border-foreground/12 bg-card/75 p-6 shadow-lg shadow-foreground/10 backdrop-blur">
           <div>
             <div className="flex items-center gap-2">
               <span
-                className="h-4 w-4 rounded-full border border-white/20"
+                className="h-4 w-4 rounded-full border border-foreground/20"
                 style={{ background: wine.color }}
               />
-              <span className="text-xs uppercase tracking-wide text-white/40">
+              <span className="text-xs uppercase tracking-wide text-muted">
                 {typeLabel(wine.type)}
               </span>
             </div>
             <h2 className="mt-1 font-serif text-2xl text-foreground">
               {wine.nameKo}
             </h2>
-            <p className="text-sm text-white/40">{wine.nameLocal}</p>
+            <p className="text-sm text-muted">{wine.nameLocal}</p>
           </div>
 
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
-            <dt className="text-white/40">품종</dt>
-            <dd className="text-white/85">{wine.grape}</dd>
-            <dt className="text-white/40">산지</dt>
-            <dd className="text-white/85">
+            <dt className="text-muted">품종</dt>
+            <dd className="text-foreground">{wine.grape}</dd>
+            <dt className="text-muted">산지</dt>
+            <dd className="text-foreground">
               {wine.country} · {wine.regionName}
             </dd>
           </dl>
 
-          <p className="text-sm leading-relaxed text-white/75">{wine.notesKo}</p>
+          <p className="text-sm leading-relaxed text-foreground/85">
+            {wine.notesKo}
+          </p>
 
           <div>
-            <p className="mb-1.5 text-xs uppercase tracking-wide text-white/40">
+            <p className="mb-1.5 text-xs uppercase tracking-wide text-muted">
               푸드 페어링
             </p>
             <div className="flex flex-wrap gap-1.5">
               {wine.foodPairing.map((f) => (
                 <span
                   key={f}
-                  className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-white/70"
+                  className="rounded-full border border-foreground/12 bg-foreground/5 px-2.5 py-1 text-xs text-foreground/80"
                 >
                   {f}
                 </span>
@@ -180,7 +182,7 @@ export default function WineShowcase() {
           <button
             type="button"
             onClick={() => setSelected(null)}
-            className="mt-auto rounded-full border border-white/15 px-4 py-2 text-xs text-white/60 transition-colors hover:text-white"
+            className="mt-auto rounded-full border border-foreground/20 px-4 py-2 text-xs text-muted transition-colors hover:text-foreground"
           >
             ← 처음으로
           </button>
