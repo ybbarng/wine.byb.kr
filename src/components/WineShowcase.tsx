@@ -3,10 +3,7 @@
 import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { RegionMap } from "@/features/wine/region-map";
-import {
-  type ShowcaseWine,
-  SHOWCASE_WINES,
-} from "@/features/wine/showcase-wines";
+import { SHOWCASE_WINES, type ShowcaseWine } from "@/features/wine/showcase-wines";
 
 // 글라스 캔버스는 하나만 유지하고 컨테이너를 transform 으로만 옮긴다(리사이즈 없이
 // 중앙→좌측으로 미끄러짐 → 스월·색 이어짐). ssr 불가(WebGPU).
@@ -36,7 +33,7 @@ export default function WineShowcase() {
         w.nameKo.toLowerCase().includes(q) ||
         w.nameLocal.toLowerCase().includes(q) ||
         w.regionName.toLowerCase().includes(q) ||
-        w.grape.toLowerCase().includes(q),
+        w.grape.toLowerCase().includes(q)
     ).slice(0, 6);
   }, [query]);
 
@@ -124,9 +121,7 @@ export default function WineShowcase() {
       {/* ── 지도 + 상세(검색 후) ── 오른쪽에서 페이드인 ── */}
       <div
         className={`absolute inset-y-0 right-0 z-10 flex w-[66vw] items-stretch gap-4 py-20 pl-2 pr-6 transition-all duration-700 ${
-          searched
-            ? "translate-x-0 opacity-100"
-            : "pointer-events-none translate-x-8 opacity-0"
+          searched ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-8 opacity-0"
         }`}
       >
         {/* 중앙: 산지 지도 */}
@@ -155,9 +150,7 @@ export default function WineShowcase() {
                 {typeLabel(wine.type)}
               </span>
             </div>
-            <h2 className="mt-1 font-serif text-2xl text-foreground">
-              {wine.nameKo}
-            </h2>
+            <h2 className="mt-1 font-serif text-2xl text-foreground">{wine.nameKo}</h2>
             <p className="text-sm text-muted">{wine.nameLocal}</p>
           </div>
 
@@ -170,14 +163,10 @@ export default function WineShowcase() {
             </dd>
           </dl>
 
-          <p className="text-sm leading-relaxed text-foreground/85">
-            {wine.notesKo}
-          </p>
+          <p className="text-sm leading-relaxed text-foreground/85">{wine.notesKo}</p>
 
           <div>
-            <p className="mb-1.5 text-xs uppercase tracking-wide text-muted">
-              푸드 페어링
-            </p>
+            <p className="mb-1.5 text-xs uppercase tracking-wide text-muted">푸드 페어링</p>
             <div className="flex flex-wrap gap-1.5">
               {wine.foodPairing.map((f) => (
                 <span

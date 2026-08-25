@@ -24,13 +24,7 @@ const OTHER_REGION = "#5b9aa9"; // 그 나라의 다른 유명 산지(청록)
 // 산지를 "영역 색칠"로 보여주는 지도. 국가 영역을 옅게 칠하고, 그 위에 주요 산지를
 // 원형 영역으로 겹친다(이 와인 산지=gold, 다른 산지=청록). 좁아질수록 짙어지는 계층.
 // maplibre는 window에 의존하므로 SSR을 피해 useEffect 안에서 동적 로드한다.
-export function RegionMap({
-  country,
-  regionName,
-  fallback,
-  label,
-  className,
-}: Props) {
+export function RegionMap({ country, regionName, fallback, label, className }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -152,9 +146,7 @@ export function RegionMap({
     <section
       ref={ref}
       aria-label={`${label} 산지 지도`}
-      className={
-        className ?? "h-80 w-full overflow-hidden rounded-xl border border-rose/15"
-      }
+      className={className ?? "h-80 w-full overflow-hidden rounded-xl border border-rose/15"}
     />
   );
 }
