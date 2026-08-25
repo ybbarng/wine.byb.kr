@@ -18,8 +18,10 @@ interface Props {
   className?: string;
 }
 
-const COUNTRY_FILL = "#7b1e3b"; // 국가 영역(가장 넓음·옅게)
-const THIS_REGION = "#d9a441"; // 이 와인의 산지(gold, 붉은/따뜻한 계열은 여기만)
+const COUNTRY_FILL = "#7b1e3b"; // 국가 영역(가장 넓음·옅은 와인색 — 계층 최상위)
+const SELECTED_FILL = "#b83259"; // 선택 산지 채색(진한 와인색 — 패널 지역 레벨과 결 맞춤)
+const GOLD = "#d9a441"; // 선택 강조 테두리·라벨(패널의 gold 액센트와 통일)
+const THIS_REGION = "#d9a441"; // (원형 폴백에서 쓰는 이 와인 산지색)
 const OTHER_REGION = "#5b9aa9"; // (원형 폴백에서 쓰는 기본 청록)
 // 선택되지 않은 산지들 — 붉은색 아닌 색을 지역마다 다르게. 라벨 색도 이 색을 따른다.
 // 밝은 지도 위에서 글자가 읽히도록 진한 계열로(채색은 낮은 불투명도라 옅게 깔린다).
@@ -114,8 +116,8 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
         }
 
         // 2a) 산지 폴리곤이 있으면 실제 경계로 채색.
-        // 선택된 와인 산지만 gold, 나머지는 붉은색 아닌 색을 지역마다 다르게(연하게).
-        // 지역 색·라벨 색·테두리 색을 같게 해 구별을 쉽게 한다. 라벨은 지역당 하나.
+        // 계층 패널과 결을 맞춘다: 선택 지역=진한 와인색 + gold 테두리·라벨(패널의 와인색+gold),
+        // 나머지=붉은색 아닌 색을 지역마다 다르게 하되 흐리게(선택 지역이 도드라지게).
         if (regionShapes) {
           const geoRegions = geo?.regions ?? [];
           const labels: {
@@ -126,7 +128,7 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
           regionShapes.features.forEach((f, idx) => {
             const key = String(f.properties?.region ?? "");
             const mine = key && regionName?.includes(key) ? 1 : 0;
-            const color = mine ? THIS_REGION : OTHER_PALETTE[idx % OTHER_PALETTE.length];
+            const color = mine ? SELECTED_FILL : OTHER_PALETTE[idx % OTHER_PALETTE.length];
             if (f.properties) {
               f.properties.color = color;
               f.properties.mine = mine;
@@ -140,6 +142,8 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
               });
             }
           });
+          const isMine = ["==", ["get", "mine"], 1] as FilterSpecification;
+          const isOther = ["==", ["get", "mine"], 0] as FilterSpecification;
 
           m.addSource("region-shapes", { type: "geojson", data: regionShapes });
           m.addLayer({
@@ -148,20 +152,26 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
             source: "region-shapes",
             paint: {
               "fill-color": ["get", "color"],
-              "fill-opacity": ["case", ["==", ["get", "mine"], 1], 0.5, 0.22],
+              "fill-opacity": ["case", ["==", ["get", "mine"], 1], 0.5, 0.12],
             },
           });
+          // 선택 안 된 지역: 얇고 흐린 테두리
           m.addLayer({
             id: "region-line",
             type: "line",
             source: "region-shapes",
-            paint: {
-              "line-color": ["get", "color"],
-              "line-width": ["case", ["==", ["get", "mine"], 1], 1.8, 1],
-              "line-opacity": ["case", ["==", ["get", "mine"], 1], 0.9, 0.45],
-            },
+            filter: isOther,
+            paint: { "line-color": ["get", "color"], "line-width": 1, "line-opacity": 0.3 },
           });
-          // 라벨은 지역당 한 곳(대표 좌표)에만. 색은 지역 색과 같게.
+          // 선택 지역: gold 테두리로 강조
+          m.addLayer({
+            id: "region-highlight",
+            type: "line",
+            source: "region-shapes",
+            filter: isMine,
+            paint: { "line-color": GOLD, "line-width": 3, "line-opacity": 0.95, "line-blur": 0.3 },
+          });
+          // 라벨은 지역당 한 곳(대표 좌표)에만. 선택=gold·크게·흰 테두리, 나머지=지역색·흐리게.
           m.addSource("region-labels", {
             type: "geojson",
             data: { type: "FeatureCollection", features: labels },
@@ -172,14 +182,13 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
             source: "region-labels",
             layout: {
               "text-field": ["get", "region"],
-              // 밝은 지도라 글씨를 키우고 흰 테두리로 또렷하게.
-              "text-size": ["case", ["==", ["get", "mine"], 1], 16, 13],
+              "text-size": ["case", ["==", ["get", "mine"], 1], 17, 12],
             },
             paint: {
-              "text-color": ["get", "color"],
+              "text-color": ["case", ["==", ["get", "mine"], 1], GOLD, ["get", "color"]],
+              "text-opacity": ["case", ["==", ["get", "mine"], 1], 1, 0.65],
               "text-halo-color": "#ffffff",
-              "text-halo-width": 2,
-              "text-halo-blur": 0.4,
+              "text-halo-width": ["case", ["==", ["get", "mine"], 1], 2.4, 1],
             },
           });
         }
