@@ -1,19 +1,12 @@
 <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#2a0a18"/>
-      <stop offset="1" stop-color="#5e162e"/>
-    </linearGradient>
-    <linearGradient id="wine" x1="20" y1="14" x2="44" y2="34" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#e8b4be"/>
-      <stop offset="1" stop-color="#b83259"/>
-    </linearGradient>
-  </defs>
-  <rect width="64" height="64" rx="15" fill="url(#bg)"/>
-  <!-- 잔 볼: 위는 열려 있고 아래로 좁아지는 형태 -->
-  <path d="M20 13h24c0 12-5.5 20-12 20S20 25 20 13Z" fill="url(#wine)"/>
-  <path d="M20 13h24c0 12-5.5 20-12 20S20 25 20 13Z" stroke="#d9a441" stroke-width="2" stroke-linejoin="round"/>
-  <!-- 스템과 베이스 -->
-  <path d="M32 33v13" stroke="#d9a441" stroke-width="2.5" stroke-linecap="round"/>
-  <path d="M23 49h18" stroke="#d9a441" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- 딥 와인 라운드 배경 (웜 테마 액센트색) -->
+  <rect width="64" height="64" rx="15" fill="#6e1a33"/>
+  <!-- 잔 속 와인 -->
+  <path d="M21 16.5h22c-0.5 8-4.6 12.5-11 12.5S21.5 24.5 21 16.5Z" fill="#c24a5f"/>
+  <!-- 잔: 볼·스템·베이스 (크림빛 스트로크) -->
+  <g stroke="#ecdcb8" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M19 14h26c0 12.5-5.8 19-13 19S19 26.5 19 14Z"/>
+    <path d="M32 33v15"/>
+    <path d="M23 48.5h18"/>
+  </g>
 </svg>

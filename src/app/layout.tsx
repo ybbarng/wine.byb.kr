@@ -18,20 +18,32 @@ const playfair = Playfair_Display({
   style: ["normal", "italic"],
 });
 
+const SITE_DESC =
+  "와인의 산지·품종·가격·시음 기록을 한 곳에서. 검색하면 3D 와인잔에 그 와인의 빛깔이 담기고 산지가 지도에 펼쳐집니다.";
+
 export const metadata: Metadata = {
   title: {
-    default: "wine.byb.kr — 와인 검색 · 가격 · 기록",
+    default: "wine.byb.kr — 와인 검색 · 산지 · 시음 기록",
     template: "%s · wine.byb.kr",
   },
-  description: "와인의 산지, 품종, 가격, 시음 기록을 한 곳에서.",
+  description: SITE_DESC,
+  applicationName: "wine.byb.kr",
+  keywords: ["와인", "와인 검색", "산지", "품종", "시음 기록", "와인 가격", "와인 셀러", "wine"],
+  authors: [{ name: "ybbarng" }],
+  creator: "ybbarng",
   metadataBase: new URL("https://wine.byb.kr"),
   openGraph: {
-    title: "wine.byb.kr",
-    description: "와인의 산지, 품종, 가격, 시음 기록을 한 곳에서.",
+    title: "wine.byb.kr — 와인 검색 · 산지 · 시음 기록",
+    description: SITE_DESC,
     url: "https://wine.byb.kr",
     siteName: "wine.byb.kr",
     locale: "ko_KR",
     type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "wine.byb.kr — 와인 검색 · 산지 · 시음 기록",
+    description: SITE_DESC,
   },
 };
 

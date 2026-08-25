@@ -4,6 +4,7 @@ import dynamic from "next/dynamic";
 import { useMemo, useState } from "react";
 import { RegionMap } from "@/features/wine/region-map";
 import { SHOWCASE_WINES, type ShowcaseWine } from "@/features/wine/showcase-wines";
+import { WineMark } from "./WineMark";
 
 // 글라스 캔버스는 하나만 유지하고 컨테이너를 transform 으로만 옮긴다(리사이즈 없이
 // 중앙→좌측으로 미끄러짐 → 스월·색 이어짐). ssr 불가(WebGPU).
@@ -24,7 +25,11 @@ export default function WineShowcase() {
   const searched = selected !== null;
   // 첫 화면 글라스 기본값(메를로). 검색하면 선택 와인으로 색·잔 전환.
   const wine = selected ?? SHOWCASE_WINES[1];
+  const year = new Date().getFullYear();
 
+  // 검색은 여러 키워드로 동작해야 한다: 와인 이름(한/영) · 산지 · 품종.
+  // (지금은 쇼케이스 데이터 대상. 추후 실제 DB 검색으로 교체 시에도 이 키워드 축
+  //  — 이름·산지·품종, 필요하면 생산자·타입·빈티지 — 을 유지한다.)
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
@@ -52,16 +57,34 @@ export default function WineShowcase() {
         <button
           type="button"
           onClick={() => setSelected(null)}
-          className="shrink-0 font-serif text-lg tracking-tight text-foreground"
+          aria-label="wine.byb.kr 홈"
+          className="group flex shrink-0 items-center gap-2"
         >
-          wine<span className="text-gold">.</span>byb.kr
+          <WineMark className="h-6 w-6 text-wine transition-colors group-hover:text-wine-bright" />
+          <span className="font-serif text-lg leading-none tracking-tight text-foreground">
+            wine
+            <span className="text-sm text-muted">.byb.kr</span>
+          </span>
         </button>
         <div className="relative w-full max-w-md">
+          {/* 검색 아이콘(돋보기) — 와인잔 심볼은 로고 전용 */}
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.7}
+            strokeLinecap="round"
+            aria-hidden="true"
+            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted"
+          >
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.2-4.2" />
+          </svg>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="와인 검색 — 이름 · 품종 · 산지"
-            className="w-full rounded-full border border-foreground/15 bg-card/70 px-5 py-2.5 text-sm text-foreground shadow-sm backdrop-blur placeholder:text-muted focus:border-foreground/40 focus:outline-none"
+            placeholder="검색하기"
+            className="w-full rounded-full border border-foreground/15 bg-card/70 py-2.5 pl-11 pr-5 text-sm text-foreground shadow-sm backdrop-blur placeholder:text-muted focus:border-foreground/40 focus:outline-none"
           />
           {results.length > 0 && (
             <ul className="absolute left-0 right-0 mt-2 overflow-hidden rounded-2xl border border-foreground/10 bg-card/95 p-1 shadow-lg shadow-foreground/10 backdrop-blur">
@@ -188,6 +211,23 @@ export default function WineShowcase() {
           </button>
         </aside>
       </div>
+
+      {/* ── 푸터 ── 클릭은 링크에만(글라스 조작 방해 없이). */}
+      <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-between gap-4 px-6 py-3 text-[11px] text-muted">
+        <span>© {year} ybbarng</span>
+        <span className="flex items-center gap-2">
+          <a
+            href="https://github.com/ybbarng/wine.byb.kr"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="pointer-events-auto transition-colors hover:text-foreground"
+          >
+            GitHub
+          </a>
+          <span className="text-foreground/20">·</span>
+          <span>Claude Code 로 만든 와인 아카이브</span>
+        </span>
+      </footer>
     </div>
   );
 }
