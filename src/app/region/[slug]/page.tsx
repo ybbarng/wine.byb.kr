@@ -8,6 +8,7 @@ import { countryFlag } from "@/features/wine/country-names";
 import { GrapeColorDot } from "@/features/wine/grape-color";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { countryInfo, regionInfo } from "@/features/wine/region-info";
+import { RegionTerroir } from "@/features/wine/region-terroir";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 
 export const dynamic = "force-dynamic";
@@ -45,10 +46,21 @@ export default async function RegionPage({ params }: PageProps<"/region/[slug]">
         ? { lat: region.parent.latitude, lng: region.parent.longitude }
         : null;
 
+  // 큐레이션 산지 정보(지역 페이지에서만). 설명·떼루아를 여기서 끌어온다.
+  const curated = isCountry ? null : regionInfo(region.nameKo);
+
   // 설명: DB 값이 있으면 우선, 없으면 큐레이션 데이터로 채운다.
   const description =
-    region.descriptionKo ??
-    (isCountry ? countryInfo(region.nameKo) : (regionInfo(region.nameKo)?.desc ?? null));
+    region.descriptionKo ?? (isCountry ? countryInfo(region.nameKo) : (curated?.desc ?? null));
+
+  // 떼루아: DB 값 우선, 없으면 큐레이션. 품종·스타일은 큐레이션에만 있다.
+  const terroir = {
+    climate: region.climate ?? curated?.climate ?? null,
+    soil: region.soil ?? curated?.soil ?? null,
+    classification: curated?.classification ?? null,
+    keyGrapes: curated?.keyGrapes,
+    styles: curated?.styles,
+  };
 
   // 대표 품종: 이 산지 와인들의 품종을 빈도순으로 집계(상위 8개). 각 칩은 품종 페이지로.
   const grapeTally = new Map<string, { slug: string; nameKo: string; n: number }>();
@@ -122,26 +134,17 @@ export default async function RegionPage({ params }: PageProps<"/region/[slug]">
         </p>
       ) : null}
 
-      {region.climate || region.soil ? (
-        <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
-          {region.climate ? (
-            <>
-              <dt className="text-muted">기후</dt>
-              <dd className="text-foreground/85">{region.climate}</dd>
-            </>
-          ) : null}
-          {region.soil ? (
-            <>
-              <dt className="text-muted">토양</dt>
-              <dd className="text-foreground/85">{region.soil}</dd>
-            </>
-          ) : null}
-        </dl>
-      ) : null}
+      <RegionTerroir
+        climate={terroir.climate}
+        soil={terroir.soil}
+        classification={terroir.classification}
+        keyGrapes={terroir.keyGrapes}
+        styles={terroir.styles}
+      />
 
       {topGrapes.length > 0 ? (
         <section className="mt-6">
-          <h2 className="mb-2 text-xs uppercase tracking-wide text-muted">대표 품종</h2>
+          <h2 className="mb-2 text-xs uppercase tracking-wide text-muted">내가 마신 품종</h2>
           <div className="flex flex-wrap gap-2">
             {topGrapes.map((g) => (
               <Link
