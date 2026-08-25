@@ -9,6 +9,7 @@ import { GrapeColorDot } from "@/features/wine/grape-color";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { countryInfo, regionInfo } from "@/features/wine/region-info";
 import { RegionMyStats } from "@/features/wine/region-my-stats";
+import { RegionProducers } from "@/features/wine/region-producers";
 import { RegionTerroir } from "@/features/wine/region-terroir";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 
@@ -26,7 +27,7 @@ export default async function RegionPage({ params }: PageProps<"/region/[slug]">
   const { slug } = await params;
   const data = await getRegionBySlug(slug);
   if (!data) notFound();
-  const { region, wines, stats } = data;
+  const { region, wines, stats, producers } = data;
   const isCountry = region.level === "country";
 
   // 대표 글라스: 이 산지의 첫 와인에서. 없으면 기본 레드.
@@ -163,6 +164,8 @@ export default async function RegionPage({ params }: PageProps<"/region/[slug]">
           </div>
         </section>
       ) : null}
+
+      <RegionProducers producers={producers} />
 
       {children.length > 0 ? (
         <section className="mt-6">

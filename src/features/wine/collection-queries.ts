@@ -22,7 +22,28 @@ export async function getRegionBySlug(rawSlug: string) {
     take: 24,
   });
   const stats = await regionTastingStats(regionIds);
-  return { region, wines, stats };
+  const producers = await db.producer.findMany({
+    where: { regionId: { in: regionIds } },
+    include: { _count: { select: { wines: true } } },
+    orderBy: { nameKo: "asc" },
+  });
+  return { region, wines, stats, producers };
+}
+
+/** 생산자 상세 — 생산자 + 지역 + 그 생산자의 와인. */
+export async function getProducerBySlug(rawSlug: string) {
+  const slug = decodeSlug(rawSlug);
+  const producer = await db.producer.findUnique({
+    where: { slug },
+    include: { region: { include: { parent: true } } },
+  });
+  if (!producer) return null;
+  const wines = await db.wine.findMany({
+    where: { producerId: producer.id },
+    include: WINE_LIST_INCLUDE,
+    take: 24,
+  });
+  return { producer, wines };
 }
 
 export interface RegionStats {
