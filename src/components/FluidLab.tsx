@@ -249,9 +249,11 @@ const GLASSES: GlassDef[] = [
 export default function FluidLab({
   wineAbsorb,
   glassType,
+  bgColor,
 }: {
   glassType?: number;
   wineAbsorb?: [number, number, number];
+  bgColor?: string; // 지정 시 배경을 이 단색으로(사이트 배경과 매끄럽게). 미지정=따뜻한 HDR.
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // 와인 흡수계수 uniform(실시간 색 변경). setup 에서 채워지고 prop 으로 갱신.
@@ -288,6 +290,10 @@ export default function FluidLab({
     let scene: THREE.Scene;
     let camera: THREE.PerspectiveCamera;
     let ro: ResizeObserver | undefined; // 컨테이너 크기 관찰
+    // 배경 두 겹: warmBg=와인 투과(bgRT) 샘플용 따뜻한 HDR(와인이 빛남),
+    // pageBg=화면에 보이는 배경(사이트 색과 매칭). bgColor 없으면 둘 다 따뜻한 HDR.
+    let warmBg: unknown;
+    let pageBg: unknown;
     let controls: OrbitControls;
     let disposed = false;
     let frameCount = 0;
@@ -1479,7 +1485,6 @@ export default function FluidLab({
           liqH = Math.max(GLASS_WINE_BOTTOM + 0.1, Math.min(liqH, gMaxY - 0.05));
         }
         // 와인 뒷면 거리 → wineThickRT (Beer–Lambert 두께용). 유리·병·배경 끔.
-        const savedBg = scene.background;
         scene.background = null;
         glassMesh.visible = false;
         liquidMesh.material = wineBackMat;
@@ -1487,18 +1492,20 @@ export default function FluidLab({
         renderer.setClearColor(0x000000, 1);
         renderer.clear();
         renderer.render(scene, camera);
-        scene.background = savedBg;
         glassMesh.visible = true;
         liquidMesh.material = liquidBodyMat;
-        // 와인 뒤 장면 → bgRT (와인·유리 모두 숨김 → 배경만). 와인 셰이더가 이걸
-        // 굴절 오프셋으로 샘플 + Beer–Lambert 흡수 → 투과(화이트와인 비침). 유리를
-        // 빼는 이유: 빈 잔의 스템·원뿔 바닥이 굴절돼 X자로 비치던 것을 없애 깔끔하게.
+        // 와인 뒤 장면 → bgRT: 따뜻한 HDR(warmBg)로 렌더해 와인이 빛나게(투과 backlit).
+        // 와인·유리 숨김 → 배경만. 유리를 빼는 이유: 빈 잔 굴절 X자 방지.
+        scene.background = warmBg;
         liquidMesh.visible = false;
         glassMesh.visible = false;
         renderer.setRenderTarget(bgRT);
         renderer.render(scene, camera);
         glassMesh.visible = true;
         liquidMesh.visible = true;
+        // 화면에 보이는 최종 렌더: 배경은 pageBg(사이트 색과 매칭). 유리 뒤로는
+        // 어두운 페이지 색이 보이지만, 와인은 warmBg 로 이미 빛나는 상태로 합성됨.
+        scene.background = pageBg;
         frameCount++;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
@@ -1662,14 +1669,18 @@ export default function FluidLab({
       controls.minDistance = 1;
       controls.maxDistance = 5;
       controls.maxPolarAngle = Math.PI * 0.5;
-      controls.target.set(0.25, 0.55, 0);
+      controls.target.set(0, 0.55, 0); // x=0: 글라스를 프레임 수평 중앙에
       controls.enableRotate = false; // 드래그는 카메라 회전이 아니라 스월(잔 기울임)
       controls.enablePan = false;
 
       const hdrLoader = new UltraHDRLoader().setPath("/textures/equirectangular/");
       const hdrTexture = await hdrLoader.loadAsync("royal_esplanade_2k.hdr.jpg");
       hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
-      scene.background = hdrTexture; // 배경은 따뜻한 블러 유지
+      // 와인 투과(bgRT)는 따뜻한 HDR 로 샘플해 와인이 빛나게, 화면에 보이는 배경은
+      // pageBg(=bgColor 지정 시 사이트 색). bgColor 없으면 둘 다 따뜻한 HDR(기존).
+      warmBg = hdrTexture;
+      pageBg = bgColor ? new THREE.Color(bgColor) : hdrTexture;
+      scene.background = pageBg;
       scene.backgroundBlurriness = 0.5;
       // 반사(IBL)는 와인잔용 따뜻한 스튜디오 환경을 절차적으로 생성 — 파란 하늘
       // 대신 따뜻한 소프트박스가 비쳐 수면·유리 반사가 자연스럽다.

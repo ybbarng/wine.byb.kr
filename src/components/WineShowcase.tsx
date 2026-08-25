@@ -15,6 +15,12 @@ const FluidLab = dynamic(() => import("./FluidLab"), {
   loading: () => null,
 });
 
+// 글라스 캔버스에 넘길 배경색(3D 씬 배경). ACES 톤매핑을 거쳐 화면엔 더 어둡게
+// 나온다: 입력 #1a0510 → 렌더 결과 #0b0004(측정값). 그래서 페이지 컨테이너 배경은
+// 렌더 결과(CANVAS_RENDERED)에 맞춰야 이음새가 사라진다.
+const CANVAS_BG = "#1a0510";
+const CANVAS_RENDERED = "#0b0004";
+
 export default function WineShowcase() {
   const [selected, setSelected] = useState<ShowcaseWine | null>(null);
   const [query, setQuery] = useState("");
@@ -40,7 +46,10 @@ export default function WineShowcase() {
   };
 
   return (
-    <div className="relative h-screen w-full overflow-hidden bg-background">
+    <div
+      className="relative h-screen w-full overflow-hidden"
+      style={{ backgroundColor: CANVAS_RENDERED }}
+    >
       {/* ── 상단 고정 검색바 ── */}
       <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-4 px-6 py-4">
         <button
@@ -81,44 +90,23 @@ export default function WineShowcase() {
         <div className="hidden w-24 shrink-0 sm:block" />
       </header>
 
-      {/* ── 글라스(유지·이동) ── 중앙(랜딩) ↔ 좌측(검색 후). transform 만 바뀜. */}
+      {/* ── 글라스(유지·이동) ── 중앙(랜딩) ↔ 좌측(검색 후). transform 만 바뀜.
+          가장자리로 갈수록 페이지 배경색으로 페이드(비네트)해 캔버스 경계를 지운다
+          — 따뜻한 백라이트(3D 배경)는 유지하면서 사이트 배경과 매끄럽게 이어짐. */}
       <div
-        className="absolute left-0 top-0 z-20 h-[82vh] w-[46vh] transition-transform duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+        className="absolute left-0 top-0 z-20 h-[76vh] w-[44vh] transition-transform duration-[800ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
         style={{
           transformOrigin: "top left",
           transform: searched
-            ? "translate(2.5vw, 12vh) scale(0.66)"
-            : "translate(calc(50vw - 23vh), 9vh) scale(1)",
+            ? "translate(1.5vw, 9vh) scale(0.86)"
+            : "translate(calc(50vw - 22vh), 6vh) scale(1)",
         }}
       >
-        <FluidLab wineAbsorb={wine.absorb} glassType={wine.glass} />
-      </div>
-
-      {/* ── 랜딩 카피 + 빠른 칩(검색 전) ── */}
-      <div
-        className={`pointer-events-none absolute inset-x-0 bottom-[8vh] z-10 flex flex-col items-center gap-4 px-6 text-center transition-opacity duration-500 ${
-          searched ? "opacity-0" : "opacity-100"
-        }`}
-      >
-        <p className="max-w-md text-sm text-rose/70">
-          한 병의 뒷이야기를 색과 산지로. 마음에 드는 와인을 검색해 보세요.
-        </p>
-        <div className="pointer-events-auto flex flex-wrap justify-center gap-1.5">
-          {SHOWCASE_WINES.slice(0, 6).map((w) => (
-            <button
-              type="button"
-              key={w.id}
-              onClick={() => pick(w)}
-              className="flex items-center gap-1.5 rounded-full border border-white/15 bg-black/25 px-2.5 py-1 text-xs text-white/70 backdrop-blur transition-colors hover:text-white"
-            >
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ background: w.color }}
-              />
-              {w.nameKo}
-            </button>
-          ))}
-        </div>
+        <FluidLab
+          wineAbsorb={wine.absorb}
+          glassType={wine.glass}
+          bgColor={CANVAS_BG}
+        />
       </div>
 
       {/* ── 지도 + 상세(검색 후) ── 오른쪽에서 페이드인 ── */}
@@ -138,6 +126,7 @@ export default function WineShowcase() {
               regionName={wine.regionName}
               fallback={wine.fallback}
               label={`${wine.country} · ${wine.regionName}`}
+              className="h-full w-full"
             />
           )}
         </div>
