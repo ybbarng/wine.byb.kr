@@ -18,10 +18,11 @@ interface Props {
   className?: string;
 }
 
-const COUNTRY_FILL = "#7b1e3b"; // 국가 영역(가장 넓음·옅은 와인색 — 계층 최상위)
-const SELECTED_FILL = "#b83259"; // 선택 산지 채색(진한 와인색 — 패널 지역 레벨과 결 맞춤)
-const GOLD = "#d9a441"; // 선택 강조 테두리·라벨(패널의 gold 액센트와 통일)
-const THIS_REGION = "#d9a441"; // (원형 폴백에서 쓰는 이 와인 산지색)
+// 색은 테마 토큰과 결을 맞춘다(globals.css: --wine/--wine-bright/--gold).
+const COUNTRY_FILL = "#6e1a33"; // 국가 영역(가장 넓음·옅은 와인색 — 계층 최상위, --wine)
+const SELECTED_FILL = "#9d2846"; // 선택 산지 채색(밝은 와인색 — 패널 지역 레벨과 결 맞춤, --wine-bright)
+const GOLD = "#8a5616"; // 선택 강조 테두리·라벨(패널의 gold 액센트와 통일, --gold)
+const THIS_REGION = "#8a5616"; // (원형 폴백에서 쓰는 이 와인 산지색, --gold)
 const OTHER_REGION = "#5b9aa9"; // (원형 폴백에서 쓰는 기본 청록)
 // 선택되지 않은 산지들 — 붉은색 아닌 색을 지역마다 다르게. 라벨 색도 이 색을 따른다.
 // 밝은 지도 위에서 글자가 읽히도록 진한 계열로(채색은 낮은 불투명도라 옅게 깔린다).
@@ -111,7 +112,7 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
             type: "line",
             source: "countries",
             filter: only,
-            paint: { "line-color": "#b83259", "line-width": 1, "line-opacity": 0.6 },
+            paint: { "line-color": SELECTED_FILL, "line-width": 1, "line-opacity": 0.6 },
           });
         }
 
@@ -230,9 +231,9 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
               "text-anchor": "top",
             },
             paint: {
-              "text-color": "#f4e9ec",
-              "text-halo-color": "#1a0510",
-              "text-halo-width": 1.4,
+              "text-color": ["match", ["get", "kind"], "this", THIS_REGION, "#2f5560"],
+              "text-halo-color": "#ffffff",
+              "text-halo-width": 1.6,
             },
           });
         }
