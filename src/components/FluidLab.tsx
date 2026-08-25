@@ -1727,10 +1727,12 @@ export default function FluidLab({
       const studioEnv = new THREE.DataTexture(edata, ew, eh, THREE.RGBAFormat, THREE.FloatType);
       studioEnv.mapping = THREE.EquirectangularReflectionMapping;
       studioEnv.needsUpdate = true;
-      scene.environment = studioEnv;
-      // 노드 재질은 envMapIntensity 대신 scene.environmentIntensity 로 IBL 세기를
-      // 제어한다(수면이 밝은 천장을 통째로 반사해 흰 원반이 되는 것을 억제).
-      scene.environmentIntensity = 0.28;
+      void studioEnv; // (절차적 스튜디오맵 — 지금은 실내 HDR 반사 사용, 필요 시 되돌림용 보존)
+      // 유리 표면에 창문/방이 비치도록 실내 HDR 을 반사 환경으로. 절차적 스튜디오맵은
+      // 디테일이 없어 창문이 안 비쳤다. royal_esplanade = 아치·창 있는 실내.
+      scene.environment = hdrTexture;
+      // 노드 재질은 envMapIntensity 대신 scene.environmentIntensity 로 IBL 세기 제어.
+      scene.environmentIntensity = 0.42; // 반사 밝게 — 창문/방이 더 또렷이 비침
 
       // SSFR: 유체 입자만 담는 씬 + 깊이 RenderTarget + 화면 표면 quad
       fluidScene = new THREE.Scene();
