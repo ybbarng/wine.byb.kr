@@ -10,11 +10,13 @@ export function getWineOptions() {
   });
 }
 
-/** 시음 기록 타임라인 — 최근 음용일 순. 와인·생산자·지역을 함께 싣는다. */
-export function getCellarEntries() {
-  return db.tastingNote.findMany({
+/**
+ * 시음 기록 타임라인. 기본 정렬: 마신 날이 있으면 그날, 아직 시음 전이면
+ * 구매일을 기준으로 최근순(둘 다 없으면 기록 생성순). 와인·생산자·지역을 함께 싣는다.
+ */
+export async function getCellarEntries() {
+  const notes = await db.tastingNote.findMany({
     where: { isPublic: true },
-    orderBy: [{ drankOn: "desc" }, { createdAt: "desc" }],
     include: {
       wine: {
         include: {
@@ -24,6 +26,8 @@ export function getCellarEntries() {
       },
     },
   });
+  const key = (n: (typeof notes)[number]) => (n.drankOn ?? n.purchasedOn ?? n.createdAt).getTime();
+  return notes.sort((a, b) => key(b) - key(a) || b.createdAt.getTime() - a.createdAt.getTime());
 }
 
 export interface CellarStats {
