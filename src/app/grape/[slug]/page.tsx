@@ -50,7 +50,7 @@ export default async function GrapePage({ params }: PageProps<"/grape/[slug]">) 
     tannin: grape.tannin ?? curated?.tannin ?? null,
     sweetness: grape.sweetness ?? curated?.sweetness ?? null,
     aroma: dbAroma.length > 0 ? dbAroma : (curated?.aroma ?? []),
-    food: curated?.food ?? [],
+    pairings: curated?.pairings ?? [],
   };
 
   // 대표 산지: 이 품종을 쓴 내 와인의 산지를 빈도순으로. 각 칩은 산지 페이지로.
@@ -101,7 +101,7 @@ export default async function GrapePage({ params }: PageProps<"/grape/[slug]">) 
         tannin={character.tannin}
         sweetness={character.sweetness}
         aroma={character.aroma}
-        food={character.food}
+        pairings={character.pairings}
       />
 
       {topRegions.length > 0 ? (

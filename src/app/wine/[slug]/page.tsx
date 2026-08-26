@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
 import { GrapeColorDot } from "@/features/wine/grape-color";
+import { pairingsForGrapes } from "@/features/wine/grape-info";
 import { getWineBySlug } from "@/features/wine/queries";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { wineGlassFor } from "@/features/wine/wine-glass";
@@ -54,6 +55,8 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
 
   const grapeNames = wine.grapes.map((g) => g.grape.nameKo);
   const { absorb, glass } = wineGlassFor(wine.type, grapeNames);
+  // 이 와인의 품종에서 음식 페어링을 모은다(무엇과·왜).
+  const pairings = pairingsForGrapes(grapeNames);
 
   // 이름 아래 "생산자 · 지역 · 국가" 줄. 지역은 지역 페이지로 잇는다.
   const identity: React.ReactNode[] = [];
@@ -174,6 +177,23 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
           <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/85">
             {wine.notesKo}
           </p>
+        </Section>
+      ) : null}
+
+      {/* 음식 페어링 — 무엇과, 그리고 왜(품종 특성에서) */}
+      {pairings.length > 0 ? (
+        <Section title="음식 페어링">
+          <ul className="flex flex-col gap-2">
+            {pairings.map((p) => (
+              <li
+                key={p.food}
+                className="rounded-lg border border-foreground/10 bg-foreground/[0.03] px-3 py-2"
+              >
+                <div className="text-sm text-foreground">{p.food}</div>
+                <div className="mt-0.5 text-xs leading-relaxed text-muted">{p.why}</div>
+              </li>
+            ))}
+          </ul>
         </Section>
       ) : null}
 
