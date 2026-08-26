@@ -5,6 +5,12 @@
 // 지저분한 시드 이름(공백·괄호·로마자 병기)에 맞도록 공백을 지우고 전체 이름으로 매칭한다.
 // 키는 정규화된 전체 이름이라 "까베르네 소비뇽"과 "까베르네 프랑"이 서로 안 겹친다.
 
+/** 음식 페어링 — 무엇과, 그리고 왜 어울리는지. 이유를 읽으면 다른 음식으로 대체할 때도 판단할 수 있다. */
+export interface Pairing {
+  food: string;
+  why: string;
+}
+
 export interface GrapeDetail {
   desc: string;
   /** 3단계 수준. 바디: 가벼움/중간/묵직함 · 산도·타닌: 낮음/중간/높음 · 당도: 드라이/오프드라이/스위트 */
@@ -13,7 +19,7 @@ export interface GrapeDetail {
   tannin?: string;
   sweetness?: string;
   aroma?: string[];
-  food?: string[];
+  pairings?: Pairing[];
 }
 
 const ENTRIES: [string[], GrapeDetail][] = [
@@ -26,7 +32,16 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "높음",
       aroma: ["블랙커런트", "삼나무", "피망"],
-      food: ["스테이크", "양고기", "숙성 치즈"],
+      pairings: [
+        {
+          food: "스테이크·양고기 등 붉은 고기",
+          why: "강한 타닌이 고기의 지방·단백질과 만나 부드러워진다. 기름진 붉은 고기라면 두루 잘 맞는다.",
+        },
+        {
+          food: "숙성 하드 치즈",
+          why: "진한 풍미끼리 서로 밀리지 않고 균형을 이룬다.",
+        },
+      ],
     },
   ],
   [
@@ -37,7 +52,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "높음",
       tannin: "중간",
       aroma: ["라즈베리", "제비꽃", "피망"],
-      food: ["돼지고기", "허브 요리"],
+      pairings: [
+        {
+          food: "돼지고기·허브 요리",
+          why: "풀·허브 향이 로즈마리·타임 같은 향신 재료와 결이 같고, 중간 타닌이 부담을 주지 않는다.",
+        },
+      ],
     },
   ],
   [
@@ -48,7 +68,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "중간",
       aroma: ["자두", "블랙베리", "초콜릿"],
-      food: ["로스트 치킨", "미트 파스타"],
+      pairings: [
+        {
+          food: "로스트 치킨·미트 파스타",
+          why: "부드러운 타닌과 둥근 과실이 특정 재료를 누르지 않아, 무게가 가벼운~중간인 요리라면 폭넓게 어울린다.",
+        },
+      ],
     },
   ],
   [
@@ -59,7 +84,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "높음",
       aroma: ["블랙베리", "제비꽃", "향신료"],
-      food: ["바비큐", "양고기"],
+      pairings: [
+        {
+          food: "바비큐·양고기",
+          why: "진한 타닌과 향신료 향이 기름지고 불맛 나는 구운 고기를 받쳐준다.",
+        },
+      ],
     },
   ],
   [
@@ -70,7 +100,16 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "높음",
       tannin: "낮음",
       aroma: ["체리", "딸기", "흙"],
-      food: ["연어", "버섯 요리", "오리"],
+      pairings: [
+        {
+          food: "연어·오리 등 기름진 흰살·가금류",
+          why: "낮은 타닌이 재료를 누르지 않고, 높은 산도가 기름기를 산뜻하게 씻어준다.",
+        },
+        {
+          food: "버섯 요리",
+          why: "피노 특유의 흙·버섯 향이 같은 결의 감칠맛과 자연스럽게 이어진다.",
+        },
+      ],
     },
   ],
   [
@@ -81,7 +120,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "높음",
       tannin: "낮음",
       aroma: ["붉은 과실", "빵", "꽃"],
-      food: ["스파클링 안주"],
+      pairings: [
+        {
+          food: "튀김·짭짤한 안주",
+          why: "높은 산도와 기포가 기름기를 씻어내 다음 한 입을 개운하게 한다.",
+        },
+      ],
     },
   ],
   [
@@ -92,7 +136,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "높음",
       aroma: ["블랙베리", "후추", "훈연"],
-      food: ["바비큐", "스튜", "숙성 치즈"],
+      pairings: [
+        {
+          food: "바비큐·훈제 고기",
+          why: "후추 같은 향신료 풍미가 불맛·훈연과 이어지고, 강한 타닌이 기름기를 잡는다.",
+        },
+      ],
     },
   ],
   [
@@ -103,7 +152,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "낮음",
       tannin: "중간",
       aroma: ["딸기", "라즈베리", "향신료"],
-      food: ["스튜", "양고기"],
+      pairings: [
+        {
+          food: "양고기 스튜·뭉근한 조림",
+          why: "잘 익은 붉은 과실과 향신료 향이 오래 끓인 요리의 진한 감칠맛과 어울린다.",
+        },
+      ],
     },
   ],
   [
@@ -114,7 +168,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "높음",
       aroma: ["블랙베리", "가죽", "흙"],
-      food: ["사냥 고기", "스튜"],
+      pairings: [
+        {
+          food: "사냥 고기·진한 스튜",
+          why: "가죽·흙 같은 야성적인 풍미가 향이 강한 고기 요리와 결이 맞고, 타닌이 무게를 받친다.",
+        },
+      ],
     },
   ],
   [
@@ -125,7 +184,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "높음",
       tannin: "높음",
       aroma: ["체리", "말린 허브", "흙"],
-      food: ["토마토 파스타", "피자"],
+      pairings: [
+        {
+          food: "토마토 파스타·피자",
+          why: "높은 산도가 토마토의 산미와 맞아떨어져 서로를 밀어내지 않는다. 산미 있는 요리와 두루 좋다.",
+        },
+      ],
     },
   ],
   [
@@ -136,7 +200,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "중간",
       aroma: ["블랙베리", "자두", "코코아"],
-      food: ["스테이크", "엠파나다"],
+      pairings: [
+        {
+          food: "구운 소고기·엠파나다",
+          why: "진한 과실과 중간 타닌이 구운 고기의 기름기를 받치면서도 너무 조이지 않는다.",
+        },
+      ],
     },
   ],
   [
@@ -147,7 +216,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "중간",
       aroma: ["자두", "피망", "후추"],
-      food: ["고기 스튜", "구운 채소"],
+      pairings: [
+        {
+          food: "고기 스튜·구운 채소",
+          why: "피망 같은 향이 채소·향신료와 이어지고, 부드러운 타닌이 편안하게 받쳐준다.",
+        },
+      ],
     },
   ],
   [
@@ -158,7 +232,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "중간",
       aroma: ["잼 블랙베리", "후추", "계피"],
-      food: ["바비큐", "햄버거"],
+      pairings: [
+        {
+          food: "바비큐·햄버거",
+          why: "잼 같은 달큰한 과실과 높은 알코올이 달콤짭짤한 소스·불맛과 어울린다.",
+        },
+      ],
     },
   ],
   [
@@ -169,7 +248,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "중간",
       aroma: ["검은 과실", "흙", "담배"],
-      food: ["구운 고기", "숙성 치즈"],
+      pairings: [
+        {
+          food: "구운 고기·숙성 치즈",
+          why: "진하고 매끄러운 풍미가 짭짤하고 감칠맛 강한 요리와 균형을 이룬다.",
+        },
+      ],
     },
   ],
   [
@@ -180,7 +264,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       tannin: "높음",
       aroma: ["블랙베리", "훈연", "커피"],
-      food: ["바비큐", "비프 스튜"],
+      pairings: [
+        {
+          food: "바비큐·비프 스튜",
+          why: "훈연·커피 풍미가 불맛과 이어지고, 진한 타닌이 기름진 고기를 받친다.",
+        },
+      ],
     },
   ],
   [
@@ -192,7 +281,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       tannin: "낮음",
       sweetness: "스위트",
       aroma: ["딸기", "장미"],
-      food: ["디저트", "생과일"],
+      pairings: [
+        {
+          food: "베리 디저트·생과일",
+          why: "은은한 단맛과 딸기 향이 과일 디저트와 결이 같아, 단맛끼리 부딪치지 않고 이어진다.",
+        },
+      ],
     },
   ],
   // 화이트
@@ -203,7 +297,16 @@ const ENTRIES: [string[], GrapeDetail][] = [
       body: "중간",
       acidity: "중간",
       aroma: ["사과", "감귤", "버터", "오크"],
-      food: ["크림 파스타", "구운 닭·생선"],
+      pairings: [
+        {
+          food: "크림 파스타·버터 소스 요리",
+          why: "오크·발효로 생긴 무게와 크리미한 질감이 서로 무게가 맞아 부담 없이 어울린다.",
+        },
+        {
+          food: "구운 닭·흰살 생선",
+          why: "서늘한 스타일이라면 산뜻한 산도가 담백한 재료의 맛을 살린다.",
+        },
+      ],
     },
   ],
   [
@@ -213,7 +316,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       body: "가벼움",
       acidity: "높음",
       aroma: ["풀", "라임", "패션프루트"],
-      food: ["샐러드", "염소 치즈", "해산물"],
+      pairings: [
+        {
+          food: "샐러드·염소 치즈·해산물",
+          why: "높은 산도와 풀 향이 채소·산미 있는 치즈와 결이 같고, 기름기를 씻어 개운하게 한다.",
+        },
+      ],
     },
   ],
   [
@@ -224,7 +332,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "높음",
       sweetness: "드라이~스위트",
       aroma: ["라임", "사과", "꿀", "페트롤"],
-      food: ["매운 음식", "돼지고기"],
+      pairings: [
+        {
+          food: "매운 음식·양념 강한 요리",
+          why: "산뜻한 산미와 살짝 남은 단맛이 매운맛과 자극을 눅여준다. 단맛이 있을수록 매운 요리에 강하다.",
+        },
+      ],
     },
   ],
   [
@@ -234,7 +347,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       body: "묵직함",
       acidity: "낮음",
       aroma: ["살구", "복숭아", "꽃"],
-      food: ["향신료 요리", "닭 요리"],
+      pairings: [
+        {
+          food: "향신료 요리·닭 요리",
+          why: "꽃·핵과일 향이 커리 같은 향신 재료와 어우러지고, 풍만한 질감이 무게를 받쳐준다.",
+        },
+      ],
     },
   ],
   [
@@ -244,7 +362,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       body: "묵직함",
       acidity: "낮음",
       aroma: ["배", "아몬드", "꿀"],
-      food: ["닭 요리", "견과 곁들임"],
+      pairings: [
+        {
+          food: "닭 요리·견과 곁들임",
+          why: "풍만한 질감이 크리미하거나 고소한 요리와 무게가 맞는다.",
+        },
+      ],
     },
   ],
   [
@@ -254,7 +377,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       body: "중간",
       acidity: "중간",
       aroma: ["허브차", "살구", "견과"],
-      food: ["크림 요리", "닭 요리"],
+      pairings: [
+        {
+          food: "크림 요리·닭 요리",
+          why: "허브 향과 중간 산도가 크리미한 요리에 산뜻함을 더한다.",
+        },
+      ],
     },
   ],
   [
@@ -264,7 +392,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       body: "중간",
       acidity: "중간",
       aroma: ["배", "사과", "꿀"],
-      food: ["가벼운 안주", "흰살 생선"],
+      pairings: [
+        {
+          food: "가벼운 안주·흰살 생선",
+          why: "산뜻~부드러운 균형이 담백한 요리와 무게가 맞아 편하게 어울린다.",
+        },
+      ],
     },
   ],
   [
@@ -275,7 +408,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "높음",
       sweetness: "드라이~스위트",
       aroma: ["사과", "배", "꿀"],
-      food: ["푸아그라", "매운 음식"],
+      pairings: [
+        {
+          food: "푸아그라·매운 음식",
+          why: "높은 산도가 기름진 푸아그라를 씻어주고, 스위트 스타일은 매운맛을 달랜다.",
+        },
+      ],
     },
   ],
   [
@@ -286,7 +424,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       acidity: "중간",
       sweetness: "오프드라이~스위트",
       aroma: ["머스크", "오렌지꽃", "포도"],
-      food: ["디저트", "아시아 음식"],
+      pairings: [
+        {
+          food: "디저트·아시아 향신 요리",
+          why: "포도향 같은 달콤한 향이 디저트와 결이 같고, 은은한 단맛이 향신료의 자극을 눅여준다.",
+        },
+      ],
     },
   ],
   [
@@ -296,7 +439,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       body: "중간",
       acidity: "낮음",
       aroma: ["흰꽃", "사과"],
-      food: ["해산물", "샐러드"],
+      pairings: [
+        {
+          food: "해산물·샐러드",
+          why: "가볍고 향긋해 담백한 요리의 맛을 살린다.",
+        },
+      ],
     },
   ],
   [
@@ -306,7 +454,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       body: "가벼움",
       acidity: "높음",
       aroma: ["감귤", "흰꽃"],
-      food: ["해산물"],
+      pairings: [
+        {
+          food: "해산물",
+          why: "산뜻한 산도가 비린맛을 잡고 담백한 해산물을 개운하게 한다.",
+        },
+      ],
     },
   ],
   [
@@ -316,7 +469,12 @@ const ENTRIES: [string[], GrapeDetail][] = [
       body: "중간",
       acidity: "중간",
       aroma: ["흰꽃", "과일"],
-      food: ["디저트"],
+      pairings: [
+        {
+          food: "디저트",
+          why: "스위트한 풍미가 달콤한 디저트와 단맛의 결을 맞춘다.",
+        },
+      ],
     },
   ],
 ];
@@ -331,4 +489,19 @@ export function grapeInfo(nameKo: string | null | undefined): GrapeDetail | null
     if (keys.some((k) => n.includes(k))) return detail;
   }
   return null;
+}
+
+/** 여러 품종에서 페어링을 모은다(와인 상세용). 대표 품종부터, 음식 기준 중복 제거. */
+export function pairingsForGrapes(names: (string | null | undefined)[]): Pairing[] {
+  const seen = new Set<string>();
+  const out: Pairing[] = [];
+  for (const name of names) {
+    const info = grapeInfo(name);
+    for (const p of info?.pairings ?? []) {
+      if (seen.has(p.food)) continue;
+      seen.add(p.food);
+      out.push(p);
+    }
+  }
+  return out;
 }
