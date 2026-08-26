@@ -40,6 +40,11 @@ echo "🗄  Syncing DB schema..."
 mkdir -p data
 pnpm db:push
 
+# 마신 기록 시드(멱등: slug upsert + 시음 중복 스킵). 데이터 단일 소스는 git.
+# 배포를 막지 않도록 실패해도 계속(기반 시드가 없는 첫 배포 등).
+echo "🍷 Applying tasting seed..."
+pnpm exec tsx scripts/add-tastings.ts || echo "⚠️  tasting seed skipped (non-fatal)"
+
 echo "🔨 Building..."
 pnpm run build
 
