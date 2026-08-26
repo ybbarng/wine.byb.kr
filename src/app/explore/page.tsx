@@ -13,6 +13,8 @@ export interface ExploreRegion {
   lng: number;
   /** DB 산지 페이지 slug(있을 때만 클릭 이동). */
   slug: string | null;
+  /** 이 산지의 와인 수(내가 얼마나 마셔봤나 표시·필터용). */
+  wines: number;
 }
 
 export interface ExploreCountry {
@@ -44,9 +46,9 @@ export default async function ExplorePage() {
 
   const countrySlug = (country: string) =>
     countryRows.find((c) => c.nameKo === country)?.slug ?? null;
-  // 산지 핀 이름 → DB 산지 slug(같은 나라에서 nameKo가 그 이름을 포함하는 행).
-  const regionSlug = (country: string, name: string) =>
-    regionRows.find((r) => r.country === country && r.nameKo.includes(name))?.slug ?? null;
+  // 산지 핀 이름 → DB 산지 행(같은 나라에서 nameKo가 그 이름을 포함하는 행).
+  const regionRow = (country: string, name: string) =>
+    regionRows.find((r) => r.country === country && r.nameKo.includes(name)) ?? null;
 
   const countries: ExploreCountry[] = allCountries().map(({ country, geo }) => {
     const countryRow = countryRows.find((c) => c.nameKo === country);
@@ -60,12 +62,16 @@ export default async function ExplorePage() {
       slug: countrySlug(country),
       bbox: geo.bbox,
       wines,
-      regions: geo.regions.map((r) => ({
-        name: r.name,
-        lat: r.lat,
-        lng: r.lng,
-        slug: regionSlug(country, r.name),
-      })),
+      regions: geo.regions.map((r) => {
+        const row = regionRow(country, r.name);
+        return {
+          name: r.name,
+          lat: r.lat,
+          lng: r.lng,
+          slug: row?.slug ?? null,
+          wines: row ? (countByRegionId.get(row.id) ?? 0) : 0,
+        };
+      }),
     };
   });
 

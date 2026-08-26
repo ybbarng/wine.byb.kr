@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { FeatureCollection } from "geojson";
 import type { LngLatBoundsLike, Map as MlMap } from "maplibre-gl";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ExploreCountry } from "@/app/explore/page";
 import { BrandLogo } from "@/components/BrandLogo";
 import { countryFlag } from "./country-names";
@@ -32,6 +32,27 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
   const router = useRouter();
   const routerRef = useRef(router);
   routerRef.current = router;
+  const [tastedOnly, setTastedOnly] = useState(false);
+  const tastedOnlyRef = useRef(tastedOnly);
+  tastedOnlyRef.current = tastedOnly;
+
+  // "마신 곳만"이 켜지면 와인이 있는 산지만 남긴다(핀·라벨은 wines>0, 폴리곤은 그 지역 이름만).
+  const applyTastedFilter = useCallback(
+    (m: MlMap | null, on: boolean) => {
+      if (!m?.getLayer("explore-pins")) return;
+      const names = countries
+        .flatMap((c) => c.regions)
+        .filter((r) => r.wines > 0)
+        .map((r) => r.name);
+      const pinFilter = on ? [">", ["get", "wines"], 0] : null;
+      const polyFilter = on ? ["in", ["get", "region"], ["literal", names]] : null;
+      m.setFilter("explore-pins", pinFilter as never);
+      m.setFilter("explore-labels", pinFilter as never);
+      m.setFilter("explore-fill", polyFilter as never);
+      m.setFilter("explore-line", polyFilter as never);
+    },
+    [countries]
+  );
 
   useEffect(() => {
     const el = ref.current;
@@ -51,6 +72,7 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
             properties: {
               name: r.name,
               slug: r.slug ?? "",
+              wines: r.wines,
               color: COUNTRY_COLOR[c.country] ?? FALLBACK_COLOR,
             },
             geometry: { type: "Point" as const, coordinates: [r.lng, r.lat] },
@@ -100,9 +122,18 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
           type: "circle",
           source: "region-pins",
           paint: {
-            "circle-radius": ["interpolate", ["linear"], ["zoom"], 2, 4, 6, 9],
+            // 마셔본 산지(wines>0)는 조금 더 크고 진하게, 아직 안 마신 곳은 작고 옅게.
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              2,
+              ["case", [">", ["get", "wines"], 0], 5, 3.5],
+              6,
+              ["case", [">", ["get", "wines"], 0], 11, 7],
+            ],
             "circle-color": ["get", "color"],
-            "circle-opacity": 0.9,
+            "circle-opacity": ["case", [">", ["get", "wines"], 0], 0.9, 0.45],
             "circle-stroke-color": "#ffffff",
             "circle-stroke-width": 1.2,
           },
@@ -149,6 +180,8 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
             m.getCanvas().style.cursor = "";
           });
         }
+
+        applyTastedFilter(m, tastedOnlyRef.current);
       });
     })();
 
@@ -157,7 +190,12 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
       mapRef.current = null;
       map?.remove();
     };
-  }, [countries]);
+  }, [countries, applyTastedFilter]);
+
+  // 토글이 바뀌면 이미 떠 있는 지도에 필터를 다시 적용한다.
+  useEffect(() => {
+    applyTastedFilter(mapRef.current, tastedOnly);
+  }, [tastedOnly, applyTastedFilter]);
 
   const flyTo = (bbox: [number, number, number, number]) => {
     mapRef.current?.fitBounds(
@@ -181,6 +219,18 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
         <div className="pointer-events-auto flex w-fit items-center gap-3 rounded-full border border-foreground/12 bg-card/85 px-4 py-2 shadow-lg shadow-foreground/10 backdrop-blur">
           <BrandLogo />
           <span className="text-sm text-muted">산지 탐험</span>
+          <button
+            type="button"
+            onClick={() => setTastedOnly((v) => !v)}
+            aria-pressed={tastedOnly}
+            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+              tastedOnly
+                ? "border-wine bg-wine text-on-accent"
+                : "border-foreground/15 text-foreground/75 hover:border-foreground/30"
+            }`}
+          >
+            마신 곳만
+          </button>
         </div>
         <div className="pointer-events-auto flex flex-wrap gap-1.5">
           {countries.map((c) => (
