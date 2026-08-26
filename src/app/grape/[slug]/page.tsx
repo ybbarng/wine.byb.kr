@@ -1,8 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
 import { getGrapeBySlug } from "@/features/wine/collection-queries";
+import { GrapeCharacter } from "@/features/wine/grape-character";
+import { GrapeColorDot } from "@/features/wine/grape-color";
+import { grapeInfo } from "@/features/wine/grape-info";
+import { RegionMyStats } from "@/features/wine/region-my-stats";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 
 export const dynamic = "force-dynamic";
@@ -13,27 +18,50 @@ export async function generateMetadata({ params }: PageProps<"/grape/[slug]">): 
   return { title: data ? `${data.grape.nameKo} 품종` : "품종을 찾을 수 없음" };
 }
 
-// (러프) 품종 상세 — 왼쪽 글라스(품종 색)·가운데 지도(대표 산지)·오른쪽 설명+와인.
+// 품종 상세 — 왼쪽 글라스(품종 색)·가운데 지도(대표 산지)·오른쪽 특성+와인.
+// DB에 특성이 비어 있으면 큐레이션된 grape-info로 채운다.
 export default async function GrapePage({ params }: PageProps<"/grape/[slug]">) {
   const { slug } = await params;
   const data = await getGrapeBySlug(slug);
   if (!data) notFound();
-  const { grape, wines } = data;
+  const { grape, wines, stats } = data;
+  const curated = grapeInfo(grape.nameKo);
 
-  // 글라스: 품종 색을 기준으로. 화이트/레드 여부는 grape.color로 잡는다.
+  // 글라스: 품종 색 기준.
   const baseType = grape.color === "white" ? "white" : "red";
   const { absorb, glass } = wineGlassFor(baseType, [grape.nameKo]);
 
-  // aromaProfile은 JSON 배열 문자열 → 안전하게 "· "로 잇는다.
-  let aroma = "";
+  // 설명: DB 우선, 없으면 큐레이션.
+  const description = grape.descriptionKo ?? curated?.desc ?? null;
+
+  // 아로마: DB aromaProfile(JSON) 우선, 없으면 큐레이션.
+  let dbAroma: string[] = [];
   if (grape.aromaProfile) {
     try {
       const arr = JSON.parse(grape.aromaProfile);
-      aroma = Array.isArray(arr) ? arr.join(" · ") : String(grape.aromaProfile);
+      if (Array.isArray(arr)) dbAroma = arr.map(String);
     } catch {
-      aroma = grape.aromaProfile;
+      dbAroma = [grape.aromaProfile];
     }
   }
+  const character = {
+    body: grape.body ?? curated?.body ?? null,
+    acidity: grape.acidity ?? curated?.acidity ?? null,
+    tannin: grape.tannin ?? curated?.tannin ?? null,
+    sweetness: grape.sweetness ?? curated?.sweetness ?? null,
+    aroma: dbAroma.length > 0 ? dbAroma : (curated?.aroma ?? []),
+    food: curated?.food ?? [],
+  };
+
+  // 대표 산지: 이 품종을 쓴 내 와인의 산지를 빈도순으로. 각 칩은 산지 페이지로.
+  const regionTally = new Map<string, { slug: string; nameKo: string; n: number }>();
+  for (const w of wines) {
+    if (!w.region) continue;
+    const cur = regionTally.get(w.region.id);
+    if (cur) cur.n += 1;
+    else regionTally.set(w.region.id, { slug: w.region.slug, nameKo: w.region.nameKo, n: 1 });
+  }
+  const topRegions = [...regionTally.values()].sort((a, b) => b.n - a.n).slice(0, 8);
 
   // 지도: 이 품종을 쓴 대표 와인의 산지.
   const rep = wines[0]?.region ?? null;
@@ -52,20 +80,46 @@ export default async function GrapePage({ params }: PageProps<"/grape/[slug]">) 
       fallback={fallback}
       label={grape.nameKo}
     >
-      <div className="text-xs uppercase tracking-wide text-muted">포도 품종</div>
+      <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
+        <GrapeColorDot nameKo={grape.nameKo} />
+        포도 품종
+      </div>
       <h1 className="mt-1 font-serif text-2xl leading-tight text-foreground">{grape.nameKo}</h1>
       {grape.nameLocal ? <p className="text-sm text-muted">{grape.nameLocal}</p> : null}
 
-      {grape.descriptionKo ? (
+      {description ? (
         <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-foreground/85">
-          {grape.descriptionKo}
+          {description}
         </p>
       ) : null}
 
-      {aroma ? (
-        <p className="mt-3 text-sm text-foreground/80">
-          <span className="text-muted">아로마</span> · {aroma}
-        </p>
+      <RegionMyStats stats={stats} />
+
+      <GrapeCharacter
+        body={character.body}
+        acidity={character.acidity}
+        tannin={character.tannin}
+        sweetness={character.sweetness}
+        aroma={character.aroma}
+        food={character.food}
+      />
+
+      {topRegions.length > 0 ? (
+        <section className="mt-6">
+          <h2 className="mb-2 text-xs uppercase tracking-wide text-muted">대표 산지</h2>
+          <div className="flex flex-wrap gap-2">
+            {topRegions.map((r) => (
+              <Link
+                key={r.slug}
+                href={`/region/${r.slug}`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-foreground/12 bg-foreground/5 px-2.5 py-1 text-xs text-foreground/80 transition-colors hover:border-foreground/25 hover:bg-foreground/10"
+              >
+                {r.nameKo}
+                {r.n > 1 ? <span className="text-muted">{r.n}</span> : null}
+              </Link>
+            ))}
+          </div>
+        </section>
       ) : null}
 
       <section className="mt-6">

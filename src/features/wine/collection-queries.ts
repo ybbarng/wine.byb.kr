@@ -117,7 +117,7 @@ async function regionTastingStats(regionIds: string[]): Promise<RegionStats> {
   };
 }
 
-/** 품종 상세 — 품종 + 그 품종을 쓴 와인. */
+/** 품종 상세 — 품종 + 그 품종을 쓴 와인 + 내 기록 통계. */
 export async function getGrapeBySlug(rawSlug: string) {
   const slug = decodeSlug(rawSlug);
   const grape = await db.grape.findUnique({ where: { slug } });
@@ -127,7 +127,25 @@ export async function getGrapeBySlug(rawSlug: string) {
     include: WINE_LIST_INCLUDE,
     take: 24,
   });
-  return { grape, wines };
+  const stats = await grapeTastingStats(grape.id);
+  return { grape, wines, stats };
+}
+
+// 이 품종을 쓴 와인들의 시음 기록을 집계한다(산지 통계와 같은 모양, RegionStats 재사용).
+async function grapeTastingStats(grapeId: string): Promise<RegionStats> {
+  const notes = await db.tastingNote.findMany({
+    where: { wine: { grapes: { some: { grapeId } } } },
+    select: { rating: true, purchasePrice: true, wineId: true },
+  });
+  const ratings = notes.map((n) => n.rating).filter((r): r is number => r != null);
+  const prices = notes.map((n) => n.purchasePrice).filter((p): p is number => p != null);
+  const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+  return {
+    tastings: notes.length,
+    winesTasted: new Set(notes.map((n) => n.wineId)).size,
+    avgRating: avg(ratings),
+    avgPrice: avg(prices),
+  };
 }
 
 /** 타입 컬렉션 — 해당 종류의 와인. */
