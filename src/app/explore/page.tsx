@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ExploreMap } from "@/features/wine/explore-map";
+import { regionInfo } from "@/features/wine/region-info";
 import { allCountries } from "@/features/wine/wine-geo";
 import { db } from "@/lib/db";
 
@@ -15,6 +16,8 @@ export interface ExploreRegion {
   slug: string | null;
   /** 이 산지의 와인 수(내가 얼마나 마셔봤나 표시·필터용). */
   wines: number;
+  /** 이 산지의 주력 품종(큐레이션) — 품종별 필터용. */
+  keyGrapes: string[];
 }
 
 export interface ExploreCountry {
@@ -70,6 +73,7 @@ export default async function ExplorePage() {
           lng: r.lng,
           slug: row?.slug ?? null,
           wines: row ? (countByRegionId.get(row.id) ?? 0) : 0,
+          keyGrapes: regionInfo(r.name)?.keyGrapes ?? [],
         };
       }),
     };
