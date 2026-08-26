@@ -114,3 +114,8 @@ export function countryGeo(country: string | null | undefined): CountryGeo | nul
   if (!country) return null;
   return COUNTRY_GEO[country] ?? null;
 }
+
+/** 전세계 탐험 지도용 — 와인 생산국 전체를 이름·지리와 함께 돌려준다. */
+export function allCountries(): { country: string; geo: CountryGeo }[] {
+  return Object.entries(COUNTRY_GEO).map(([country, geo]) => ({ country, geo }));
+}
