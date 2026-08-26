@@ -35,21 +35,35 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
   const [tastedOnly, setTastedOnly] = useState(false);
   const tastedOnlyRef = useRef(tastedOnly);
   tastedOnlyRef.current = tastedOnly;
+  const [grape, setGrape] = useState<string | null>(null);
+  const grapeRef = useRef(grape);
+  grapeRef.current = grape;
 
-  // "마신 곳만"이 켜지면 와인이 있는 산지만 남긴다(핀·라벨은 wines>0, 폴리곤은 그 지역 이름만).
-  const applyTastedFilter = useCallback(
-    (m: MlMap | null, on: boolean) => {
+  // 필터에 쓸 품종 목록(모든 산지 주력 품종의 합집합).
+  const grapeOptions = [
+    ...new Set(countries.flatMap((c) => c.regions).flatMap((r) => r.keyGrapes)),
+  ].sort();
+
+  // "마신 곳만"·품종 필터를 적용한다. 조건을 통과한 산지 이름만 남긴다(핀·라벨·폴리곤 공통).
+  const applyFilters = useCallback(
+    (m: MlMap | null, tasted: boolean, g: string | null) => {
       if (!m?.getLayer("explore-pins")) return;
-      const names = countries
+      const active = tasted || g != null;
+      const layers = ["explore-pins", "explore-labels", "explore-fill", "explore-line"];
+      if (!active) {
+        for (const l of layers) m.setFilter(l, null);
+        return;
+      }
+      const allowed = countries
         .flatMap((c) => c.regions)
-        .filter((r) => r.wines > 0)
+        .filter((r) => (!tasted || r.wines > 0) && (!g || r.keyGrapes.includes(g)))
         .map((r) => r.name);
-      const pinFilter = on ? [">", ["get", "wines"], 0] : null;
-      const polyFilter = on ? ["in", ["get", "region"], ["literal", names]] : null;
-      m.setFilter("explore-pins", pinFilter as never);
-      m.setFilter("explore-labels", pinFilter as never);
-      m.setFilter("explore-fill", polyFilter as never);
-      m.setFilter("explore-line", polyFilter as never);
+      const pinF = ["in", ["get", "name"], ["literal", allowed]] as never;
+      const polyF = ["in", ["get", "region"], ["literal", allowed]] as never;
+      m.setFilter("explore-pins", pinF);
+      m.setFilter("explore-labels", pinF);
+      m.setFilter("explore-fill", polyF);
+      m.setFilter("explore-line", polyF);
     },
     [countries]
   );
@@ -181,7 +195,7 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
           });
         }
 
-        applyTastedFilter(m, tastedOnlyRef.current);
+        applyFilters(m, tastedOnlyRef.current, grapeRef.current);
       });
     })();
 
@@ -190,12 +204,12 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
       mapRef.current = null;
       map?.remove();
     };
-  }, [countries, applyTastedFilter]);
+  }, [countries, applyFilters]);
 
-  // 토글이 바뀌면 이미 떠 있는 지도에 필터를 다시 적용한다.
+  // 필터가 바뀌면 이미 떠 있는 지도에 다시 적용한다.
   useEffect(() => {
-    applyTastedFilter(mapRef.current, tastedOnly);
-  }, [tastedOnly, applyTastedFilter]);
+    applyFilters(mapRef.current, tastedOnly, grape);
+  }, [tastedOnly, grape, applyFilters]);
 
   const flyTo = (bbox: [number, number, number, number]) => {
     mapRef.current?.fitBounds(
@@ -231,6 +245,23 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
           >
             마신 곳만
           </button>
+          <select
+            value={grape ?? ""}
+            onChange={(e) => setGrape(e.target.value || null)}
+            aria-label="품종으로 거르기"
+            className={`rounded-full border px-3 py-1 text-xs transition-colors focus:outline-none ${
+              grape
+                ? "border-wine bg-wine/10 text-foreground"
+                : "border-foreground/15 text-foreground/75 hover:border-foreground/30"
+            }`}
+          >
+            <option value="">모든 품종</option>
+            {grapeOptions.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
         </div>
         <div className="pointer-events-auto flex flex-wrap gap-1.5">
           {countries.map((c) => (
