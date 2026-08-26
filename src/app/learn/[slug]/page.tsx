@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { LESSONS, lessonBySlug } from "@/features/learn/learn-content";
+import { LessonBlocks } from "@/features/learn/lesson-blocks";
 
 export async function generateMetadata({ params }: PageProps<"/learn/[slug]">): Promise<Metadata> {
   const { slug } = await params;
@@ -23,7 +24,7 @@ export default async function LessonPage({ params }: PageProps<"/learn/[slug]">)
     <div className="flex flex-1 flex-col">
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-6 pb-24">
+      <main className="mx-auto w-full max-w-3xl flex-1 px-6 pb-24">
         <Link
           href="/learn"
           className="mt-6 inline-block text-sm text-muted transition-colors hover:text-foreground"
@@ -37,16 +38,9 @@ export default async function LessonPage({ params }: PageProps<"/learn/[slug]">)
           <p className="mt-2 text-muted/80">{lesson.summary}</p>
         </header>
 
-        <article className="mt-8 flex flex-col gap-7">
-          {lesson.sections.map((s) => (
-            <section key={s.heading}>
-              <h2 className="font-serif text-xl text-foreground">{s.heading}</h2>
-              <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed text-foreground/85">
-                {s.body}
-              </p>
-            </section>
-          ))}
-        </article>
+        <div className="mt-8">
+          <LessonBlocks blocks={lesson.blocks} />
+        </div>
 
         {lesson.links && lesson.links.length > 0 ? (
           <div className="mt-8 flex flex-wrap gap-2">
