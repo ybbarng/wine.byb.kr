@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
-import { NewEntryButton } from "@/features/cellar/new-entry-button";
-import { getCellarEntries, getCellarStats } from "@/features/cellar/queries";
+import { NewEntryButton } from "@/features/journal/new-entry-button";
+import { getJournalEntries, getJournalStats } from "@/features/journal/queries";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
 import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
 export const metadata: Metadata = {
-  title: "셀러",
+  title: "마신 기록",
   description: "내가 마신 와인 기록.",
 };
 
@@ -23,8 +23,8 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-export default async function CellarPage() {
-  const [entries, stats] = await Promise.all([getCellarEntries(), getCellarStats()]);
+export default async function JournalPage() {
+  const [entries, stats] = await Promise.all([getJournalEntries(), getJournalStats()]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -33,7 +33,7 @@ export default async function CellarPage() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 pb-24">
         <header className="mt-6 flex items-start justify-between gap-4">
           <div>
-            <h1 className="font-serif text-4xl tracking-tight text-foreground">셀러</h1>
+            <h1 className="font-serif text-4xl tracking-tight text-foreground">마신 기록</h1>
             <p className="mt-2 text-muted/70">그동안 마신 와인 기록.</p>
           </div>
           <div className="mt-2">
@@ -80,7 +80,7 @@ export default async function CellarPage() {
               return (
                 <li key={e.id} className="border-t border-foreground/10 first:border-t-0">
                   <Link
-                    href={`/cellar/${e.id}`}
+                    href={`/journal/${e.id}`}
                     className="group flex flex-col gap-1 py-4 transition-colors hover:bg-foreground/5 sm:flex-row sm:items-baseline sm:gap-4"
                   >
                     <time className="w-24 shrink-0 font-mono text-sm text-gold/80">

@@ -12,7 +12,7 @@ export function NoteActions({ id }: { id: string }) {
 
   return (
     <Link
-      href={`/cellar/${id}/edit`}
+      href={`/journal/${id}/edit`}
       className="rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-sm text-gold transition-colors hover:bg-gold/20"
     >
       수정

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 
-// 셀러(내가 마신 기록) 조회. 작성은 관리자만, 조회는 누구나(§4.5).
+// 마신 기록(내가 마신 기록) 조회. 작성은 관리자만, 조회는 누구나(§4.5).
 
 /** 작성 폼의 와인 선택용 목록 — 원어 이름 순. */
 export function getWineOptions() {
@@ -14,7 +14,7 @@ export function getWineOptions() {
  * 시음 기록 타임라인. 기본 정렬: 마신 날이 있으면 그날, 아직 시음 전이면
  * 구매일을 기준으로 최근순(둘 다 없으면 기록 생성순). 와인·생산자·지역을 함께 싣는다.
  */
-export async function getCellarEntries() {
+export async function getJournalEntries() {
   const notes = await db.tastingNote.findMany({
     where: { isPublic: true },
     include: {
@@ -30,7 +30,7 @@ export async function getCellarEntries() {
   return notes.sort((a, b) => key(b) - key(a) || b.createdAt.getTime() - a.createdAt.getTime());
 }
 
-export interface CellarStats {
+export interface JournalStats {
   total: number;
   uniqueWines: number;
   avgPrice: number | null;
@@ -39,8 +39,8 @@ export interface CellarStats {
   byCountry: { label: string; count: number }[];
 }
 
-/** 셀러 통계 — 총 병 수, 마신 와인 종류, 평균 가격, 재구매, 종류/국가 분포. */
-export async function getCellarStats(): Promise<CellarStats> {
+/** 마신 기록 통계 — 총 병 수, 마신 와인 종류, 평균 가격, 재구매, 종류/국가 분포. */
+export async function getJournalStats(): Promise<JournalStats> {
   const notes = await db.tastingNote.findMany({
     where: { isPublic: true },
     include: { wine: { include: { region: { include: { parent: true } } } } },

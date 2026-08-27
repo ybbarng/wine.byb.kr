@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { AdminGuard } from "@/features/admin/admin-guard";
-import { getWineOptions } from "@/features/cellar/queries";
-import { TastingNoteForm } from "@/features/cellar/tasting-note-form";
+import { getWineOptions } from "@/features/journal/queries";
+import { TastingNoteForm } from "@/features/journal/tasting-note-form";
 
 export const metadata: Metadata = {
   title: "새 기록",
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function NewTastingNotePage({ searchParams }: PageProps<"/cellar/new">) {
+export default async function NewTastingNotePage({ searchParams }: PageProps<"/journal/new">) {
   const [wines, sp] = await Promise.all([getWineOptions(), searchParams]);
   const wineId = typeof sp.wineId === "string" ? sp.wineId : undefined;
 

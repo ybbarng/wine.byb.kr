@@ -52,7 +52,7 @@ export function WineForm() {
     }
     const created = await res.json();
     // 등록한 와인을 미리 고른 채로 기록 작성 화면으로.
-    router.push(`/cellar/new?wineId=${created.id}`);
+    router.push(`/journal/new?wineId=${created.id}`);
     router.refresh();
   }
 
@@ -151,7 +151,7 @@ export function WineForm() {
         </button>
         <button
           type="button"
-          onClick={() => router.push("/cellar/new")}
+          onClick={() => router.push("/journal/new")}
           className="text-sm text-muted/50 transition-colors hover:text-foreground"
         >
           취소

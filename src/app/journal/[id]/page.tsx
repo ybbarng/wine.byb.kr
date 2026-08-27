@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
-import { NoteActions } from "@/features/cellar/note-actions";
-import { getTastingNote } from "@/features/cellar/queries";
+import { NoteActions } from "@/features/journal/note-actions";
+import { getTastingNote } from "@/features/journal/queries";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
 import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
 // DB를 요청 시점에 읽는다. 빌드 때 정적 생성하지 않는다.
 export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: PageProps<"/cellar/[id]">): Promise<Metadata> {
+export async function generateMetadata({ params }: PageProps<"/journal/[id]">): Promise<Metadata> {
   const { id } = await params;
   const data = await getTastingNote(id);
   if (!data) return { title: "기록을 찾을 수 없음" };
@@ -31,7 +31,7 @@ function DetailRow({ label, value }: { label: string; value: string | null }) {
   );
 }
 
-export default async function TastingNotePage({ params }: PageProps<"/cellar/[id]">) {
+export default async function TastingNotePage({ params }: PageProps<"/journal/[id]">) {
   const { id } = await params;
   const data = await getTastingNote(id);
   if (!data) notFound();
@@ -47,8 +47,8 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
 
       <main className="mx-auto w-full max-w-2xl flex-1 px-6 pb-24">
         <div className="mt-6 flex items-center justify-between gap-4">
-          <Link href="/cellar" className="text-sm text-muted/60 hover:text-foreground">
-            ← 셀러
+          <Link href="/journal" className="text-sm text-muted/60 hover:text-foreground">
+            ← 마신 기록
           </Link>
           <NoteActions id={note.id} />
         </div>
@@ -126,7 +126,7 @@ export default async function TastingNotePage({ params }: PageProps<"/cellar/[id
               {others.map((o) => (
                 <li key={o.id}>
                   <Link
-                    href={`/cellar/${o.id}`}
+                    href={`/journal/${o.id}`}
                     className="flex items-baseline justify-between gap-3 py-1.5 text-sm text-muted/70 hover:text-foreground"
                   >
                     <span className="font-mono text-gold/70">{formatDate(o.drankOn)}</span>

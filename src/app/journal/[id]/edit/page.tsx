@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { AdminGuard } from "@/features/admin/admin-guard";
-import { getTastingNote, getWineOptions } from "@/features/cellar/queries";
-import { type ExistingNote, TastingNoteForm } from "@/features/cellar/tasting-note-form";
-import { toDateInput } from "@/features/cellar/tasting-note-schema";
+import { getTastingNote, getWineOptions } from "@/features/journal/queries";
+import { type ExistingNote, TastingNoteForm } from "@/features/journal/tasting-note-form";
+import { toDateInput } from "@/features/journal/tasting-note-schema";
 
 export const metadata: Metadata = {
   title: "기록 수정",
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function EditTastingNotePage({ params }: PageProps<"/cellar/[id]/edit">) {
+export default async function EditTastingNotePage({ params }: PageProps<"/journal/[id]/edit">) {
   const { id } = await params;
   const [data, wines] = await Promise.all([getTastingNote(id), getWineOptions()]);
   if (!data) notFound();

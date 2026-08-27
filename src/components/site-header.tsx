@@ -4,11 +4,11 @@ import { BrandLogo } from "./BrandLogo";
 
 const NAV = [
   { href: "/explore", label: "탐험" },
-  { href: "/cellar", label: "기록" },
+  { href: "/journal", label: "기록" },
   { href: "/learn", label: "학습" },
 ];
 
-// 콘텐츠 페이지(셀러·학습 등)의 상단 헤더. 홈/쇼케이스의 ShowcaseHeader와
+// 콘텐츠 페이지(기록·학습 등)의 상단 헤더. 홈/쇼케이스의 ShowcaseHeader와
 // 같은 브랜딩·헤어라인을 쓰되, 풀스크린 검색 대신 단순 내비만 둔다.
 export function SiteHeader() {
   return (
