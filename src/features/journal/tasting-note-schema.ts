@@ -27,6 +27,13 @@ export const tastingNoteSchema = z.object({
   rating: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1).max(5).optional()),
   repurchase: z.preprocess(emptyToUndefined, z.enum(["응", "아마", "아니"]).optional()),
   value: z.preprocess(emptyToUndefined, z.enum(["만족", "보통", "아쉬움"]).optional()),
+  colorHex: z.preprocess(
+    emptyToUndefined,
+    z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/, "#rrggbb 형식이어야 합니다")
+      .optional()
+  ),
   bodyText: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
   foodPaired: z.preprocess(emptyToUndefined, z.string().max(500).optional()),
 });

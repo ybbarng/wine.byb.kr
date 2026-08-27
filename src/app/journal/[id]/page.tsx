@@ -111,8 +111,17 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
             <DetailRow label="구매가격" value={formatKRW(note.purchasePrice) || null} />
             <DetailRow label="등급" value={wine.classification} />
           </dl>
-          {note.rating || note.repurchase || note.value ? (
+          {note.rating || note.repurchase || note.value || note.colorHex ? (
             <div className="mt-3 flex flex-wrap gap-2 text-sm">
+              {note.colorHex ? (
+                <span className="inline-flex items-center gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-muted">색</span>
+                  <span
+                    className="h-4 w-4 rounded-full border border-foreground/20"
+                    style={{ background: note.colorHex }}
+                  />
+                </span>
+              ) : null}
               {note.rating ? (
                 <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
                   <span className="text-[10px] uppercase tracking-wide text-muted">별점</span>

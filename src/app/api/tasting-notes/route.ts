@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
       rating: d.rating ?? null,
       repurchase: d.repurchase ?? null,
       value: d.value ?? null,
+      colorHex: d.colorHex ?? null,
       bodyText: d.bodyText ?? null,
       foodPaired: d.foodPaired ?? null,
       owner: "admin",

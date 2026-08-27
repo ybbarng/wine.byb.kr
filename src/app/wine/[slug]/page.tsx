@@ -9,7 +9,7 @@ import { producerInfo } from "@/features/wine/producer-info";
 import { getWineBySlug } from "@/features/wine/queries";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { regionInfo } from "@/features/wine/region-info";
-import { wineGlassFor } from "@/features/wine/wine-glass";
+import { averageHex, wineGlassFor } from "@/features/wine/wine-glass";
 import { wineProfile } from "@/features/wine/wine-profile";
 import { formatDate, formatKRW } from "@/lib/format";
 import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
@@ -66,7 +66,10 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
         : null;
 
   const grapeNames = wine.grapes.map((g) => g.grape.nameKo);
-  const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug, wine.colorHex);
+  // 잔 색: 수동 고정(wine.colorHex) → 시음 기록 색들의 평균 → 추정.
+  const displayColor =
+    wine.colorHex ?? averageHex(wine.tastingNotes.map((n) => n.colorHex)) ?? undefined;
+  const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug, displayColor);
   // 이 와인의 품종에서 음식 페어링을 모은다(무엇과·왜).
   const pairings = pairingsForGrapes(grapeNames);
 
