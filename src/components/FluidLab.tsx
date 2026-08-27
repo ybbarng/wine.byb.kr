@@ -269,6 +269,13 @@ export default function FluidLab({
     }
   }, [wineAbsorb]);
 
+  // 스월 기울기 배율 — 컨테이너 폭에 따라 실시간으로 바뀔 수 있어 ref 로 읽는다
+  // (반응형: 좁은 데스크톱 3분할 칸은 작게, 풀폭 모바일/홈은 크게).
+  const swirlRef = useRef(swirlScale ?? 1);
+  useEffect(() => {
+    swirlRef.current = swirlScale ?? 1;
+  }, [swirlScale]);
+
   // 색(wineAbsorb)은 위 별도 effect 로 실시간 반영 — 여기(씬 셋업)는 glassType 변경 시에만 재빌드.
   // biome-ignore lint/correctness/useExhaustiveDependencies: 색은 별도 effect로 실시간 반영, glassType 변경 시에만 재빌드
   useEffect(() => {
@@ -1377,7 +1384,7 @@ export default function FluidLab({
         const dt = 1 / 60;
         // 잔 = 마우스 추종. 드래그 시작점 기준 오프셋으로 기울고, 놓으면 세워진다.
         const GAMP = 0.007; // px → rad
-        const GMAX = 0.32 * (swirlScale ?? 1); // 최대 잔 기울기(좁은 홈은 축소)
+        const GMAX = 0.32 * swirlRef.current; // 최대 잔 기울기(컨테이너 폭에 맞춰 실시간)
         let gtx = 0;
         let gtz = 0;
         if (autoSwirl) {
