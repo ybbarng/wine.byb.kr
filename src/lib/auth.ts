@@ -30,6 +30,10 @@ export type AuthResult = { success: true } | { success: false; response: NextRes
  * 실패면 그대로 돌려줄 응답이 담긴 { success: false, response }.
  */
 export function verifyAdmin(request: NextRequest): AuthResult {
+  // 로컬 개발(next dev)에서는 항상 편집 허용 — 배포는 NODE_ENV=production 이라 영향 없음.
+  if (process.env.NODE_ENV === "development") {
+    return { success: true };
+  }
   const expected = process.env.ADMIN_PASSWORD;
   if (!expected) {
     return { success: false, response: passwordNotConfiguredResponse() };

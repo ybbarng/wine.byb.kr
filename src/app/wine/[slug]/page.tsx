@@ -3,16 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
-import { GrapeColorDot } from "@/features/wine/grape-color";
-import { grapeInfo, pairingsForGrapes } from "@/features/wine/grape-info";
 import { PriceBadge } from "@/features/wine/price-badge";
-import { producerInfo } from "@/features/wine/producer-info";
 import { getWineBySlug } from "@/features/wine/queries";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
-import { regionInfo } from "@/features/wine/region-info";
 import { averageHex, wineGlassFor } from "@/features/wine/wine-glass";
+import { WineInfoSections } from "@/features/wine/wine-info-sections";
 import { priceVerdict, winePrice } from "@/features/wine/wine-price-info";
-import { wineProfile } from "@/features/wine/wine-profile";
 import { formatDate, formatKRW } from "@/lib/format";
 import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
@@ -29,15 +25,6 @@ function Chip({ children }: { children: React.ReactNode }) {
   return (
     <span className="rounded-full border border-foreground/12 bg-foreground/5 px-2.5 py-1 text-xs text-foreground/80">
       {children}
-    </span>
-  );
-}
-
-function ProfileChip({ label, value }: { label: string; value: string }) {
-  return (
-    <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
-      <span className="text-[10px] uppercase tracking-wide text-muted">{label}</span>
-      <span className="text-sm text-foreground/90">{value}</span>
     </span>
   );
 }
@@ -72,28 +59,26 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
   const displayColor =
     wine.colorHex ?? averageHex(wine.tastingNotes.map((n) => n.colorHex)) ?? undefined;
   const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug, displayColor);
-  // 이 와인의 품종에서 음식 페어링을 모은다(무엇과·왜).
-  const pairings = pairingsForGrapes(grapeNames);
+  const fair = winePrice(wine.slug); // 국내 소매 적정가 범위(내 기록 판정용)
 
-  // 종합 프로필: 색·바디·당도·서빙 온도·수준(타입·품종·산지·등급에서).
-  const primaryGrape = grapeNames[0] ?? null;
-  const gInfo = grapeInfo(primaryGrape);
-  const rInfo = regionInfo(wine.region?.nameKo);
-  const profile = wineProfile(wine, gInfo, primaryGrape);
-  const pInfo = producerInfo(wine.producer?.nameKo ?? wine.producer?.nameLocal ?? null);
-  const fair = winePrice(wine.slug); // 국내 소매 적정가 범위(있으면)
-  const terroir = [rInfo?.climate, rInfo?.soil].filter(Boolean).join(" · ");
-  const grapeStats = [
-    gInfo?.body && `바디 ${gInfo.body}`,
-    gInfo?.acidity && `산도 ${gInfo.acidity}`,
-    gInfo?.tannin && `타닌 ${gInfo.tannin}`,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-
-  // 이름 아래 "생산자 · 지역 · 국가" 줄. 지역은 지역 페이지로 잇는다.
+  // 이름 아래 "생산자 · 지역 · 국가" 줄. 생산자·지역은 각 페이지로 잇는다. 지역명이
+  // 국가와 같으면(예: 산지도 국가도 "호주") 국가는 생략해 중복을 없앤다.
   const identity: React.ReactNode[] = [];
-  if (wine.producer?.nameKo) identity.push(wine.producer.nameKo);
+  if (wine.producer?.nameKo) {
+    identity.push(
+      wine.producer.slug ? (
+        <Link
+          key="producer"
+          href={`/producer/${wine.producer.slug}`}
+          className="underline decoration-foreground/25 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/60"
+        >
+          {wine.producer.nameKo}
+        </Link>
+      ) : (
+        wine.producer.nameKo
+      )
+    );
+  }
   if (region) {
     identity.push(
       <Link
@@ -107,7 +92,7 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
   } else if (wine.region?.nameKo) {
     identity.push(wine.region.nameKo);
   }
-  if (country) identity.push(country);
+  if (country && country !== region?.nameKo) identity.push(country);
 
   return (
     <WineDetailView
@@ -168,130 +153,8 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
         </div>
       ) : null}
 
-      {/* 이 와인, 어떨까 — 한눈에 + 떼루아·품종의 이유 */}
-      <Section title="이 와인, 어떨까">
-        <div className="flex flex-wrap gap-1.5">
-          <ProfileChip label="색" value={profile.color} />
-          {profile.body ? <ProfileChip label="바디" value={profile.body} /> : null}
-          <ProfileChip label="당도" value={profile.sweetness} />
-          <ProfileChip label="온도" value={profile.servingTemp} />
-          {profile.tier ? <ProfileChip label="수준" value={profile.tier} /> : null}
-        </div>
-        {rInfo || gInfo ? (
-          <dl className="mt-3 flex flex-col gap-2 text-sm leading-relaxed">
-            {rInfo ? (
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted">
-                  떼루아{terroir ? ` · ${terroir}` : ""}
-                </dt>
-                <dd className="text-foreground/85">{rInfo.desc}</dd>
-              </div>
-            ) : null}
-            {gInfo && primaryGrape ? (
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-muted">
-                  {primaryGrape}
-                  {grapeStats ? ` · ${grapeStats}` : ""}
-                </dt>
-                <dd className="text-foreground/85">{gInfo.desc}</dd>
-              </div>
-            ) : null}
-          </dl>
-        ) : null}
-      </Section>
-
-      {/* 품종 */}
-      {wine.grapes.length > 0 ? (
-        <Section title="품종">
-          <ul className="flex flex-col gap-2">
-            {wine.grapes.map((g) => (
-              <li key={g.id} className="flex items-center gap-3 text-sm">
-                <Link
-                  href={`/grape/${g.grape.slug}`}
-                  className="flex w-28 shrink-0 items-center gap-1.5 text-foreground underline decoration-transparent underline-offset-2 transition-colors hover:text-wine hover:decoration-wine/50"
-                >
-                  <GrapeColorDot nameKo={g.grape.nameKo} />
-                  {g.grape.nameKo}
-                </Link>
-                {g.percent != null ? (
-                  <div className="flex flex-1 items-center gap-2">
-                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-foreground/10">
-                      <div
-                        className="h-full rounded-full bg-wine-bright"
-                        style={{ width: `${g.percent}%` }}
-                      />
-                    </div>
-                    <span className="w-9 shrink-0 text-right text-muted">{g.percent}%</span>
-                  </div>
-                ) : (
-                  <span className="text-muted">비율 미상</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : wine.blendRaw ? (
-        <Section title="품종">
-          <p className="text-sm text-foreground/80">{wine.blendRaw}</p>
-        </Section>
-      ) : null}
-
-      {/* 시음 포인트 */}
-      {wine.notesKo ? (
-        <Section title="시음 포인트">
-          <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/85">
-            {wine.notesKo}
-          </p>
-        </Section>
-      ) : null}
-
-      {/* 음식 페어링 — 무엇과, 그리고 왜(품종 특성에서) */}
-      {pairings.length > 0 ? (
-        <Section title="음식 페어링">
-          <ul className="flex flex-col gap-2">
-            {pairings.map((p) => (
-              <li
-                key={p.food}
-                className="rounded-lg border border-foreground/10 bg-foreground/[0.03] px-3 py-2"
-              >
-                <div className="text-sm text-foreground">{p.food}</div>
-                <div className="mt-0.5 text-xs leading-relaxed text-muted">{p.why}</div>
-              </li>
-            ))}
-          </ul>
-        </Section>
-      ) : null}
-
-      {/* 생산자 */}
-      {pInfo || wine.producer ? (
-        <Section title="생산자">
-          <div className="rounded-lg border border-foreground/10 bg-foreground/[0.03] px-3 py-2.5">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-sm text-foreground">{wine.producer?.nameKo ?? "—"}</span>
-              {wine.producer?.slug ? (
-                <Link
-                  href={`/producer/${wine.producer.slug}`}
-                  className="shrink-0 text-xs text-gold underline decoration-transparent underline-offset-2 transition-colors hover:decoration-gold/50"
-                >
-                  생산자 페이지 →
-                </Link>
-              ) : null}
-            </div>
-            {pInfo ? <p className="mt-1 text-xs leading-relaxed text-muted">{pInfo.desc}</p> : null}
-          </div>
-        </Section>
-      ) : null}
-
-      {/* 국내 적정가 */}
-      {fair ? (
-        <Section title="국내 적정가">
-          <p className="text-sm text-foreground/90">
-            {formatKRW(fair.low)} ~ {formatKRW(fair.high)}
-            <span className="ml-1.5 text-xs text-muted">와인샵·마트 소매 기준 · 추정</span>
-          </p>
-          {fair.note ? <p className="mt-1 text-xs text-muted">{fair.note}</p> : null}
-        </Section>
-      ) : null}
+      {/* 와인 보편 정보(프로필·떼루아·품종·페어링·생산자·적정가) — 시음 기록과 공용 */}
+      <WineInfoSections wine={wine} />
 
       {/* 내 기록 */}
       <Section title="내 기록">
