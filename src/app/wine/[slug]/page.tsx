@@ -54,7 +54,7 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
         : null;
 
   const grapeNames = wine.grapes.map((g) => g.grape.nameKo);
-  const { absorb, glass } = wineGlassFor(wine.type, grapeNames);
+  const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug);
   // 이 와인의 품종에서 음식 페어링을 모은다(무엇과·왜).
   const pairings = pairingsForGrapes(grapeNames);
 

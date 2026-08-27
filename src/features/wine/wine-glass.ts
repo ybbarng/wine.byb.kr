@@ -36,12 +36,20 @@ const TYPE_DEFAULT: Record<string, { absorb: [number, number, number]; glass: nu
 // 레드 중 넓은 볼(부르고뉴)이 어울리는 아로마틱 품종.
 const BURGUNDY_GRAPES = new Set(["피노 누아", "네비올로", "산지오베제", "가메"]);
 
+// 타입·품종으로는 안 잡히는 특수한 색을 와인별(slug)로 지정. 로제 샴페인처럼
+// 품종을 넣으면(피노 누아 등) 오히려 어두워지는 경우를 여기서 바로잡는다.
+// (나중에 '색 컬러피커'가 여기를 채우거나 DB 필드로 옮길 자리다.)
+const WINE_ABSORB: Record<string, [number, number, number]> = {
+  "gosset-grand-rose-brut": [2.4, 7, 6], // 로제 샴페인 — 연한 분홍
+};
+
 export type GlassSpec = { absorb: [number, number, number]; glass: number };
 
-/** 와인 타입 + 대표 품종(첫 번째)으로 글라스 색·잔을 정한다. */
+/** 와인 타입 + 대표 품종(첫 번째)으로 글라스 색·잔을 정한다. slug가 있으면 특수 색을 우선. */
 export function wineGlassFor(
   type: string | null | undefined,
-  grapeNames: string[] = []
+  grapeNames: string[] = [],
+  slug?: string | null
 ): GlassSpec {
   const t = type ?? "red";
   const base = TYPE_DEFAULT[t] ?? TYPE_DEFAULT.red;
@@ -50,5 +58,6 @@ export function wineGlassFor(
   const primary = grapeNames[0];
   if (primary && GRAPE_ABSORB[primary]) absorb = GRAPE_ABSORB[primary];
   if (t === "red" && primary && BURGUNDY_GRAPES.has(primary)) glass = GLASS.burgundy;
+  if (slug && WINE_ABSORB[slug]) absorb = WINE_ABSORB[slug];
   return { absorb, glass };
 }
