@@ -53,36 +53,37 @@ export function WineDetailView({
     </div>
   );
   return (
+    // 데스크톱: 한 화면 3칸(글라스·지도·상세). 모바일: 세로로 쌓고 페이지가 스크롤된다.
     <div
-      className="relative h-screen w-full overflow-hidden"
+      className="relative min-h-screen w-full md:h-screen md:overflow-hidden"
       style={{ backgroundColor: CANVAS_RENDERED }}
     >
       <ShowcaseHeader hairline={false} />
 
-      <div className="absolute inset-x-0 bottom-0 top-16 flex gap-4 px-6 pb-6">
-        {/* 왼쪽: 글라스 (배경과 이음새 없이 떠 있음) */}
-        <div className="relative w-[19%] min-w-[180px] shrink-0">
+      <div className="flex flex-col gap-4 px-4 pb-10 pt-20 md:absolute md:inset-x-0 md:bottom-0 md:top-16 md:flex-row md:px-6 md:pb-6 md:pt-0">
+        {/* 글라스 — 모바일은 고정 높이, 데스크톱은 왼쪽 칸 */}
+        <div className="relative h-72 w-full shrink-0 md:h-auto md:w-[19%] md:min-w-[180px]">
           <FluidLab wineAbsorb={absorb} glassType={glass} bgColor={CANVAS_BG} swirlScale={0.5} />
         </div>
 
-        {/* 가운데: 산지 지도 (+ 지도 아래 내용). 지도는 작게, 아래는 스크롤. */}
-        <div className="flex w-[28%] min-w-[260px] shrink-0 flex-col gap-4">
+        {/* 산지 지도 (+ 지도 아래 내용) */}
+        <div className="flex w-full shrink-0 flex-col gap-4 md:w-[28%] md:min-w-[260px]">
           <div
-            className={`relative overflow-hidden rounded-3xl border border-foreground/12 shadow-lg shadow-foreground/10 ${
-              belowMap ? "h-[42%] shrink-0" : "flex-1"
+            className={`relative h-64 overflow-hidden rounded-3xl border border-foreground/12 shadow-lg shadow-foreground/10 ${
+              belowMap ? "md:h-[42%] md:shrink-0" : "md:h-full md:flex-1"
             }`}
           >
             {map}
           </div>
           {belowMap ? (
-            <div className="min-h-0 flex-1 overflow-y-auto rounded-3xl border border-foreground/12 bg-card/75 p-5 shadow-lg shadow-foreground/10 backdrop-blur">
+            <div className="rounded-3xl border border-foreground/12 bg-card/75 p-5 shadow-lg shadow-foreground/10 backdrop-blur md:min-h-0 md:flex-1 md:overflow-y-auto">
               {belowMap}
             </div>
           ) : null}
         </div>
 
-        {/* 오른쪽: 상세 (가장 넓게) */}
-        <aside className="min-w-0 flex-1 overflow-y-auto rounded-3xl border border-foreground/12 bg-card/75 p-6 shadow-lg shadow-foreground/10 backdrop-blur">
+        {/* 상세 (데스크톱에서 가장 넓게) */}
+        <aside className="min-w-0 rounded-3xl border border-foreground/12 bg-card/75 p-5 shadow-lg shadow-foreground/10 backdrop-blur md:flex-1 md:overflow-y-auto md:p-6">
           {children}
         </aside>
       </div>

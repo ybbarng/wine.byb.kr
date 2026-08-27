@@ -230,9 +230,9 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
 
       {/* 상단: 로고(홈) + 나라 칩 */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-3 p-4">
-        <div className="pointer-events-auto flex w-fit items-center gap-3 rounded-full border border-foreground/12 bg-card/85 px-4 py-2 shadow-lg shadow-foreground/10 backdrop-blur">
+        <div className="pointer-events-auto flex w-fit flex-wrap items-center gap-2 rounded-3xl border border-foreground/12 bg-card/85 px-3 py-2 shadow-lg shadow-foreground/10 backdrop-blur sm:gap-3 sm:rounded-full sm:px-4">
           <BrandLogo />
-          <span className="text-sm text-muted">산지 탐험</span>
+          <span className="hidden text-sm text-muted sm:inline">산지 탐험</span>
           <button
             type="button"
             onClick={() => setTastedOnly((v) => !v)}
@@ -263,13 +263,13 @@ export function ExploreMap({ countries }: { countries: ExploreCountry[] }) {
             ))}
           </select>
         </div>
-        <div className="pointer-events-auto flex flex-wrap gap-1.5">
+        <div className="pointer-events-auto flex gap-1.5 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
           {countries.map((c) => (
             <button
               key={c.country}
               type="button"
               onClick={() => flyTo(c.bbox)}
-              className="flex items-center gap-1.5 rounded-full border border-foreground/12 bg-card/85 px-3 py-1.5 text-xs text-foreground/85 shadow-sm backdrop-blur transition-colors hover:border-foreground/30 hover:bg-card"
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-foreground/12 bg-card/85 px-3 py-1.5 text-xs text-foreground/85 shadow-sm backdrop-blur transition-colors hover:border-foreground/30 hover:bg-card"
             >
               {countryFlag(c.country) ? <span aria-hidden>{countryFlag(c.country)}</span> : null}
               {c.country}
