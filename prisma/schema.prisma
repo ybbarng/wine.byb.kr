@@ -90,6 +90,7 @@ model Wine {
   blendRaw          String? // 원본 품종 문자열 보존(파싱이 애매한 서술형 대비)
   notesKo           String?
   foodPairing       String? // JSON 배열
+  colorHex          String? // 컬러피커로 지정한 관찰 색(#rrggbb). 없으면 타입·품종 추정색.
   imageUrl          String?
   externalRefs      String? // JSON (Vivino/Wine-Searcher 링크 등)
   grapes            WineGrape[]
