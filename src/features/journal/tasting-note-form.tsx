@@ -54,7 +54,7 @@ export interface ExistingNote {
   foodPaired: string | null;
 }
 
-function toDefaults(n: ExistingNote): TastingNoteFormInput {
+export function toDefaults(n: ExistingNote): TastingNoteFormInput {
   return {
     wineId: n.wineId,
     drankOn: n.drankOn ?? "",

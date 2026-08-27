@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { AdminGuard } from "@/features/admin/admin-guard";
 import { getWineOptions } from "@/features/journal/queries";
-import { TastingNoteForm } from "@/features/journal/tasting-note-form";
+import { TastingNoteWizard } from "@/features/journal/tasting-note-wizard";
 
 export const metadata: Metadata = {
   title: "새 기록",
@@ -18,13 +18,9 @@ export default async function NewTastingNotePage({ searchParams }: PageProps<"/j
   return (
     <div className="flex flex-1 flex-col">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-xl flex-1 px-6 pb-24">
-        <header className="mt-6">
-          <h1 className="font-serif text-3xl tracking-tight text-foreground">새 기록</h1>
-          <p className="mt-2 text-sm text-muted/60">마신 와인을 기록합니다.</p>
-        </header>
+      <main className="mx-auto w-full max-w-xl flex-1 px-5 pb-6 pt-4">
         <AdminGuard>
-          <TastingNoteForm wines={wines} defaultWineId={wineId} />
+          <TastingNoteWizard wines={wines} defaultWineId={wineId} />
         </AdminGuard>
       </main>
     </div>
