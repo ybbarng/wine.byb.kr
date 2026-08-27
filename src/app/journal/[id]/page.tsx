@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { NoteActions } from "@/features/journal/note-actions";
 import { getTastingNote } from "@/features/journal/queries";
+import { PriceBadge } from "@/features/wine/price-badge";
+import { priceVerdict, winePrice } from "@/features/wine/wine-price-info";
 import { formatDate, formatKRW, joinDot } from "@/lib/format";
 import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
@@ -38,6 +40,7 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
 
   const { note, others } = data;
   const { wine } = note;
+  const fair = winePrice(wine.slug); // 국내 소매 적정가 범위(있으면)
   const name = wineDisplayName(wine);
   const country = wine.region?.country ?? wine.region?.parent?.nameKo ?? null;
 
@@ -108,7 +111,21 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
           <dl className="mt-3">
             <DetailRow label="음용일" value={formatDate(note.drankOn)} />
             <DetailRow label="구매일" value={formatDate(note.purchasedOn)} />
-            <DetailRow label="구매가격" value={formatKRW(note.purchasePrice) || null} />
+            {note.purchasePrice != null ? (
+              <div className="flex items-center gap-3 border-t border-foreground/10 py-2.5 text-sm first:border-t-0">
+                <dt className="w-20 shrink-0 text-muted/50">구매가격</dt>
+                <dd className="flex items-center gap-2 text-foreground">
+                  {formatKRW(note.purchasePrice)}
+                  {fair ? <PriceBadge v={priceVerdict(note.purchasePrice, fair)} /> : null}
+                </dd>
+              </div>
+            ) : null}
+            {fair ? (
+              <DetailRow
+                label="적정가"
+                value={`${formatKRW(fair.low)} ~ ${formatKRW(fair.high)} · 추정`}
+              />
+            ) : null}
             <DetailRow label="등급" value={wine.classification} />
           </dl>
           {note.rating || note.repurchase || note.value || note.colorHex ? (
