@@ -27,12 +27,15 @@ export default function WineShowcase() {
     >
       <ShowcaseHeader />
 
-      {/* 중앙 글라스 (배경과 이음새 없이 떠 있음) */}
-      <div
-        className="absolute left-0 top-0 h-[76vh] w-[44vh]"
-        style={{ transform: "translate(calc(50vw - 22vh), 6vh)" }}
-      >
-        <FluidLab wineAbsorb={HOME_ABSORB} glassType={HOME_GLASS} bgColor={CANVAS_BG} />
+      {/* 중앙 글라스 (배경과 이음새 없이 떠 있음). 캔버스를 잔보다 넓게 잡아
+          기울여도 영역 밖으로 안 나가게 한다(잔은 높이에 맞춰지고 좌우는 여백). */}
+      <div className="absolute left-1/2 top-[6vh] h-[76vh] w-[68vh] max-w-full -translate-x-1/2">
+        <FluidLab
+          wineAbsorb={HOME_ABSORB}
+          glassType={HOME_GLASS}
+          bgColor={CANVAS_BG}
+          swirlScale={0.8}
+        />
       </div>
 
       {/* 푸터 */}
