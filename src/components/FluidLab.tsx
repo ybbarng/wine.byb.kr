@@ -1284,11 +1284,16 @@ export default function FluidLab({
       // 밝게가 물리적으로 나온다. 두께 = 뒷면거리(wineThickRT) − 앞면거리.
       const bodyMat = new A.MeshPhysicalNodeMaterial({
         color: new THREE.Color(0x080103), // 디퓨즈 최소(색은 흡수가 담당)
-        roughness: 0.18, // 부드러운 젖은 광택 — 너무 낮으면 날카롭게 반짝임
+        // 와인은 물 기반(굴절률 1.33) — 유리 기본값 1.5로 두면 표면 반사율이 ~4%로
+        // 유리처럼 번쩍인다. 1.33이면 ~2%로 절반, 위에서 봐도 깊은 색이 지배.
+        ior: 1.33,
+        roughness: 0.3, // 미세 물결 sheen — 낮으면 거울처럼 날카롭게 반짝여 덜 액체같음
         metalness: 0,
         side: THREE.DoubleSide,
       });
-      bodyMat.envMapIntensity = 0.18; // 반사 약하게 — 와인색이 드러나고 하이라이트만
+      // 노드 재질은 envMapIntensity 를 무시하므로(교훈), 표면 반사 세기는 ior·roughness
+      // 로만 제어된다. 전역 scene.environmentIntensity(0.42)는 유리 반짝임용으로 유지.
+      bodyMat.envMapIntensity = 0.18;
       bodyMat.emissiveNode = Fn(() => {
         // 시선이 와인을 통과하는 실제 두께 t = 뒷면거리 − 앞면거리.
         const frontDist = positionView.z.negate();
