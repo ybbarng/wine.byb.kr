@@ -45,11 +45,29 @@ const WINE_ABSORB: Record<string, [number, number, number]> = {
 
 export type GlassSpec = { absorb: [number, number, number]; glass: number };
 
-/** 와인 타입 + 대표 품종(첫 번째)으로 글라스 색·잔을 정한다. slug가 있으면 특수 색을 우선. */
+// 눈에 보이길 원하는 색(#rrggbb) → Beer–Lambert 흡수계수. 잘 통과하는 채널(밝음)은
+// 적게, 흡수되는 채널(어두움)은 많이. 완벽한 물리 변환은 아니고(투명도는 나중에),
+// 실시간 미리보기로 눈으로 맞추는 용도. 스케일은 기존 프리셋 범위에 맞춘다.
+const HEX_ABSORB_SCALE = 90;
+export function hexToAbsorb(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const n = Number.parseInt(m[1], 16);
+  const ch = (c: number) => {
+    const t = c / 255; // 통과율(밝을수록 큼)
+    return Math.max(0.4, Math.round((1 - t) * HEX_ABSORB_SCALE * 10) / 10);
+  };
+  return [ch((n >> 16) & 255), ch((n >> 8) & 255), ch(n & 255)];
+}
+
+// 타입·품종으로는 안 잡히는 특수한 색을 와인별(slug)로 지정(코드). colorHex(DB)가
+// 있으면 그게 최우선.
+/** 글라스 색·잔을 정한다. 우선순위: colorHex(DB) > slug 특수색 > 품종/타입 추정. */
 export function wineGlassFor(
   type: string | null | undefined,
   grapeNames: string[] = [],
-  slug?: string | null
+  slug?: string | null,
+  colorHex?: string | null
 ): GlassSpec {
   const t = type ?? "red";
   const base = TYPE_DEFAULT[t] ?? TYPE_DEFAULT.red;
@@ -59,5 +77,9 @@ export function wineGlassFor(
   if (primary && GRAPE_ABSORB[primary]) absorb = GRAPE_ABSORB[primary];
   if (t === "red" && primary && BURGUNDY_GRAPES.has(primary)) glass = GLASS.burgundy;
   if (slug && WINE_ABSORB[slug]) absorb = WINE_ABSORB[slug];
+  if (colorHex) {
+    const fromHex = hexToAbsorb(colorHex);
+    if (fromHex) absorb = fromHex;
+  }
   return { absorb, glass };
 }

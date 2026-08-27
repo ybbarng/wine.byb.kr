@@ -80,3 +80,8 @@ export async function createWine(input: WineInput): Promise<{ id: string }> {
   });
   return { id: wine.id };
 }
+
+/** 컬러피커로 지정한 색(#rrggbb)을 와인에 저장한다. null 이면 지워 추정색으로 되돌린다. */
+export async function updateWineColor(slug: string, colorHex: string | null) {
+  await db.wine.update({ where: { slug }, data: { colorHex } });
+}

@@ -1,7 +1,9 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { hexToAbsorb } from "@/features/wine/wine-glass";
 
 const FluidLab = dynamic(() => import("./FluidLab"), {
   ssr: false,
@@ -26,49 +28,88 @@ const GLASS_OPTIONS: { label: string; desc: string }[] = [
   { label: "디저트", desc: "아이스와인·포트" },
 ];
 
-// 대표 와인 프리셋. absorb = Beer–Lambert 흡수계수(R 적게·G/B 많이 → 붉은색,
-// B 만 많이 → 노란 화이트). glass = 어울리는 잔(선택 시 색과 함께 자동 전환).
-type Preset = {
-  name: string;
-  absorb: [number, number, number];
-  color: string;
-  glass: number;
-};
+// 대표 색 프리셋. color = 컬러피커 초기값(눈에 보이는 색), glass = 어울리는 잔.
+type Preset = { name: string; color: string; glass: number };
 const WINE_PRESETS: Preset[] = [
-  { name: "카베르네 소비뇽", absorb: [13, 60, 80], color: "#3f0e1c", glass: GLASS.bordeaux },
-  { name: "메를로", absorb: [16, 78, 98], color: "#5a1122", glass: GLASS.bordeaux },
-  { name: "피노 누아", absorb: [9, 40, 52], color: "#7c1f2c", glass: GLASS.burgundy },
-  { name: "시라", absorb: [11, 55, 72], color: "#340a18", glass: GLASS.bordeaux },
-  { name: "산지오베제", absorb: [14, 66, 78], color: "#611423", glass: GLASS.burgundy },
-  { name: "로제", absorb: [3.5, 10, 8.5], color: "#e59aa4", glass: GLASS.white },
-  { name: "샤르도네", absorb: [1.6, 3.2, 13], color: "#ecd88f", glass: GLASS.white },
-  { name: "소비뇽 블랑", absorb: [1.3, 2.4, 11], color: "#e7e0a6", glass: GLASS.white },
-  { name: "샴페인", absorb: [1.4, 3.0, 12], color: "#f1e7b4", glass: GLASS.flute },
-  { name: "아이스와인", absorb: [5, 12, 27], color: "#cf8f2a", glass: GLASS.dessert },
+  { name: "카베르네 소비뇽", color: "#4a0f1a", glass: GLASS.bordeaux },
+  { name: "메를로", color: "#5a1122", glass: GLASS.bordeaux },
+  { name: "피노 누아", color: "#7c1f2c", glass: GLASS.burgundy },
+  { name: "시라", color: "#3a0a15", glass: GLASS.bordeaux },
+  { name: "산지오베제", color: "#611423", glass: GLASS.burgundy },
+  { name: "로제", color: "#e59aa4", glass: GLASS.white },
+  { name: "로제 샴페인", color: "#f0b8c0", glass: GLASS.flute },
+  { name: "샤르도네", color: "#ecd88f", glass: GLASS.white },
+  { name: "소비뇽 블랑", color: "#e7e0a6", glass: GLASS.white },
+  { name: "샴페인", color: "#f1e7b4", glass: GLASS.flute },
+  { name: "아이스와인", color: "#cf8f2a", glass: GLASS.dessert },
 ];
 
-export default function FluidLabMount() {
-  const [idx, setIdx] = useState(1); // 메를로 기본
-  // 잔은 선택 와인에 맞춰 자동 전환(수동 변경도 허용).
-  const [glassIdx, setGlassIdx] = useState(WINE_PRESETS[1].glass);
+type WineRow = {
+  slug: string;
+  nameKo: string;
+  nameLocal: string | null;
+  type: string | null;
+  colorHex: string | null;
+};
 
-  const pickWine = (i: number) => {
-    setIdx(i);
-    setGlassIdx(WINE_PRESETS[i].glass); // 색과 잔 함께 전환
+export default function FluidLabMount() {
+  const [color, setColor] = useState<string>(WINE_PRESETS[1].color); // 현재 색(프리셋 or 커스텀)
+  const [glassIdx, setGlassIdx] = useState(WINE_PRESETS[1].glass);
+  const [wines, setWines] = useState<WineRow[]>([]);
+  const [selSlug, setSelSlug] = useState("");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const isAdmin = useAuthStore((s) => !!s.password);
+
+  // 색 도구용 와인 목록.
+  useEffect(() => {
+    fetch("/api/wines")
+      .then((r) => r.json())
+      .then((d) => setWines(d.wines ?? []))
+      .catch(() => {});
+  }, []);
+
+  const absorb = hexToAbsorb(color) ?? [16, 78, 98];
+
+  const pickPreset = (p: Preset) => {
+    setColor(p.color);
+    setGlassIdx(p.glass);
+  };
+  const pickWine = (slug: string) => {
+    setSelSlug(slug);
+    const w = wines.find((x) => x.slug === slug);
+    if (w?.colorHex) setColor(w.colorHex);
+    setSaveState("idle");
+  };
+  const save = async () => {
+    if (!selSlug) return;
+    setSaveState("saving");
+    try {
+      const res = await fetch("/api/wines/color", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...adminHeaders() },
+        body: JSON.stringify({ slug: selSlug, colorHex: color }),
+      });
+      setSaveState(res.ok ? "saved" : "error");
+      setWines((ws) => ws.map((w) => (w.slug === selSlug ? { ...w, colorHex: color } : w)));
+    } catch {
+      setSaveState("error");
+    }
+    setTimeout(() => setSaveState("idle"), 2500);
   };
 
   return (
     <div className="relative h-full w-full">
-      <FluidLab wineAbsorb={WINE_PRESETS[idx].absorb} glassType={glassIdx} />
-      {/* 와인 프리셋 컨트롤러 (lab) — 고르면 색+잔 함께 전환 */}
-      <div className="absolute left-3 top-3 z-10 flex max-w-[92vw] flex-wrap gap-1.5">
-        {WINE_PRESETS.map((w, i) => (
+      <FluidLab wineAbsorb={absorb} glassType={glassIdx} />
+
+      {/* 색 프리셋 (좌상) */}
+      <div className="absolute left-3 top-3 z-10 flex max-w-[62vw] flex-wrap gap-1.5">
+        {WINE_PRESETS.map((w) => (
           <button
             type="button"
             key={w.name}
-            onClick={() => pickWine(i)}
+            onClick={() => pickPreset(w)}
             className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs backdrop-blur transition-colors ${
-              i === idx
+              color === w.color
                 ? "border-white/70 bg-black/50 text-white"
                 : "border-white/20 bg-black/25 text-white/70 hover:text-white"
             }`}
@@ -81,7 +122,56 @@ export default function FluidLabMount() {
           </button>
         ))}
       </div>
-      {/* 와인잔 형태 컨트롤러 (lab) — 수동 변경(자동 매핑 덮어쓰기) */}
+
+      {/* 색 맞추기 (우상) — 컬러피커 + (관리자) 와인에 저장 */}
+      <div className="absolute right-3 top-3 z-10 flex w-52 max-w-[44vw] flex-col gap-2 rounded-2xl border border-white/20 bg-black/45 p-3 backdrop-blur">
+        <label className="flex items-center gap-2 text-xs text-white/80">
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            aria-label="와인 색"
+            className="h-8 w-10 shrink-0 cursor-pointer rounded border border-white/30 bg-transparent"
+          />
+          <span className="font-mono">{color}</span>
+        </label>
+        {isAdmin ? (
+          <div className="flex flex-col gap-1.5">
+            <select
+              value={selSlug}
+              onChange={(e) => pickWine(e.target.value)}
+              className="w-full rounded-lg border border-white/20 bg-black/40 px-2 py-1.5 text-xs text-white"
+            >
+              <option value="">와인 선택…</option>
+              {wines.map((w) => (
+                <option key={w.slug} value={w.slug} className="text-black">
+                  {(w.nameLocal ?? w.nameKo) + (w.colorHex ? " ●" : "")}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={save}
+              disabled={!selSlug || saveState === "saving"}
+              className="rounded-lg border border-white/30 bg-white/10 px-2 py-1.5 text-xs text-white transition-colors hover:bg-white/20 disabled:opacity-40"
+            >
+              {saveState === "saving"
+                ? "저장 중…"
+                : saveState === "saved"
+                  ? "저장됨 ✓"
+                  : saveState === "error"
+                    ? "실패"
+                    : "이 색으로 저장"}
+            </button>
+          </div>
+        ) : (
+          <p className="text-[11px] leading-snug text-white/50">
+            로그인하면 이 색을 와인에 저장할 수 있어요.
+          </p>
+        )}
+      </div>
+
+      {/* 잔 형태 (좌하) */}
       <div className="absolute bottom-3 left-3 z-10 flex max-w-[92vw] flex-wrap gap-1.5">
         {GLASS_OPTIONS.map((g, i) => (
           <button
