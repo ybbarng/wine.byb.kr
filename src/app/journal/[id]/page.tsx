@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { SiteHeader } from "@/components/site-header";
+import { WineDetailView } from "@/components/WineDetailView";
 import { NoteActions } from "@/features/journal/note-actions";
 import { getTastingNote } from "@/features/journal/queries";
 import { PriceBadge } from "@/features/wine/price-badge";
+import { RegionHierarchy } from "@/features/wine/region-hierarchy";
+import { wineGlassFor } from "@/features/wine/wine-glass";
+import { WineInfoSections } from "@/features/wine/wine-info-sections";
 import { priceVerdict, winePrice } from "@/features/wine/wine-price-info";
-import { formatDate, formatKRW, joinDot } from "@/lib/format";
-import { wineDisplayName, wineTypeLabel } from "@/lib/wine";
+import { formatDate, formatKRW } from "@/lib/format";
+import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
 // DB를 요청 시점에 읽는다. 빌드 때 정적 생성하지 않는다.
 export const dynamic = "force-dynamic";
@@ -19,17 +22,21 @@ export async function generateMetadata({ params }: PageProps<"/journal/[id]">): 
   return { title: `${wineDisplayName(data.note.wine).primary} 시음 기록` };
 }
 
-function Badge({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-md bg-wine/40 px-2 py-1 text-xs text-muted/80">{children}</span>;
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="mt-6">
+      <h2 className="mb-2 text-xs uppercase tracking-wide text-muted">{title}</h2>
+      {children}
+    </section>
+  );
 }
 
-function DetailRow({ label, value }: { label: string; value: string | null }) {
-  if (!value) return null;
+function InfoChip({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex gap-3 border-t border-foreground/10 py-2.5 text-sm first:border-t-0">
-      <dt className="w-20 shrink-0 text-muted/50">{label}</dt>
-      <dd className="text-foreground">{value}</dd>
-    </div>
+    <span className="inline-flex items-center gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
+      <span className="text-[10px] uppercase tracking-wide text-muted">{label}</span>
+      <span className="text-sm text-foreground/90">{children}</span>
+    </span>
   );
 }
 
@@ -40,155 +47,186 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
 
   const { note, others } = data;
   const { wine } = note;
-  const fair = winePrice(wine.slug); // 국내 소매 적정가 범위(있으면)
   const name = wineDisplayName(wine);
-  const country = wine.region?.country ?? wine.region?.parent?.nameKo ?? null;
+  const region = wine.region;
+  const country = region?.country ?? region?.parent?.nameKo ?? null;
+  const target =
+    region?.latitude != null && region?.longitude != null
+      ? { lat: region.latitude, lng: region.longitude }
+      : region?.parent?.latitude != null && region?.parent?.longitude != null
+        ? { lat: region.parent.latitude, lng: region.parent.longitude }
+        : null;
+
+  // 잔 색: 이 기록에서 관찰한 색 → 와인 고정색 → 추정.
+  const grapeNames = wine.grapes.map((g) => g.grape.nameKo);
+  const displayColor = note.colorHex ?? wine.colorHex ?? undefined;
+  const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug, displayColor);
+  const fair = winePrice(wine.slug);
+
+  // 이름 아래 "생산자 · 지역 · 국가" — 생산자·지역은 각 페이지로 링크. 지역명이 국가와
+  // 같으면(예: 산지도 국가도 "호주") 국가는 생략해 중복을 없앤다.
+  const identity: React.ReactNode[] = [];
+  if (wine.producer?.nameKo) {
+    identity.push(
+      wine.producer.slug ? (
+        <Link
+          key="producer"
+          href={`/producer/${wine.producer.slug}`}
+          className="underline decoration-foreground/25 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/60"
+        >
+          {wine.producer.nameKo}
+        </Link>
+      ) : (
+        wine.producer.nameKo
+      )
+    );
+  }
+  if (region) {
+    identity.push(
+      <Link
+        key="region"
+        href={`/region/${region.slug}`}
+        className="underline decoration-foreground/25 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/60"
+      >
+        {region.nameKo}
+      </Link>
+    );
+  }
+  if (country && country !== region?.nameKo) identity.push(country);
 
   return (
-    <div className="flex flex-1 flex-col">
-      <SiteHeader />
-
-      <main className="mx-auto w-full max-w-2xl flex-1 px-6 pb-24">
-        <div className="mt-6 flex items-center justify-between gap-4">
-          <Link href="/journal" className="text-sm text-muted/60 hover:text-foreground">
-            ← 마신 기록
-          </Link>
-          <NoteActions id={note.id} />
-        </div>
-
-        {/* 와인 히어로 */}
-        <header className="mt-4">
-          <h1 className="font-serif text-3xl leading-tight tracking-tight text-foreground sm:text-4xl">
-            {name.primary}
-          </h1>
-          {name.alias ? <p className="mt-1 text-muted/50">{name.alias}</p> : null}
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Badge>{wineTypeLabel(wine.type)}</Badge>
-            {note.vintageYear ? <Badge>{note.vintageYear} 빈티지</Badge> : null}
-            {wine.abv != null ? <Badge>{wine.abv}%</Badge> : null}
+    <WineDetailView
+      absorb={absorb}
+      glass={glass}
+      country={country}
+      regionName={region?.nameKo ?? null}
+      fallback={target}
+      label={country ?? name.primary}
+      leadWithDetail
+      belowMap={
+        country || region ? (
+          <div>
+            <h2 className="mb-2 text-xs uppercase tracking-wide text-muted">산지 계층</h2>
+            <RegionHierarchy
+              country={country}
+              regionName={region?.nameKo ?? null}
+              regionHref={region ? `/region/${region.slug}` : null}
+              countryHref={
+                region?.parent && region.parent.nameKo === country
+                  ? `/region/${region.parent.slug}`
+                  : null
+              }
+            />
           </div>
-          <p className="mt-3 text-sm text-muted/70">
-            {joinDot(wine.producer?.nameKo, wine.region?.nameKo, country)}
-          </p>
+        ) : null
+      }
+    >
+      {/* 상단: 뒤로 · 수정 */}
+      <div className="flex items-center justify-between gap-4">
+        <Link href="/journal" className="text-sm text-muted hover:text-foreground">
+          ← 마신 기록
+        </Link>
+        <NoteActions id={note.id} />
+      </div>
+
+      {/* 와인 이름 */}
+      <div className="mt-3 flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
+        <span className="h-3 w-3 rounded-full border border-foreground/20 bg-wine" />
+        {wine.type && WINE_TYPE_LABELS[wine.type] ? (
           <Link
-            href={`/wine/${wine.slug}`}
-            className="mt-2 inline-block text-sm text-gold/80 hover:text-gold"
+            href={`/type/${wine.type}`}
+            className="underline decoration-transparent underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/50"
           >
-            이 와인 페이지 →
+            {wineTypeLabel(wine.type)}
           </Link>
-        </header>
+        ) : (
+          wineTypeLabel(wine.type)
+        )}
+        {note.vintageYear ? <span>· {note.vintageYear} 빈티지</span> : null}
+        {wine.abv != null ? <span>· {wine.abv}%</span> : null}
+      </div>
+      <h1 className="mt-1 font-serif text-2xl leading-tight text-foreground">{name.primary}</h1>
+      {name.alias ? <p className="text-sm text-muted">{name.alias}</p> : null}
+      <p className="mt-2 text-sm text-foreground/80">
+        {identity.map((part, i) => (
+          <span key={i}>
+            {i > 0 ? " · " : ""}
+            {part}
+          </span>
+        ))}
+      </p>
 
-        {/* 품종 */}
-        {wine.grapes.length > 0 ? (
-          <section className="mt-8">
-            <h2 className="font-serif text-lg text-foreground">품종</h2>
-            <ul className="mt-3 flex flex-col gap-2">
-              {wine.grapes.map((g) => (
-                <li key={g.id} className="flex items-center gap-3 text-sm">
-                  <span className="w-32 shrink-0 text-foreground">{g.grape.nameKo}</span>
-                  {g.percent != null ? (
-                    <div className="flex flex-1 items-center gap-2">
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-card/60">
-                        <div
-                          className="h-full rounded-full bg-wine-bright"
-                          style={{ width: `${g.percent}%` }}
-                        />
-                      </div>
-                      <span className="w-10 shrink-0 text-right text-muted/60">{g.percent}%</span>
-                    </div>
-                  ) : (
-                    <span className="text-muted/40">비율 미상</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </section>
+      {/* 이 기록 — 맨 위(이 페이지의 주인공). 골드 카드로 강조 */}
+      <section className="mt-4 rounded-2xl border border-gold/25 bg-gold/[0.06] p-4 shadow-sm shadow-gold/5">
+        <h2 className="mb-2 text-sm font-medium text-gold">{formatDate(note.drankOn)} 시음 노트</h2>
+        {note.rating ? (
+          <div className="text-xl text-gold">
+            {"★".repeat(note.rating)}
+            <span className="text-muted/25">{"★".repeat(5 - note.rating)}</span>
+          </div>
         ) : null}
-
-        {/* 시음 내용 */}
-        <section className="mt-8">
-          <h2 className="font-serif text-lg text-foreground">이 기록</h2>
-          <dl className="mt-3">
-            <DetailRow label="음용일" value={formatDate(note.drankOn)} />
-            <DetailRow label="구매일" value={formatDate(note.purchasedOn)} />
-            {note.purchasePrice != null ? (
-              <div className="flex items-center gap-3 border-t border-foreground/10 py-2.5 text-sm first:border-t-0">
-                <dt className="w-20 shrink-0 text-muted/50">구매가격</dt>
-                <dd className="flex items-center gap-2 text-foreground">
-                  {formatKRW(note.purchasePrice)}
-                  {fair ? <PriceBadge v={priceVerdict(note.purchasePrice, fair)} /> : null}
-                </dd>
-              </div>
-            ) : null}
-            {fair ? (
-              <DetailRow
-                label="적정가"
-                value={`${formatKRW(fair.low)} ~ ${formatKRW(fair.high)} · 추정`}
-              />
-            ) : null}
-            <DetailRow label="등급" value={wine.classification} />
-          </dl>
-          {note.rating || note.repurchase || note.value || note.colorHex ? (
-            <div className="mt-3 flex flex-wrap gap-2 text-sm">
-              {note.colorHex ? (
-                <span className="inline-flex items-center gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-muted">색</span>
-                  <span
-                    className="h-4 w-4 rounded-full border border-foreground/20"
-                    style={{ background: note.colorHex }}
-                  />
-                </span>
-              ) : null}
-              {note.rating ? (
-                <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-muted">별점</span>
-                  <span className="text-gold">
-                    {"★".repeat(note.rating)}
-                    <span className="text-muted/25">{"★".repeat(5 - note.rating)}</span>
-                  </span>
-                </span>
-              ) : null}
-              {note.repurchase ? (
-                <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-muted">다시 살까</span>
-                  <span className="text-foreground/90">{note.repurchase}</span>
-                </span>
-              ) : null}
-              {note.value ? (
-                <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
-                  <span className="text-[10px] uppercase tracking-wide text-muted">가격 대비</span>
-                  <span className="text-foreground/90">{note.value}</span>
-                </span>
-              ) : null}
+        <dl className="mt-2">
+          {note.purchasedOn ? (
+            <div className="flex gap-3 border-t border-foreground/10 py-2 text-sm first:border-t-0">
+              <dt className="w-20 shrink-0 text-muted">구매일</dt>
+              <dd className="text-foreground">{formatDate(note.purchasedOn)}</dd>
             </div>
           ) : null}
-          {note.bodyText ? (
-            <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-foreground/90">
-              {note.bodyText}
-            </p>
+          {note.purchasePrice != null ? (
+            <div className="flex items-center gap-3 border-t border-foreground/10 py-2 text-sm first:border-t-0">
+              <dt className="w-20 shrink-0 text-muted">구매가격</dt>
+              <dd className="flex items-center gap-2 text-foreground">
+                {formatKRW(note.purchasePrice)}
+                {fair ? <PriceBadge v={priceVerdict(note.purchasePrice, fair)} /> : null}
+              </dd>
+            </div>
           ) : null}
-        </section>
-
-        {/* 재음용 — 같은 와인의 다른 기록 */}
-        {others.length > 0 ? (
-          <section className="mt-8 rounded-xl border border-gold/20 bg-gold/5 px-4 py-4">
-            <h2 className="text-sm text-gold">이 와인을 마신 다른 기록 {others.length}건</h2>
-            <ul className="mt-2 flex flex-col">
-              {others.map((o) => (
-                <li key={o.id}>
-                  <Link
-                    href={`/journal/${o.id}`}
-                    className="flex items-baseline justify-between gap-3 py-1.5 text-sm text-muted/70 hover:text-foreground"
-                  >
-                    <span className="font-mono text-gold/70">{formatDate(o.drankOn)}</span>
-                    <span>{formatKRW(o.purchasePrice)}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
+        </dl>
+        {note.repurchase || note.value || note.colorHex ? (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {note.colorHex ? (
+              <InfoChip label="색">
+                <span
+                  className="h-4 w-4 rounded-full border border-foreground/20"
+                  style={{ background: note.colorHex }}
+                />
+              </InfoChip>
+            ) : null}
+            {note.repurchase ? <InfoChip label="다시 살까">{note.repurchase}</InfoChip> : null}
+            {note.value ? <InfoChip label="가격 대비">{note.value}</InfoChip> : null}
+          </div>
         ) : null}
-      </main>
-    </div>
+        {note.bodyText ? (
+          <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-foreground/90">
+            {note.bodyText}
+          </p>
+        ) : null}
+      </section>
+
+      {/* 와인 보편 정보 — 와인 페이지와 공용 */}
+      <WineInfoSections wine={wine} />
+
+      {/* 이 와인을 마신 다른 기록 */}
+      {others.length > 0 ? (
+        <Section title={`이 와인을 마신 다른 기록 ${others.length}건`}>
+          <ul className="flex flex-col">
+            {others.map((o) => (
+              <li key={o.id} className="border-t border-foreground/10 first:border-t-0">
+                <Link
+                  href={`/journal/${o.id}`}
+                  className="flex items-baseline justify-between gap-3 py-2 text-sm text-foreground/75 hover:text-foreground"
+                >
+                  <span className="font-mono text-xs text-gold">{formatDate(o.drankOn)}</span>
+                  {fair && o.purchasePrice != null ? (
+                    <PriceBadge v={priceVerdict(o.purchasePrice, fair)} />
+                  ) : null}
+                  <span className="shrink-0">{formatKRW(o.purchasePrice)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      ) : null}
+    </WineDetailView>
   );
 }
