@@ -4,10 +4,13 @@ import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
 import { GrapeColorDot } from "@/features/wine/grape-color";
-import { pairingsForGrapes } from "@/features/wine/grape-info";
+import { grapeInfo, pairingsForGrapes } from "@/features/wine/grape-info";
+import { producerInfo } from "@/features/wine/producer-info";
 import { getWineBySlug } from "@/features/wine/queries";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
+import { regionInfo } from "@/features/wine/region-info";
 import { wineGlassFor } from "@/features/wine/wine-glass";
+import { wineProfile } from "@/features/wine/wine-profile";
 import { formatDate, formatKRW } from "@/lib/format";
 import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
@@ -24,6 +27,15 @@ function Chip({ children }: { children: React.ReactNode }) {
   return (
     <span className="rounded-full border border-foreground/12 bg-foreground/5 px-2.5 py-1 text-xs text-foreground/80">
       {children}
+    </span>
+  );
+}
+
+function ProfileChip({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
+      <span className="text-[10px] uppercase tracking-wide text-muted">{label}</span>
+      <span className="text-sm text-foreground/90">{value}</span>
     </span>
   );
 }
@@ -57,6 +69,21 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
   const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug);
   // 이 와인의 품종에서 음식 페어링을 모은다(무엇과·왜).
   const pairings = pairingsForGrapes(grapeNames);
+
+  // 종합 프로필: 색·바디·당도·서빙 온도·수준(타입·품종·산지·등급에서).
+  const primaryGrape = grapeNames[0] ?? null;
+  const gInfo = grapeInfo(primaryGrape);
+  const rInfo = regionInfo(wine.region?.nameKo);
+  const profile = wineProfile(wine, gInfo, primaryGrape);
+  const pInfo = producerInfo(wine.producer?.nameKo ?? wine.producer?.nameLocal ?? null);
+  const terroir = [rInfo?.climate, rInfo?.soil].filter(Boolean).join(" · ");
+  const grapeStats = [
+    gInfo?.body && `바디 ${gInfo.body}`,
+    gInfo?.acidity && `산도 ${gInfo.acidity}`,
+    gInfo?.tannin && `타닌 ${gInfo.tannin}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   // 이름 아래 "생산자 · 지역 · 국가" 줄. 지역은 지역 페이지로 잇는다.
   const identity: React.ReactNode[] = [];
@@ -135,6 +162,38 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
         </div>
       ) : null}
 
+      {/* 이 와인, 어떨까 — 한눈에 + 떼루아·품종의 이유 */}
+      <Section title="이 와인, 어떨까">
+        <div className="flex flex-wrap gap-1.5">
+          <ProfileChip label="색" value={profile.color} />
+          {profile.body ? <ProfileChip label="바디" value={profile.body} /> : null}
+          <ProfileChip label="당도" value={profile.sweetness} />
+          <ProfileChip label="온도" value={profile.servingTemp} />
+          {profile.tier ? <ProfileChip label="수준" value={profile.tier} /> : null}
+        </div>
+        {rInfo || gInfo ? (
+          <dl className="mt-3 flex flex-col gap-2 text-sm leading-relaxed">
+            {rInfo ? (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted">
+                  떼루아{terroir ? ` · ${terroir}` : ""}
+                </dt>
+                <dd className="text-foreground/85">{rInfo.desc}</dd>
+              </div>
+            ) : null}
+            {gInfo && primaryGrape ? (
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-muted">
+                  {primaryGrape}
+                  {grapeStats ? ` · ${grapeStats}` : ""}
+                </dt>
+                <dd className="text-foreground/85">{gInfo.desc}</dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : null}
+      </Section>
+
       {/* 품종 */}
       {wine.grapes.length > 0 ? (
         <Section title="품종">
@@ -194,6 +253,26 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
               </li>
             ))}
           </ul>
+        </Section>
+      ) : null}
+
+      {/* 생산자 */}
+      {pInfo || wine.producer ? (
+        <Section title="생산자">
+          <div className="rounded-lg border border-foreground/10 bg-foreground/[0.03] px-3 py-2.5">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-sm text-foreground">{wine.producer?.nameKo ?? "—"}</span>
+              {wine.producer?.slug ? (
+                <Link
+                  href={`/producer/${wine.producer.slug}`}
+                  className="shrink-0 text-xs text-gold underline decoration-transparent underline-offset-2 transition-colors hover:decoration-gold/50"
+                >
+                  생산자 페이지 →
+                </Link>
+              ) : null}
+            </div>
+            {pInfo ? <p className="mt-1 text-xs leading-relaxed text-muted">{pInfo.desc}</p> : null}
+          </div>
         </Section>
       ) : null}
 
