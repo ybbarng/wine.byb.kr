@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { RegionMap } from "@/features/wine/region-map";
 import { ShowcaseHeader } from "./ShowcaseHeader";
 
@@ -38,6 +38,17 @@ export function WineDetailView({
   children,
   belowMap,
 }: Props) {
+  // 스월 기울기: 데스크톱은 좁은 왼쪽 칸이라 작게, 모바일은 세로 스택으로 풀폭이라 넓게.
+  const [isDesktop, setIsDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  const swirlScale = isDesktop ? 0.5 : 0.8;
+
   const hasMap = country != null || fallback != null;
   const map = hasMap ? (
     <RegionMap
@@ -63,7 +74,12 @@ export function WineDetailView({
       <div className="flex flex-col gap-4 px-4 pb-10 pt-20 md:absolute md:inset-x-0 md:bottom-0 md:top-16 md:flex-row md:px-6 md:pb-6 md:pt-0">
         {/* 글라스 — 모바일은 고정 높이, 데스크톱은 왼쪽 칸 */}
         <div className="relative h-72 w-full shrink-0 md:h-auto md:w-[19%] md:min-w-[180px]">
-          <FluidLab wineAbsorb={absorb} glassType={glass} bgColor={CANVAS_BG} swirlScale={0.5} />
+          <FluidLab
+            wineAbsorb={absorb}
+            glassType={glass}
+            bgColor={CANVAS_BG}
+            swirlScale={swirlScale}
+          />
         </div>
 
         {/* 산지 지도 (+ 지도 아래 내용) */}
