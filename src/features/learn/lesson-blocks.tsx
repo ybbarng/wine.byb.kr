@@ -138,18 +138,20 @@ function Spectrum({
 }) {
   return (
     <section>
-      {heading ? <h2 className="mb-4 font-serif text-xl text-foreground">{heading}</h2> : null}
-      <div className="relative mx-2 mt-8 mb-2 h-px bg-gradient-to-r from-rose/30 via-wine/40 to-wine">
+      {heading ? <h2 className="mb-2 font-serif text-xl text-foreground">{heading}</h2> : null}
+      {/* 라벨은 축 위쪽에, 점은 축 위에. 겹치지 않게 세로로 충분히 띄운다. */}
+      <div className="relative mx-3 h-12">
+        <div className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-gradient-to-r from-rose/30 via-wine/40 to-wine" />
         {items.map((it) => (
           <div
             key={it.label}
-            className="absolute -translate-x-1/2"
+            className="absolute top-1/2 -translate-x-1/2 -translate-y-1/2"
             style={{ left: `${Math.min(100, Math.max(0, it.pos * 100))}%` }}
           >
-            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] text-foreground/85">
+            <span className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap text-[11px] text-foreground/85">
               {it.label}
             </span>
-            <span className="block h-2.5 w-2.5 -translate-y-1/2 rounded-full border border-background bg-wine" />
+            <span className="block h-2.5 w-2.5 rounded-full border-2 border-background bg-wine" />
           </div>
         ))}
       </div>
