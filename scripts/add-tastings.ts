@@ -172,7 +172,7 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     notesKo: "가볍고 향긋한 오스트리아 레드. 붉은 과실과 은은한 후추 향, 부드러운 타닌.",
   },
   "chateau-pey-la-tour-reserve": {
-    abv: 14,
+    abv: 14.5,
     notesKo: "메를로 중심의 부드러운 보르도. 자두·블랙베리와 은은한 오크, 편하게 마시는 스타일.",
   },
   "tosti-moscato-d-asti": {
@@ -196,11 +196,11 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     notesKo: "오크를 절제한 샤블리. 레몬·초록 사과에 부싯돌 같은 미네랄, 산뜻하다.",
   },
   "pesquera-crianza": {
-    abv: 14,
+    abv: 14.5,
     notesKo: "리베라 델 두에로 템프라니요. 검은 과실과 오크의 바닐라·가죽, 힘 있는 구조.",
   },
   "fattoria-dei-barbi-brunello-blue-label": {
-    abv: 14,
+    abv: 14.5,
     notesKo: "산지오베제 100% 브루넬로. 체리·말린 허브·가죽 향에 높은 산미와 타닌, 장기 숙성형.",
   },
   "errazuriz-aconcagua-costa-chardonnay": {
@@ -208,7 +208,7 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     notesKo: "서늘한 연안 샤르도네. 감귤·흰 꽃에 짭짤한 미네랄, 산뜻하고 긴장감 있다.",
   },
   "vranken-pommery-brut-nature": {
-    abv: 12,
+    abv: 12.5,
     notesKo: "당분을 넣지 않은 브뤼 나투르 샴페인. 매우 드라이하고 사과·빵 향에 날카로운 산미.",
   },
   "domaine-vincent-fournier-bourgogne-chardonnay": {
@@ -220,19 +220,19 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     notesKo: "루아르 슈냉 블랑. 노란 사과·꿀 향에 높은 산미, 드라이하면서 풍미가 있다.",
   },
   "luigi-baudana-langhe-bianco": {
-    abv: 12.5,
+    abv: 13,
     notesKo: "피에몬테 화이트. 흰 꽃·감귤 향에 또렷한 산미, 깔끔하고 미네랄이 있다.",
   },
   "luigi-baudana-langhe-rosso": {
-    abv: 14,
+    abv: 13,
     notesKo: "네비올로 중심의 랑게 레드. 체리·장미·타르 향에 산미와 타닌이 살아 있다.",
   },
   "muga-reserva": {
-    abv: 14,
+    abv: 14.5,
     notesKo: "리오하 레세르바. 딸기·자두에 오크의 바닐라·가죽, 부드럽게 숙성된 균형.",
   },
   "brown-brothers-premium-cuvee": {
-    abv: 11.5,
+    abv: 13,
     notesKo: "호주 스파클링. 사과·시트러스 향에 상큼한 기포, 가볍고 마시기 편하다.",
   },
 };
