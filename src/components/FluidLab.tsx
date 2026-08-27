@@ -1140,6 +1140,9 @@ export default function FluidLab({
     let sloshZ = 0;
     let sloshVX = 0;
     let sloshVZ = 0;
+    let rotSmooth = 0; // 슬로싱이 얼마나 "도는가"(0=한 축 왕복=선형, 1=원형 스월)
+    let w2ph = 0; // mode-2 회전 위상 누적 — 회전할 때만 증가
+    let w3ph = 0; // mode-3 회전 위상 누적
     // 진행성 잔물결: 정지=평면, 흔들면 활성. simT=파동 위상용 시각, waveAct=활성도.
     let simT = 0;
     let waveAct = 0;
@@ -1447,10 +1450,19 @@ export default function FluidLab({
         const phi = Math.atan2(sloshZ, sloshX);
         crC = Math.cos(phi);
         crS = Math.sin(phi);
-        const a2 = phi + W2SPD * simT;
+        // "회전했나" 판별: 슬로싱 벡터의 각속도(각운동량/‖s‖²). 원형 스월이면 크고,
+        // 한 축 왕복(선형)이면 ~0. 회전할 때만 mode-2·3 로브를 돌린다 → 왼쪽으로만
+        // 기울였다 놓으면 표면이 돌지 않고 좌우로만 넘실인다(자연스러움).
+        const angMom = sloshX * sloshVZ - sloshZ * sloshVX;
+        const rotInstant =
+          swirlMag > 0.06 ? Math.min(1, Math.abs(angMom) / (swirlMag * swirlMag * OMEGA)) : 0;
+        rotSmooth += (rotInstant - rotSmooth) * 0.08;
+        w2ph += W2SPD * rotSmooth * dt;
+        w3ph += W3SPD * rotSmooth * dt;
+        const a2 = phi + w2ph;
         l2c = Math.cos(a2);
         l2s = Math.sin(a2);
-        const a3 = phi + W3SPD * simT;
+        const a3 = phi + w3ph;
         l3c = Math.cos(a3);
         l3s = Math.sin(a3);
         // legs: 스월 중엔 벽이 젖고(빠르게↑, 흘러내림 리셋), 멈추면 서서히 마르며
