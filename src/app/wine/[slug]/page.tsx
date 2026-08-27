@@ -61,9 +61,24 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
   const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug, displayColor);
   const fair = winePrice(wine.slug); // 국내 소매 적정가 범위(내 기록 판정용)
 
-  // 이름 아래 "생산자 · 지역 · 국가" 줄. 지역은 지역 페이지로 잇는다.
+  // 이름 아래 "생산자 · 지역 · 국가" 줄. 생산자·지역은 각 페이지로 잇는다. 지역명이
+  // 국가와 같으면(예: 산지도 국가도 "호주") 국가는 생략해 중복을 없앤다.
   const identity: React.ReactNode[] = [];
-  if (wine.producer?.nameKo) identity.push(wine.producer.nameKo);
+  if (wine.producer?.nameKo) {
+    identity.push(
+      wine.producer.slug ? (
+        <Link
+          key="producer"
+          href={`/producer/${wine.producer.slug}`}
+          className="underline decoration-foreground/25 underline-offset-2 transition-colors hover:text-foreground hover:decoration-foreground/60"
+        >
+          {wine.producer.nameKo}
+        </Link>
+      ) : (
+        wine.producer.nameKo
+      )
+    );
+  }
   if (region) {
     identity.push(
       <Link
@@ -77,7 +92,7 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
   } else if (wine.region?.nameKo) {
     identity.push(wine.region.nameKo);
   }
-  if (country) identity.push(country);
+  if (country && country !== region?.nameKo) identity.push(country);
 
   return (
     <WineDetailView
