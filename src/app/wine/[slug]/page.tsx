@@ -5,11 +5,13 @@ import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
 import { GrapeColorDot } from "@/features/wine/grape-color";
 import { grapeInfo, pairingsForGrapes } from "@/features/wine/grape-info";
+import { PriceBadge } from "@/features/wine/price-badge";
 import { producerInfo } from "@/features/wine/producer-info";
 import { getWineBySlug } from "@/features/wine/queries";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { regionInfo } from "@/features/wine/region-info";
 import { averageHex, wineGlassFor } from "@/features/wine/wine-glass";
+import { priceVerdict, winePrice } from "@/features/wine/wine-price-info";
 import { wineProfile } from "@/features/wine/wine-profile";
 import { formatDate, formatKRW } from "@/lib/format";
 import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
@@ -79,6 +81,7 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
   const rInfo = regionInfo(wine.region?.nameKo);
   const profile = wineProfile(wine, gInfo, primaryGrape);
   const pInfo = producerInfo(wine.producer?.nameKo ?? wine.producer?.nameLocal ?? null);
+  const fair = winePrice(wine.slug); // 국내 소매 적정가 범위(있으면)
   const terroir = [rInfo?.climate, rInfo?.soil].filter(Boolean).join(" · ");
   const grapeStats = [
     gInfo?.body && `바디 ${gInfo.body}`,
@@ -279,6 +282,17 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
         </Section>
       ) : null}
 
+      {/* 국내 적정가 */}
+      {fair ? (
+        <Section title="국내 적정가">
+          <p className="text-sm text-foreground/90">
+            {formatKRW(fair.low)} ~ {formatKRW(fair.high)}
+            <span className="ml-1.5 text-xs text-muted">와인샵·마트 소매 기준 · 추정</span>
+          </p>
+          {fair.note ? <p className="mt-1 text-xs text-muted">{fair.note}</p> : null}
+        </Section>
+      ) : null}
+
       {/* 내 기록 */}
       <Section title="내 기록">
         {wine.tastingNotes.length > 0 ? (
@@ -287,10 +301,13 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
               <li key={n.id} className="border-t border-foreground/10 first:border-t-0">
                 <Link
                   href={`/journal/${n.id}`}
-                  className="flex items-baseline justify-between gap-3 py-2 text-sm text-foreground/75 hover:text-foreground"
+                  className="flex items-baseline justify-between gap-2.5 py-2 text-sm text-foreground/75 hover:text-foreground"
                 >
                   <span className="font-mono text-xs text-gold">{formatDate(n.drankOn)}</span>
                   <span className="min-w-0 flex-1 truncate text-muted">{n.bodyText ?? ""}</span>
+                  {fair && n.purchasePrice != null ? (
+                    <PriceBadge v={priceVerdict(n.purchasePrice, fair)} />
+                  ) : null}
                   <span className="shrink-0">{formatKRW(n.purchasePrice)}</span>
                 </Link>
               </li>
