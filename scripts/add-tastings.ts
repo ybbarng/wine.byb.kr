@@ -158,7 +158,84 @@ const GRAPES: { slug: string; nameKo: string; nameLocal: string; color: string }
   { slug: "tempranillo", nameKo: "템프라니요", nameLocal: "Tempranillo", color: "red" },
   { slug: "chenin-blanc", nameKo: "슈냉 블랑", nameLocal: "Chenin Blanc", color: "white" },
   { slug: "nebbiolo", nameKo: "네비올로", nameLocal: "Nebbiolo", color: "red" },
+  { slug: "zweigelt", nameKo: "츠바이겔트", nameLocal: "Zweigelt", color: "red" },
 ];
+
+// 와인별 abv(라벨 기준 추정 — 정확값은 라벨 확인 후 조정)와 시음 포인트.
+const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
+  "henri-bourgeois-sancerre-les-baronnes": {
+    abv: 13,
+    notesKo: "드라이하고 미네랄이 또렷한 화이트. 감귤·풋풀 향에 부싯돌 같은 미네랄이 받친다.",
+  },
+  "esterhazy-klimt-red": {
+    abv: 13,
+    notesKo: "가볍고 향긋한 오스트리아 레드. 붉은 과실과 은은한 후추 향, 부드러운 타닌.",
+  },
+  "chateau-pey-la-tour-reserve": {
+    abv: 14,
+    notesKo: "메를로 중심의 부드러운 보르도. 자두·블랙베리와 은은한 오크, 편하게 마시는 스타일.",
+  },
+  "tosti-moscato-d-asti": {
+    abv: 5.5,
+    notesKo: "달콤하고 살짝 발포하는 저알코올 화이트. 복숭아·머스캇 향이 화사하다.",
+  },
+  "montgras-intriga-maxima": {
+    abv: 14.5,
+    notesKo: "마이포 고지대 카베르네. 블랙커런트·삼나무 향에 짜임새 있는 타닌, 진하고 길다.",
+  },
+  "carlo-sani-susumaniello": {
+    abv: 13.5,
+    notesKo: "뿔리아 토착 품종의 진한 레드. 잘 익은 붉은 과실과 향신료, 부드러운 질감.",
+  },
+  "gosset-grand-rose-brut": {
+    abv: 12,
+    notesKo: "로제 샴페인. 딸기·라즈베리 향에 섬세한 기포와 또렷한 산미.",
+  },
+  "domaine-laroche-chablis-saint-martin": {
+    abv: 12.5,
+    notesKo: "오크를 절제한 샤블리. 레몬·초록 사과에 부싯돌 같은 미네랄, 산뜻하다.",
+  },
+  "pesquera-crianza": {
+    abv: 14,
+    notesKo: "리베라 델 두에로 템프라니요. 검은 과실과 오크의 바닐라·가죽, 힘 있는 구조.",
+  },
+  "fattoria-dei-barbi-brunello-blue-label": {
+    abv: 14,
+    notesKo: "산지오베제 100% 브루넬로. 체리·말린 허브·가죽 향에 높은 산미와 타닌, 장기 숙성형.",
+  },
+  "errazuriz-aconcagua-costa-chardonnay": {
+    abv: 13,
+    notesKo: "서늘한 연안 샤르도네. 감귤·흰 꽃에 짭짤한 미네랄, 산뜻하고 긴장감 있다.",
+  },
+  "vranken-pommery-brut-nature": {
+    abv: 12,
+    notesKo: "당분을 넣지 않은 브뤼 나투르 샴페인. 매우 드라이하고 사과·빵 향에 날카로운 산미.",
+  },
+  "domaine-vincent-fournier-bourgogne-chardonnay": {
+    abv: 12.5,
+    notesKo: "부르고뉴 샤르도네. 사과·감귤에 은은한 오크, 균형 잡힌 미디엄 화이트.",
+  },
+  "domaine-des-ardillers-anjou-blanc": {
+    abv: 12.5,
+    notesKo: "루아르 슈냉 블랑. 노란 사과·꿀 향에 높은 산미, 드라이하면서 풍미가 있다.",
+  },
+  "luigi-baudana-langhe-bianco": {
+    abv: 12.5,
+    notesKo: "피에몬테 화이트. 흰 꽃·감귤 향에 또렷한 산미, 깔끔하고 미네랄이 있다.",
+  },
+  "luigi-baudana-langhe-rosso": {
+    abv: 14,
+    notesKo: "네비올로 중심의 랑게 레드. 체리·장미·타르 향에 산미와 타닌이 살아 있다.",
+  },
+  "muga-reserva": {
+    abv: 14,
+    notesKo: "리오하 레세르바. 딸기·자두에 오크의 바닐라·가죽, 부드럽게 숙성된 균형.",
+  },
+  "brown-brothers-premium-cuvee": {
+    abv: 11.5,
+    notesKo: "호주 스파클링. 사과·시트러스 향에 상큼한 기포, 가볍고 마시기 편하다.",
+  },
+};
 
 type Entry = {
   regionSlug: string;
@@ -208,7 +285,7 @@ const ENTRIES: Entry[] = [
       nameLocal: "Esterházy Klimt Red",
       type: "red",
     },
-    grapeSlugs: [],
+    grapeSlugs: [{ slug: "zweigelt" }],
     tasting: {
       drankOn: "2025-09-12",
       purchasedOn: "2025-09-11",
@@ -586,15 +663,23 @@ async function main() {
       },
     });
 
+    const d = WINE_DETAILS[e.wine.slug] ?? {};
     const wine = await db.wine.upsert({
       where: { slug: e.wine.slug },
-      update: {},
+      // abv·notesKo·classification 은 재실행 때도 갱신(시드가 단일 소스).
+      update: {
+        abv: d.abv ?? null,
+        notesKo: d.notesKo ?? null,
+        classification: e.wine.classification ?? null,
+      },
       create: {
         slug: e.wine.slug,
         nameKo: e.wine.nameKo,
         nameLocal: e.wine.nameLocal,
         type: e.wine.type,
         classification: e.wine.classification,
+        abv: d.abv,
+        notesKo: d.notesKo,
         producerId: producer.id,
         regionId: region.id,
       },
