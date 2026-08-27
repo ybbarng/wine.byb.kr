@@ -4,6 +4,7 @@ import { BrandLogo } from "./BrandLogo";
 
 const NAV = [
   { href: "/explore", label: "탐험" },
+  { href: "/catalog", label: "도감" },
   { href: "/journal", label: "기록" },
   { href: "/learn", label: "학습" },
 ];

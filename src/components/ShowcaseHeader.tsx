@@ -110,6 +110,9 @@ export function ShowcaseHeader({ hairline = true }: { hairline?: boolean } = {})
         <Link href="/explore" className="transition-colors hover:text-foreground">
           탐험
         </Link>
+        <Link href="/catalog" className="transition-colors hover:text-foreground">
+          도감
+        </Link>
         <Link href="/journal" className="transition-colors hover:text-foreground">
           기록
         </Link>
