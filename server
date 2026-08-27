@@ -45,6 +45,10 @@ pnpm db:push
 echo "🍷 Applying tasting seed..."
 pnpm exec tsx scripts/add-tastings.ts || echo "⚠️  tasting seed skipped (non-fatal)"
 
+# 시드 파싱으로 생긴 중복 품종 병합(멱등). 실패해도 배포는 계속.
+echo "🍇 Deduping grapes..."
+pnpm exec tsx scripts/dedupe-grapes.ts || echo "⚠️  grape dedupe skipped (non-fatal)"
+
 echo "🔨 Building..."
 pnpm run build
 
