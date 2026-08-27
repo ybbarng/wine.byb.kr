@@ -1457,8 +1457,12 @@ export default function FluidLab({
         const rotInstant =
           swirlMag > 0.06 ? Math.min(1, Math.abs(angMom) / (swirlMag * swirlMag * OMEGA)) : 0;
         rotSmooth += (rotInstant - rotSmooth) * 0.08;
-        w2ph += W2SPD * rotSmooth * dt;
-        w3ph += W3SPD * rotSmooth * dt;
+        // 약하게 도는 것(잔을 기울일 때 손목이 자연히 그리는 아크·손떨림 →
+        // rotSmooth~0.3)은 회전으로 치지 않고, 확실히 도는 원 스월(rotSmooth~0.9)만
+        // 로브를 돌린다. 제곱으로 낮은 회전을 눌러 준다(0.3²=0.09 vs 0.9²=0.81).
+        const rotDrive = rotSmooth * rotSmooth;
+        w2ph += W2SPD * rotDrive * dt;
+        w3ph += W3SPD * rotDrive * dt;
         const a2 = phi + w2ph;
         l2c = Math.cos(a2);
         l2s = Math.sin(a2);
