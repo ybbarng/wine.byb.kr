@@ -1140,9 +1140,12 @@ export default function FluidLab({
     let sloshZ = 0;
     let sloshVX = 0;
     let sloshVZ = 0;
-    let rotSmooth = 0; // 슬로싱이 얼마나 "도는가"(0=한 축 왕복=선형, 1=원형 스월)
-    let w2ph = 0; // mode-2 회전 위상 누적 — 회전할 때만 증가
+    let rotSmooth = 0; // 슬로싱이 얼마나·어느 쪽으로 "도는가"(−1=CW ~ 0=선형 ~ +1=CCW)
+    let w2ph = 0; // mode-2 회전 위상 누적 — 회전할 때만, 스월 방향으로
     let w3ph = 0; // mode-3 회전 위상 누적
+    // 드래그→잔 기울기 매핑용: 카메라의 화면 오른쪽·위를 월드 수평면에 투영(재사용).
+    const swR = new THREE.Vector3();
+    const swU = new THREE.Vector3();
     // 진행성 잔물결: 정지=평면, 흔들면 활성. simT=파동 위상용 시각, waveAct=활성도.
     let simT = 0;
     let waveAct = 0;
@@ -1405,9 +1408,20 @@ export default function FluidLab({
           autoSwirlT += dt;
           if (autoSwirlT >= TOTAL) autoSwirl = false;
         } else if (swDragging) {
-          // 마우스 위=잔 먼쪽, 아래=가까운쪽(더 자연스러움) → Y 부호 반전.
-          gtx = (mStartY - mCurY) * GAMP;
-          gtz = (mCurX - mStartX) * GAMP;
+          // 카메라가 XZ 대각(−1.9,1.7,−1.9)에 있어 월드 X·Z 축이 화면과 45° 어긋난다.
+          // 카메라의 화면 오른쪽·위를 월드 수평면에 투영해, 드래그 방향대로 잔 윗부분이
+          // 기울게 한다(위=뒤, 아래=앞, 왼쪽=왼, 오른쪽=오른쪽).
+          swR.setFromMatrixColumn(camera.matrixWorld, 0);
+          swR.y = 0;
+          swR.normalize(); // 화면 오른쪽(월드 수평)
+          swU.setFromMatrixColumn(camera.matrixWorld, 1);
+          swU.y = 0;
+          swU.normalize(); // 화면 위(월드 수평)
+          const sx = (mCurX - mStartX) * GAMP; // 화면 오른쪽 +
+          const sy = (mStartY - mCurY) * GAMP; // 화면 위 +
+          // 잔 top이 향할 월드 수평 방향 T. rotation.x>0→top+Z, rotation.z>0→top−X.
+          gtx = swR.z * sx + swU.z * sy; // = T.z
+          gtz = -(swR.x * sx + swU.x * sy); // = −T.x
           // 기울기 벡터 크기를 반지름으로 제한(방향 보존). 축별로 자르면(box) 한
           // 축이 먼저 한계에 걸릴 때 직선 드래그가 코너로 꺾여 없던 회전이 생긴다.
           const gLen = Math.hypot(gtx, gtz);
@@ -1430,10 +1444,13 @@ export default function FluidLab({
         const ZETA = 0.055; // 감쇠 낮춤 — 더 오래·크게 출렁
         const COUPLE = 2.7; // 잔 움직임 → 와인 슬로싱 결합↑(세게 흔들면 크게)
         const SLOSH_MAX = 0.78; // 최대 수면 기울기↑ — 세게 흔들수록 더 세워짐
+        // 두 축 결합 부호는 표면 크레스트가 잔 스월과 "같은 방향"으로 돌게 맞춘다
+        // (와인은 잔을 쫓아감). 좌우(roll) 항은 그대로, 앞뒤(pitch) 항 부호만 뒤집어
+        // 회전 방향을 바로잡되 선형 정렬은 유지.
         sloshVX +=
           (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt - COUPLE * gvz * dt;
         sloshVZ +=
-          (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt - COUPLE * gvx * dt;
+          (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt + COUPLE * gvx * dt;
         sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshX + sloshVX * dt));
         sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshZ + sloshVZ * dt));
         // 잔 기울기 적용(마우스 추종).
@@ -1457,12 +1474,12 @@ export default function FluidLab({
         const phi = Math.atan2(sloshZ, sloshX);
         crC = Math.cos(phi);
         crS = Math.sin(phi);
-        // "회전했나" 판별: 슬로싱 벡터의 각속도(각운동량/‖s‖²). 원형 스월이면 크고,
-        // 한 축 왕복(선형)이면 ~0. 회전할 때만 mode-2·3 로브를 돌린다 → 왼쪽으로만
-        // 기울였다 놓으면 표면이 돌지 않고 좌우로만 넘실인다(자연스러움).
+        // "얼마나·어느 쪽으로 도나" 판별: 슬로싱 벡터의 부호 있는 각속도
+        // (각운동량/‖s‖²·ω). 원형 스월이면 ±1, 한 축 왕복(선형)이면 ~0. 부호를
+        // 살려 로브가 스월 방향으로 돌게 하고, 선형이면 거의 안 돈다.
         const angMom = sloshX * sloshVZ - sloshZ * sloshVX;
         const rotInstant =
-          swirlMag > 0.06 ? Math.min(1, Math.abs(angMom) / (swirlMag * swirlMag * OMEGA)) : 0;
+          swirlMag > 0.06 ? Math.max(-1, Math.min(1, angMom / (swirlMag * swirlMag * OMEGA))) : 0;
         rotSmooth += (rotInstant - rotSmooth) * 0.08;
         w2ph += W2SPD * rotSmooth * dt;
         w3ph += W3SPD * rotSmooth * dt;
