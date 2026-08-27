@@ -28,6 +28,8 @@ export default async function EditTastingNotePage({ params }: PageProps<"/journa
     purchasePrice: n.purchasePrice,
     purchasePlace: n.purchasePlace,
     rating: n.rating,
+    repurchase: n.repurchase,
+    value: n.value,
     bodyText: n.bodyText,
     foodPaired: n.foodPaired,
   };

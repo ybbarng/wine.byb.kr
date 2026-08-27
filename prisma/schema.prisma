@@ -142,6 +142,8 @@ model TastingNote {
   purchaseCurrency String    @default("KRW")
   purchasePlace    String?
   rating           Int?
+  repurchase       String? // 다시 살까: 응|아마|아니
+  value            String? // 가격 대비: 만족|보통|아쉬움
   bodyText         String?
   foodPaired       String?
   photos           String? // JSON 배열
