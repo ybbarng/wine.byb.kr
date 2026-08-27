@@ -48,14 +48,18 @@ export type GlassSpec = { absorb: [number, number, number]; glass: number };
 // 눈에 보이길 원하는 색(#rrggbb) → Beer–Lambert 흡수계수. 잘 통과하는 채널(밝음)은
 // 적게, 흡수되는 채널(어두움)은 많이. 완벽한 물리 변환은 아니고(투명도는 나중에),
 // 실시간 미리보기로 눈으로 맞추는 용도. 스케일은 기존 프리셋 범위에 맞춘다.
-const HEX_ABSORB_SCALE = 90;
+// 관측색(잔에서 본 색) → Beer–Lambert 흡수계수. 렌더가 observed ≈ exp(−A·t) 이므로
+// 역은 A = −ln(관측/255)·k (로그). 선형 (1−c/255)·90 은 밝은 색(화이트)을 과다
+// 흡수시켜 연노랑을 갈색으로 튀게 했다. k 는 "고른 색 ≈ 잔에 보이는 색"이 되도록
+// (두께 효과 상쇄) 잡음 — k≈1/유효두께. 로그라 화이트·레드 모두 스와치에 근접.
+const HEX_ABSORB_K = 14;
 export function hexToAbsorb(hex: string): [number, number, number] | null {
   const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!m) return null;
   const n = Number.parseInt(m[1], 16);
   const ch = (c: number) => {
-    const t = c / 255; // 통과율(밝을수록 큼)
-    return Math.max(0.4, Math.round((1 - t) * HEX_ABSORB_SCALE * 10) / 10);
+    const t = Math.max(c / 255, 0.02); // 통과율(0=검정 방지)
+    return Math.max(0.4, Math.round(-Math.log(t) * HEX_ABSORB_K * 10) / 10);
   };
   return [ch((n >> 16) & 255), ch((n >> 8) & 255), ch(n & 255)];
 }

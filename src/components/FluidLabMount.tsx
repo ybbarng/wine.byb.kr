@@ -44,6 +44,11 @@ const WINE_PRESETS: Preset[] = [
   { name: "아이스와인", color: "#cf8f2a", glass: GLASS.dessert },
 ];
 
+// 와인 페이지(WineDetailView)와 같은 평평한 웜톤 배경. HDR 을 그대로 쓰면 위쪽이
+// 어두운 회색 천장 영역으로 그라데이션 져 지저분하다. 프리뷰는 이 단색을 쓴다.
+const CANVAS_BG = "#9a8168";
+const CANVAS_RENDERED = "#bda588";
+
 type WineRow = {
   slug: string;
   nameKo: string;
@@ -98,8 +103,21 @@ export default function FluidLabMount() {
   };
 
   return (
-    <div className="relative h-full w-full">
-      <FluidLab wineAbsorb={absorb} glassType={glassIdx} />
+    <div className="relative h-full w-full" style={{ backgroundColor: CANVAS_RENDERED }}>
+      <FluidLab wineAbsorb={absorb} glassType={glassIdx} bgColor={CANVAS_BG} />
+
+      {/* 작은 프리뷰 — 와인 페이지와 같은 평평한 웜 배경(HDR 그라데이션 없이 깔끔). */}
+      <div className="absolute bottom-3 right-3 z-10 flex flex-col items-center gap-1">
+        <div
+          className="relative h-72 w-52 overflow-hidden rounded-2xl border border-white/25"
+          style={{ backgroundColor: CANVAS_RENDERED }}
+        >
+          <FluidLab wineAbsorb={absorb} glassType={glassIdx} bgColor={CANVAS_BG} swirlScale={0.4} />
+        </div>
+        <span className="rounded bg-black/45 px-1.5 py-0.5 text-[10px] text-white/70 backdrop-blur">
+          작은 잔 (와인 페이지 배경)
+        </span>
+      </div>
 
       {/* 색 프리셋 (좌상) */}
       <div className="absolute left-3 top-3 z-10 flex max-w-[62vw] flex-wrap gap-1.5">

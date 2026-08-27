@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
-import { defaultColorHex, hexToAbsorb, wineGlassFor } from "@/features/wine/wine-glass";
+import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
 import { wineDisplayName } from "@/lib/wine";
 import { type ExistingNote, toDefaults, type WineOption } from "./tasting-note-form";
 import {
@@ -19,6 +19,12 @@ const FluidLab = dynamic(() => import("@/components/FluidLab"), {
   ssr: false,
   loading: () => null,
 });
+
+// 글라스 캔버스 배경 — 와인 페이지(WineDetailView)와 같은 평평한 웜톤으로 통일해,
+// 프리뷰에서 고른 색이 실제 와인 페이지 잔과 같게 보이게 한다. (bgColor 를 안 주면
+// 흐린 HDR 이 뒤에 비쳐 뿌옇고 위쪽이 어둡다.) 색 정확도는 hexToAbsorb 로그 보정으로.
+const CANVAS_BG = "#9a8168";
+const CANVAS_RENDERED = "#bda588";
 
 const COLOR_PRESETS = ["#4a0f1a", "#7c1f2c", "#e59aa4", "#ecd88f", "#f1e7b4"];
 const REPURCHASE_OPTS = ["응", "아마", "아니"] as const;
@@ -69,8 +75,15 @@ export function TastingNoteWizard({
   const colorHex = watch("colorHex") as string | undefined;
   const selWine = wines.find((w) => w.id === wineId);
   const currentColor = colorHex ?? defaultColorHex(selWine?.type);
-  const previewAbsorb = hexToAbsorb(currentColor) ?? [16, 78, 98];
-  const previewGlass = wineGlassFor(selWine?.type ?? "red", []).glass;
+  // 프리뷰 absorb·glass 는 실제 렌더(와인/상세 페이지)와 같은 wineGlassFor 파이프라인으로.
+  // 색을 안 고르면 타입 추정색(튜닝값), 고르면 그 색. hexToAbsorb 를 직접 쓰면 스케일이
+  // 세서 특히 화이트가 어둡고 탁하게 튀었다.
+  const { absorb: previewAbsorb, glass: previewGlass } = wineGlassFor(
+    selWine?.type ?? "red",
+    [],
+    undefined,
+    colorHex
+  );
   const canSave = isEdit || !!wineId;
   const isLast = step === STEPS.length - 1;
 
@@ -183,8 +196,16 @@ export function TastingNoteWizard({
 
           {cur.key === "color" ? (
             <div className="flex flex-col gap-3">
-              <div className="relative h-56 w-full overflow-hidden rounded-2xl border border-foreground/12 bg-card/40">
-                <FluidLab wineAbsorb={previewAbsorb} glassType={previewGlass} swirlScale={0.4} />
+              <div
+                className="relative mx-auto h-72 w-full max-w-[19rem] overflow-hidden rounded-2xl border border-foreground/12"
+                style={{ backgroundColor: CANVAS_RENDERED }}
+              >
+                <FluidLab
+                  wineAbsorb={previewAbsorb}
+                  glassType={previewGlass}
+                  bgColor={CANVAS_BG}
+                  swirlScale={0.4}
+                />
               </div>
               <div className="flex items-center gap-2">
                 <input
