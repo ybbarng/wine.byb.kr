@@ -18,6 +18,13 @@ const KIND_LABEL: Record<SearchResult["kind"], string> = {
   wine: "와인",
 };
 
+const NAV = [
+  { href: "/explore", label: "탐험" },
+  { href: "/catalog", label: "도감" },
+  { href: "/journal", label: "기록" },
+  { href: "/learn", label: "학습" },
+];
+
 // 홈·와인 상세·검색 결과 페이지가 공유하는 상단 헤더.
 // 로고(와인잔 심볼 + wine) · 통합 검색(→ /wine/[slug]) · 내비.
 // hairline: 하단 와인톤 가로선. 홈처럼 내용이 바로 이어질 땐 켜고, 카드가 떠 있는
@@ -26,7 +33,9 @@ export function ShowcaseHeader({ hairline = true }: { hairline?: boolean } = {})
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
+  const [menuOpen, setMenuOpen] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // 입력 디바운스 후 서버 검색.
   useEffect(() => {
@@ -50,9 +59,9 @@ export function ShowcaseHeader({ hairline = true }: { hairline?: boolean } = {})
   // 바깥 클릭 시 드롭다운 닫기.
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
-      if (boxRef.current && !boxRef.current.contains(e.target as Node)) {
-        setResults([]);
-      }
+      const t = e.target as Node;
+      if (boxRef.current && !boxRef.current.contains(t)) setResults([]);
+      if (menuRef.current && !menuRef.current.contains(t)) setMenuOpen(false);
     };
     window.addEventListener("pointerdown", onDown);
     return () => window.removeEventListener("pointerdown", onDown);
@@ -106,20 +115,54 @@ export function ShowcaseHeader({ hairline = true }: { hairline?: boolean } = {})
         )}
       </div>
 
+      {/* 데스크톱: 가로 내비 */}
       <nav className="hidden shrink-0 items-center gap-5 text-sm text-muted sm:flex">
-        <Link href="/explore" className="transition-colors hover:text-foreground">
-          탐험
-        </Link>
-        <Link href="/catalog" className="transition-colors hover:text-foreground">
-          도감
-        </Link>
-        <Link href="/journal" className="transition-colors hover:text-foreground">
-          기록
-        </Link>
-        <Link href="/learn" className="transition-colors hover:text-foreground">
-          학습
-        </Link>
+        {NAV.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className="transition-colors hover:text-foreground"
+          >
+            {item.label}
+          </Link>
+        ))}
       </nav>
+
+      {/* 모바일: 햄버거 메뉴 */}
+      <div ref={menuRef} className="relative shrink-0 sm:hidden">
+        <button
+          type="button"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-label="메뉴"
+          aria-expanded={menuOpen}
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-foreground/15 bg-card/70 text-foreground/70 backdrop-blur"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            className="h-5 w-5"
+            aria-hidden
+          >
+            <path strokeLinecap="round" d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
+        {menuOpen ? (
+          <nav className="absolute right-0 top-full mt-2 flex min-w-32 flex-col overflow-hidden rounded-2xl border border-foreground/10 bg-card/95 p-1 shadow-lg shadow-foreground/10 backdrop-blur">
+            {NAV.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setMenuOpen(false)}
+                className="rounded-xl px-3 py-2 text-sm text-foreground transition-colors hover:bg-foreground/8"
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
+      </div>
 
       {hairline ? (
         <div
