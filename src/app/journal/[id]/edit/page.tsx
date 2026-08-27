@@ -30,6 +30,7 @@ export default async function EditTastingNotePage({ params }: PageProps<"/journa
     rating: n.rating,
     repurchase: n.repurchase,
     value: n.value,
+    colorHex: n.colorHex,
     bodyText: n.bodyText,
     foodPaired: n.foodPaired,
   };

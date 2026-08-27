@@ -60,6 +60,42 @@ export function hexToAbsorb(hex: string): [number, number, number] | null {
   return [ch((n >> 16) & 255), ch((n >> 8) & 255), ch(n & 255)];
 }
 
+// 컬러피커 시작값(종류별 대표 색, 눈에 보이는 색). 지정 색이 없을 때 여기서 출발.
+const TYPE_COLOR_HEX: Record<string, string> = {
+  red: "#5a1122",
+  white: "#ecd88f",
+  rose: "#e59aa4",
+  sparkling: "#f1e7b4",
+  champagne: "#f1e7b4",
+  dessert: "#cf8f2a",
+  fortified: "#7a2a12",
+};
+export function defaultColorHex(type: string | null | undefined): string {
+  return TYPE_COLOR_HEX[type ?? "red"] ?? "#5a1122";
+}
+
+// 여러 관측 색(#rrggbb)을 RGB 평균내 하나의 대표 색으로. 유효한 값이 없으면 null.
+export function averageHex(hexes: (string | null | undefined)[]): string | null {
+  const rgb = hexes
+    .map((h) => (h ? /^#?([0-9a-f]{6})$/i.exec(h.trim()) : null))
+    .filter((m): m is RegExpExecArray => m != null)
+    .map((m) => Number.parseInt(m[1], 16));
+  if (rgb.length === 0) return null;
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  for (const n of rgb) {
+    r += (n >> 16) & 255;
+    g += (n >> 8) & 255;
+    b += n & 255;
+  }
+  const avg = (x: number) =>
+    Math.round(x / rgb.length)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${avg(r)}${avg(g)}${avg(b)}`;
+}
+
 // 타입·품종으로는 안 잡히는 특수한 색을 와인별(slug)로 지정(코드). colorHex(DB)가
 // 있으면 그게 최우선.
 /** 글라스 색·잔을 정한다. 우선순위: colorHex(DB) > slug 특수색 > 품종/타입 추정. */

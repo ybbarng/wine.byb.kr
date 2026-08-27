@@ -2,10 +2,10 @@ import { db } from "@/lib/db";
 
 // 마신 기록(내가 마신 기록) 조회. 작성은 관리자만, 조회는 누구나(§4.5).
 
-/** 작성 폼의 와인 선택용 목록 — 원어 이름 순. */
+/** 작성 폼의 와인 선택용 목록 — 원어 이름 순. 색 설정을 위해 종류·현재 색도 싣는다. */
 export function getWineOptions() {
   return db.wine.findMany({
-    select: { id: true, nameKo: true, nameLocal: true },
+    select: { id: true, nameKo: true, nameLocal: true, type: true, colorHex: true },
     orderBy: { nameLocal: "asc" },
   });
 }

@@ -1,11 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { defaultColorHex, hexToAbsorb, wineGlassFor } from "@/features/wine/wine-glass";
 import { wineDisplayName } from "@/lib/wine";
 import {
   type TastingNoteFormInput,
@@ -13,10 +15,26 @@ import {
   tastingNoteSchema,
 } from "./tasting-note-schema";
 
+const FluidLab = dynamic(() => import("@/components/FluidLab"), {
+  ssr: false,
+  loading: () => null,
+});
+
+// 노트 색 프리셋(눈에 보이는 색).
+const COLOR_PRESETS: { name: string; hex: string }[] = [
+  { name: "짙은 레드", hex: "#4a0f1a" },
+  { name: "루비", hex: "#7c1f2c" },
+  { name: "로제", hex: "#e59aa4" },
+  { name: "화이트", hex: "#ecd88f" },
+  { name: "옅은 골드", hex: "#f1e7b4" },
+];
+
 export interface WineOption {
   id: string;
   nameKo: string;
   nameLocal: string | null;
+  type: string | null;
+  colorHex: string | null;
 }
 
 // 수정 모드에서 폼을 채울 기존 값. 날짜는 서버에서 "YYYY-MM-DD"로 넘긴다.
@@ -31,6 +49,7 @@ export interface ExistingNote {
   rating: number | null;
   repurchase: string | null;
   value: string | null;
+  colorHex: string | null;
   bodyText: string | null;
   foodPaired: string | null;
 }
@@ -46,6 +65,7 @@ function toDefaults(n: ExistingNote): TastingNoteFormInput {
     rating: n.rating ?? undefined,
     repurchase: (n.repurchase as TastingNoteFormInput["repurchase"]) ?? undefined,
     value: (n.value as TastingNoteFormInput["value"]) ?? undefined,
+    colorHex: n.colorHex ?? undefined,
     bodyText: n.bodyText ?? "",
     foodPaired: n.foodPaired ?? "",
   };
@@ -97,6 +117,13 @@ export function TastingNoteForm({
   const rating = watch("rating") as number | undefined;
   const repurchase = watch("repurchase") as string | undefined;
   const value = watch("value") as string | undefined;
+  // 색: 이때 관측한 와인 색. 선택 와인의 종류로 시작 색을 잡고, 고르면 잔에 실시간 반영.
+  const wineId = watch("wineId") as string | undefined;
+  const selWine = wines.find((w) => w.id === wineId);
+  const colorHex = watch("colorHex") as string | undefined;
+  const currentColor = colorHex ?? defaultColorHex(selWine?.type);
+  const previewAbsorb = hexToAbsorb(currentColor) ?? [16, 78, 98];
+  const previewGlass = wineGlassFor(selWine?.type ?? "red", []).glass;
 
   function handleAuthFail() {
     logout();
@@ -163,6 +190,55 @@ export function TastingNoteForm({
           <Link href="/wine/new" className="text-xs text-gold/80 hover:text-gold">
             목록에 없어요? 새 와인 추가
           </Link>
+        </div>
+      </Field>
+
+      {/* 와인 색 — 이날 관측한 색을 골라 저장. 잔에 실시간 미리보기. */}
+      <Field label="와인 색 (이날 관측)">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="relative h-40 w-full shrink-0 overflow-hidden rounded-xl border border-foreground/12 bg-card/40 sm:h-32 sm:w-40">
+            <FluidLab wineAbsorb={previewAbsorb} glassType={previewGlass} swirlScale={0.4} />
+          </div>
+          <div className="flex flex-1 flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="color"
+                value={currentColor}
+                onChange={(e) => setValue("colorHex", e.target.value, { shouldValidate: true })}
+                aria-label="와인 색"
+                className="h-9 w-12 shrink-0 cursor-pointer rounded border border-foreground/20 bg-transparent"
+              />
+              <span className="font-mono text-sm text-muted">{currentColor}</span>
+              {colorHex ? (
+                <button
+                  type="button"
+                  onClick={() => setValue("colorHex", undefined, { shouldValidate: true })}
+                  className="text-xs text-muted/60 transition-colors hover:text-foreground"
+                >
+                  지우기
+                </button>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {COLOR_PRESETS.map((p) => (
+                <button
+                  key={p.hex}
+                  type="button"
+                  onClick={() => setValue("colorHex", p.hex, { shouldValidate: true })}
+                  className="flex items-center gap-1 rounded-full border border-foreground/15 px-2 py-1 text-xs text-muted transition-colors hover:text-foreground"
+                >
+                  <span
+                    className="h-3 w-3 rounded-full border border-foreground/20"
+                    style={{ background: p.hex }}
+                  />
+                  {p.name}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] leading-snug text-muted/60">
+              실제 잔을 보며 색을 맞춰 저장하세요. 와인 페이지 색은 기록들의 평균이 됩니다.
+            </p>
+          </div>
         </div>
       </Field>
 
