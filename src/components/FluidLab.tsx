@@ -1406,8 +1406,15 @@ export default function FluidLab({
           if (autoSwirlT >= TOTAL) autoSwirl = false;
         } else if (swDragging) {
           // 마우스 위=잔 먼쪽, 아래=가까운쪽(더 자연스러움) → Y 부호 반전.
-          gtx = Math.max(-GMAX, Math.min(GMAX, (mStartY - mCurY) * GAMP));
-          gtz = Math.max(-GMAX, Math.min(GMAX, (mCurX - mStartX) * GAMP));
+          gtx = (mStartY - mCurY) * GAMP;
+          gtz = (mCurX - mStartX) * GAMP;
+          // 기울기 벡터 크기를 반지름으로 제한(방향 보존). 축별로 자르면(box) 한
+          // 축이 먼저 한계에 걸릴 때 직선 드래그가 코너로 꺾여 없던 회전이 생긴다.
+          const gLen = Math.hypot(gtx, gtz);
+          if (gLen > GMAX) {
+            gtx *= GMAX / gLen;
+            gtz *= GMAX / gLen;
+          }
         }
         // 자동 스월 중엔 잔이 프로그램대로 돌게 빠르게 추종.
         const gEase = swDragging || autoSwirl ? 0.5 : 0.14;
