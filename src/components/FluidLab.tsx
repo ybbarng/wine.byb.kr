@@ -252,11 +252,13 @@ export default function FluidLab({
   glassType,
   bgColor,
   swirlScale,
+  bgIntensity,
 }: {
   glassType?: number;
   wineAbsorb?: [number, number, number];
   bgColor?: string; // 지정 시 배경을 이 단색으로(사이트 배경과 매끄럽게). 미지정=따뜻한 HDR.
   swirlScale?: number; // 최대 스월 기울기 배율(기본 1). 좁은 컨테이너(홈)에선 <1 로 줄여 영역 이탈 방지.
+  bgIntensity?: number; // 배경(HDR) 밝기 배율(기본 1). 좁은 프레임이 어두운 영역을 비출 때 ↑.
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // 와인 흡수계수 uniform(실시간 색 변경). setup 에서 채워지고 prop 으로 갱신.
@@ -1783,6 +1785,7 @@ export default function FluidLab({
       pageBg = bgColor ? new THREE.Color(bgColor) : hdrTexture;
       scene.background = pageBg;
       scene.backgroundBlurriness = 0.5;
+      scene.backgroundIntensity = bgIntensity ?? 1; // 배경 밝기(좁은 프레임 보정용)
       // 반사(IBL)는 와인잔용 따뜻한 스튜디오 환경을 절차적으로 생성 — 파란 하늘
       // 대신 따뜻한 소프트박스가 비쳐 수면·유리 반사가 자연스럽다.
       const ew = 256;
