@@ -24,6 +24,9 @@ type Props = {
   label: string;
   children: ReactNode; // 오른쪽 상세 패널 내용(서버에서 렌더해 전달)
   belowMap?: ReactNode; // 가운데 칸에서 지도 아래로 들어갈 내용(산지 계층 등)
+  // 모바일 세로 스택에서 상세(children)를 맨 위로. 시음 기록처럼 "기록이 먼저,
+  // 글라스·지도는 그 뒤"가 자연스러운 화면용. 데스크톱 3칸 배치는 그대로.
+  leadWithDetail?: boolean;
 };
 
 // 와인 상세/검색 결과 공용 3칸 레이아웃: 왼쪽 글라스 · 가운데 산지 지도 · 오른쪽 상세.
@@ -37,7 +40,13 @@ export function WineDetailView({
   label,
   children,
   belowMap,
+  leadWithDetail = false,
 }: Props) {
+  // 모바일에서 상세를 먼저 보이려면 flex order 로 순서를 바꾼다(데스크톱은 md:order-none
+  // 으로 원래 소스 순서 = 글라스·지도·상세 복원).
+  const glassOrder = leadWithDetail ? "order-2 md:order-none" : "";
+  const mapOrder = leadWithDetail ? "order-3 md:order-none" : "";
+  const detailOrder = leadWithDetail ? "order-1 md:order-none" : "";
   // 스월 기울기: 데스크톱은 좁은 왼쪽 칸이라 작게, 모바일은 세로 스택으로 풀폭이라 넓게.
   const [isDesktop, setIsDesktop] = useState(true);
   useEffect(() => {
@@ -73,7 +82,9 @@ export function WineDetailView({
 
       <div className="flex flex-col gap-4 px-4 pb-10 pt-20 md:absolute md:inset-x-0 md:bottom-0 md:top-16 md:flex-row md:px-6 md:pb-6 md:pt-0">
         {/* 글라스 — 모바일은 고정 높이, 데스크톱은 왼쪽 칸 */}
-        <div className="relative h-72 w-full shrink-0 md:h-auto md:w-[19%] md:min-w-[180px]">
+        <div
+          className={`relative h-72 w-full shrink-0 md:h-auto md:w-[19%] md:min-w-[180px] ${glassOrder}`}
+        >
           <FluidLab
             wineAbsorb={absorb}
             glassType={glass}
@@ -83,7 +94,9 @@ export function WineDetailView({
         </div>
 
         {/* 산지 지도 (+ 지도 아래 내용) */}
-        <div className="flex w-full shrink-0 flex-col gap-4 md:w-[28%] md:min-w-[260px]">
+        <div
+          className={`flex w-full shrink-0 flex-col gap-4 md:w-[28%] md:min-w-[260px] ${mapOrder}`}
+        >
           <div
             className={`relative h-64 overflow-hidden rounded-3xl border border-foreground/12 shadow-lg shadow-foreground/10 ${
               belowMap ? "md:h-[42%] md:shrink-0" : "md:h-full md:flex-1"
@@ -99,7 +112,9 @@ export function WineDetailView({
         </div>
 
         {/* 상세 (데스크톱에서 가장 넓게) */}
-        <aside className="min-w-0 rounded-3xl border border-foreground/12 bg-card/75 p-5 shadow-lg shadow-foreground/10 backdrop-blur md:flex-1 md:overflow-y-auto md:p-6">
+        <aside
+          className={`min-w-0 rounded-3xl border border-foreground/12 bg-card/75 p-5 shadow-lg shadow-foreground/10 backdrop-blur md:flex-1 md:overflow-y-auto md:p-6 ${detailOrder}`}
+        >
           {children}
         </aside>
       </div>
