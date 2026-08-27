@@ -20,7 +20,7 @@ export function LoginForm() {
     setLoading(false);
     if (ok) {
       setPassword(value);
-      router.push("/cellar");
+      router.push("/journal");
     } else {
       setError("비밀번호가 올바르지 않습니다.");
     }

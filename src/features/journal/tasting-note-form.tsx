@@ -106,7 +106,7 @@ export function TastingNoteForm({
       setServerError(body?.error ?? "저장에 실패했습니다.");
       return;
     }
-    router.push(isEdit ? `/cellar/${existing.id}` : "/cellar");
+    router.push(isEdit ? `/journal/${existing.id}` : "/journal");
     router.refresh();
   }
 
@@ -123,7 +123,7 @@ export function TastingNoteForm({
       setServerError("삭제에 실패했습니다.");
       return;
     }
-    router.push("/cellar");
+    router.push("/journal");
     router.refresh();
   }
 
@@ -246,7 +246,7 @@ export function TastingNoteForm({
         </button>
         <button
           type="button"
-          onClick={() => router.push(isEdit && existing ? `/cellar/${existing.id}` : "/cellar")}
+          onClick={() => router.push(isEdit && existing ? `/journal/${existing.id}` : "/journal")}
           className="text-sm text-muted/50 transition-colors hover:text-foreground"
         >
           취소

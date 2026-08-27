@@ -12,7 +12,7 @@ export function NewEntryButton() {
 
   return (
     <Link
-      href="/cellar/new"
+      href="/journal/new"
       className="rounded-lg border border-gold/30 bg-gold/10 px-3 py-1.5 text-sm text-gold transition-colors hover:bg-gold/20"
     >
       + 새 기록

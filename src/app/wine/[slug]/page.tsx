@@ -204,7 +204,7 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
             {wine.tastingNotes.map((n) => (
               <li key={n.id} className="border-t border-foreground/10 first:border-t-0">
                 <Link
-                  href={`/cellar/${n.id}`}
+                  href={`/journal/${n.id}`}
                   className="flex items-baseline justify-between gap-3 py-2 text-sm text-foreground/75 hover:text-foreground"
                 >
                   <span className="font-mono text-xs text-gold">{formatDate(n.drankOn)}</span>

@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { tastingNoteSchema, toUtcDate } from "@/features/cellar/tasting-note-schema";
+import { tastingNoteSchema, toUtcDate } from "@/features/journal/tasting-note-schema";
 import { verifyAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 

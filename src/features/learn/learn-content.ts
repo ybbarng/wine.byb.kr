@@ -414,7 +414,7 @@ export const LESSONS: Lesson[] = [
         body: "느낀 향을 굳이 전문 용어로 옮길 필요는 없습니다. '할머니 장롱 냄새'도 좋은 표현입니다. 자기 말로 적어 두면 다음에 고를 때 도움이 됩니다.",
       },
     ],
-    links: [{ label: "내 시음 기록 남기기", href: "/cellar" }],
+    links: [{ label: "내 시음 기록 남기기", href: "/journal" }],
   },
   {
     slug: "faults",
