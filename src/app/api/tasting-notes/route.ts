@@ -36,6 +36,8 @@ export async function POST(request: NextRequest) {
       purchasePrice: d.purchasePrice ?? null,
       purchasePlace: d.purchasePlace ?? null,
       rating: d.rating ?? null,
+      repurchase: d.repurchase ?? null,
+      value: d.value ?? null,
       bodyText: d.bodyText ?? null,
       foodPaired: d.foodPaired ?? null,
       owner: "admin",

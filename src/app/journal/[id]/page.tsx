@@ -111,6 +111,31 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
             <DetailRow label="구매가격" value={formatKRW(note.purchasePrice) || null} />
             <DetailRow label="등급" value={wine.classification} />
           </dl>
+          {note.rating || note.repurchase || note.value ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-sm">
+              {note.rating ? (
+                <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-muted">별점</span>
+                  <span className="text-gold">
+                    {"★".repeat(note.rating)}
+                    <span className="text-muted/25">{"★".repeat(5 - note.rating)}</span>
+                  </span>
+                </span>
+              ) : null}
+              {note.repurchase ? (
+                <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-muted">다시 살까</span>
+                  <span className="text-foreground/90">{note.repurchase}</span>
+                </span>
+              ) : null}
+              {note.value ? (
+                <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-foreground/10 bg-foreground/[0.03] px-2.5 py-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-muted">가격 대비</span>
+                  <span className="text-foreground/90">{note.value}</span>
+                </span>
+              ) : null}
+            </div>
+          ) : null}
           {note.bodyText ? (
             <p className="mt-4 whitespace-pre-line text-sm leading-relaxed text-foreground/90">
               {note.bodyText}

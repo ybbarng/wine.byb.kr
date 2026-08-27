@@ -29,6 +29,8 @@ export interface ExistingNote {
   purchasePrice: number | null;
   purchasePlace: string | null;
   rating: number | null;
+  repurchase: string | null;
+  value: string | null;
   bodyText: string | null;
   foodPaired: string | null;
 }
@@ -42,10 +44,16 @@ function toDefaults(n: ExistingNote): TastingNoteFormInput {
     purchasePrice: n.purchasePrice?.toString() ?? "",
     purchasePlace: n.purchasePlace ?? "",
     rating: n.rating ?? undefined,
+    repurchase: (n.repurchase as TastingNoteFormInput["repurchase"]) ?? undefined,
+    value: (n.value as TastingNoteFormInput["value"]) ?? undefined,
     bodyText: n.bodyText ?? "",
     foodPaired: n.foodPaired ?? "",
   };
 }
+
+// 버튼형 선택(다시 살까·가격 대비)용 옵션.
+const REPURCHASE_OPTS = ["응", "아마", "아니"] as const;
+const VALUE_OPTS = ["만족", "보통", "아쉬움"] as const;
 
 const inputClass =
   "w-full rounded-lg border border-foreground/20 bg-card/60 px-3 py-2 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";
@@ -87,6 +95,8 @@ export function TastingNoteForm({
 
   // 스키마 입력 타입상 느슨하게 나오므로 별점 계산을 위해 number로 좁힌다.
   const rating = watch("rating") as number | undefined;
+  const repurchase = watch("repurchase") as string | undefined;
+  const value = watch("value") as string | undefined;
 
   function handleAuthFail() {
     logout();
@@ -215,6 +225,51 @@ export function TastingNoteForm({
           {rating != null ? <span className="ml-2 text-sm text-muted/60">{rating}점</span> : null}
         </div>
       </Field>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="다시 살까?">
+          <div className="flex gap-1.5">
+            {REPURCHASE_OPTS.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() =>
+                  setValue("repurchase", opt === repurchase ? undefined : opt, {
+                    shouldValidate: true,
+                  })
+                }
+                className={`flex-1 rounded-lg border px-2 py-2 text-sm transition-colors ${
+                  repurchase === opt
+                    ? "border-gold/50 bg-gold/10 text-foreground"
+                    : "border-foreground/15 text-muted hover:text-foreground"
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </Field>
+        <Field label="가격 대비">
+          <div className="flex gap-1.5">
+            {VALUE_OPTS.map((opt) => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() =>
+                  setValue("value", opt === value ? undefined : opt, { shouldValidate: true })
+                }
+                className={`flex-1 rounded-lg border px-2 py-2 text-sm transition-colors ${
+                  value === opt
+                    ? "border-gold/50 bg-gold/10 text-foreground"
+                    : "border-foreground/15 text-muted hover:text-foreground"
+                }`}
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        </Field>
+      </div>
 
       <Field label="감상">
         <textarea

@@ -41,6 +41,8 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/tastin
       purchasePrice: d.purchasePrice ?? null,
       purchasePlace: d.purchasePlace ?? null,
       rating: d.rating ?? null,
+      repurchase: d.repurchase ?? null,
+      value: d.value ?? null,
       bodyText: d.bodyText ?? null,
       foodPaired: d.foodPaired ?? null,
     },
