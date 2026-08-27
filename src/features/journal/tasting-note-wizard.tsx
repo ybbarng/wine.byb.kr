@@ -1,0 +1,342 @@
+"use client";
+
+import { zodResolver } from "@hookform/resolvers/zod";
+import dynamic from "next/dynamic";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { defaultColorHex, hexToAbsorb, wineGlassFor } from "@/features/wine/wine-glass";
+import { wineDisplayName } from "@/lib/wine";
+import { type ExistingNote, toDefaults, type WineOption } from "./tasting-note-form";
+import {
+  type TastingNoteFormInput,
+  type TastingNoteInput,
+  tastingNoteSchema,
+} from "./tasting-note-schema";
+
+const FluidLab = dynamic(() => import("@/components/FluidLab"), {
+  ssr: false,
+  loading: () => null,
+});
+
+const COLOR_PRESETS = ["#4a0f1a", "#7c1f2c", "#e59aa4", "#ecd88f", "#f1e7b4"];
+const REPURCHASE_OPTS = ["응", "아마", "아니"] as const;
+const VALUE_OPTS = ["만족", "보통", "아쉬움"] as const;
+
+// 중요한 것부터. 각 단계는 한 가지에 집중(토스 스타일).
+const STEPS = [
+  { key: "wine", title: "어떤 와인이에요?", sub: "기록할 와인을 골라요" },
+  { key: "rating", title: "몇 점이었어요?", sub: "전체 인상을 별로" },
+  { key: "color", title: "무슨 색이었어요?", sub: "실제 잔을 보며 맞춰요" },
+  { key: "verdict", title: "어땠어요?", sub: "다시 살지, 값은 어땠는지" },
+  { key: "note", title: "한마디 남긴다면?", sub: "향·맛·안주 등 자유롭게" },
+  { key: "buy", title: "언제·얼마에 샀어요?", sub: "선택 — 없으면 건너뛰어요" },
+] as const;
+
+const inputClass =
+  "w-full rounded-xl border border-foreground/20 bg-card/60 px-3 py-3 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";
+
+export function TastingNoteWizard({
+  wines,
+  defaultWineId,
+  existing,
+}: {
+  wines: WineOption[];
+  defaultWineId?: string;
+  existing?: ExistingNote;
+}) {
+  const router = useRouter();
+  const logout = useAuthStore((s) => s.logout);
+  const isEdit = existing != null;
+  const [step, setStep] = useState(0);
+  const [q, setQ] = useState("");
+  const [serverError, setServerError] = useState<string | null>(null);
+
+  const { watch, setValue, handleSubmit, register, formState } = useForm<
+    TastingNoteFormInput,
+    unknown,
+    TastingNoteInput
+  >({
+    resolver: zodResolver(tastingNoteSchema),
+    defaultValues: existing ? toDefaults(existing) : { wineId: defaultWineId ?? "" },
+  });
+
+  const wineId = watch("wineId") as string | undefined;
+  const rating = watch("rating") as number | undefined;
+  const repurchase = watch("repurchase") as string | undefined;
+  const value = watch("value") as string | undefined;
+  const colorHex = watch("colorHex") as string | undefined;
+  const selWine = wines.find((w) => w.id === wineId);
+  const currentColor = colorHex ?? defaultColorHex(selWine?.type);
+  const previewAbsorb = hexToAbsorb(currentColor) ?? [16, 78, 98];
+  const previewGlass = wineGlassFor(selWine?.type ?? "red", []).glass;
+  const canSave = isEdit || !!wineId;
+  const isLast = step === STEPS.length - 1;
+
+  const filtered = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return wines;
+    return wines.filter((w) => `${w.nameLocal ?? ""} ${w.nameKo}`.toLowerCase().includes(t));
+  }, [q, wines]);
+
+  const save = handleSubmit(async (data) => {
+    setServerError(null);
+    try {
+      const res = await fetch(isEdit ? `/api/tasting-notes/${existing.id}` : "/api/tasting-notes", {
+        method: isEdit ? "PUT" : "POST",
+        headers: { "content-type": "application/json", ...adminHeaders() },
+        body: JSON.stringify(data),
+      });
+      if (res.status === 401) {
+        logout();
+        router.push("/admin/login");
+        return;
+      }
+      if (!res.ok) {
+        setServerError("저장에 실패했어요.");
+        return;
+      }
+      const id = isEdit ? existing.id : (await res.json()).id;
+      router.push(`/journal/${id}`);
+    } catch {
+      setServerError("저장에 실패했어요.");
+    }
+  });
+
+  const cur = STEPS[step];
+
+  return (
+    <div className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col">
+      {/* 진행 바 — 각 칸을 눌러 그 단계로 바로 이동(특히 수정 시) */}
+      <div className="flex items-center gap-1.5">
+        {STEPS.map((s, i) => (
+          <button
+            key={s.key}
+            type="button"
+            onClick={() => setStep(i)}
+            aria-label={s.title}
+            className={`h-1.5 flex-1 rounded-full transition-colors ${
+              i <= step ? "bg-wine" : "bg-foreground/12 hover:bg-foreground/25"
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* 단계 내용 */}
+      <div className="mt-6 flex-1">
+        <h1 className="font-serif text-2xl leading-tight text-foreground">{cur.title}</h1>
+        <p className="mt-1 text-sm text-muted">{cur.sub}</p>
+
+        <div className="mt-6">
+          {cur.key === "wine" ? (
+            <div className="flex flex-col gap-2">
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="와인 이름 검색"
+                className={inputClass}
+              />
+              <div className="max-h-[46vh] overflow-y-auto rounded-xl border border-foreground/10">
+                {filtered.map((w) => {
+                  const nm = wineDisplayName(w);
+                  return (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => {
+                        setValue("wineId", w.id, { shouldValidate: true });
+                        setStep(1);
+                      }}
+                      className={`flex w-full flex-col border-b border-foreground/8 px-3 py-3 text-left last:border-b-0 transition-colors ${
+                        wineId === w.id ? "bg-wine/10" : "hover:bg-foreground/5"
+                      }`}
+                    >
+                      <span className="text-sm text-foreground">{nm.primary}</span>
+                      {nm.alias ? <span className="text-xs text-muted">{nm.alias}</span> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+
+          {cur.key === "rating" ? (
+            <div className="flex items-center justify-center gap-2 py-6">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setValue("rating", n === rating ? undefined : n)}
+                  className={`text-5xl transition-colors ${
+                    rating != null && n <= rating
+                      ? "text-gold"
+                      : "text-muted/20 hover:text-muted/40"
+                  }`}
+                  aria-label={`${n}점`}
+                >
+                  ★
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {cur.key === "color" ? (
+            <div className="flex flex-col gap-3">
+              <div className="relative h-56 w-full overflow-hidden rounded-2xl border border-foreground/12 bg-card/40">
+                <FluidLab wineAbsorb={previewAbsorb} glassType={previewGlass} swirlScale={0.4} />
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={currentColor}
+                  onChange={(e) => setValue("colorHex", e.target.value)}
+                  aria-label="와인 색"
+                  className="h-10 w-14 shrink-0 cursor-pointer rounded border border-foreground/20 bg-transparent"
+                />
+                <span className="font-mono text-sm text-muted">{currentColor}</span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {COLOR_PRESETS.map((hex) => (
+                  <button
+                    key={hex}
+                    type="button"
+                    onClick={() => setValue("colorHex", hex)}
+                    className="h-8 w-8 rounded-full border border-foreground/20"
+                    style={{ background: hex }}
+                    aria-label={hex}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {cur.key === "verdict" ? (
+            <div className="flex flex-col gap-6">
+              <div>
+                <p className="mb-2 text-sm text-muted">다시 살까?</p>
+                <div className="flex gap-2">
+                  {REPURCHASE_OPTS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setValue("repurchase", opt === repurchase ? undefined : opt)}
+                      className={`flex-1 rounded-xl border py-3 text-base transition-colors ${
+                        repurchase === opt
+                          ? "border-gold/50 bg-gold/10 text-foreground"
+                          : "border-foreground/15 text-muted"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="mb-2 text-sm text-muted">가격 대비</p>
+                <div className="flex gap-2">
+                  {VALUE_OPTS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setValue("value", opt === value ? undefined : opt)}
+                      className={`flex-1 rounded-xl border py-3 text-base transition-colors ${
+                        value === opt
+                          ? "border-gold/50 bg-gold/10 text-foreground"
+                          : "border-foreground/15 text-muted"
+                      }`}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {cur.key === "note" ? (
+            <div className="flex flex-col gap-4">
+              <textarea
+                rows={5}
+                placeholder="향·맛·인상, 안주 등"
+                className={`${inputClass} resize-y`}
+                {...register("bodyText")}
+              />
+              <input
+                type="text"
+                placeholder="함께한 음식 (예: 스테이크)"
+                className={inputClass}
+                {...register("foodPaired")}
+              />
+            </div>
+          ) : null}
+
+          {cur.key === "buy" ? (
+            <div className="grid grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1 text-sm text-muted">
+                음용일
+                <input type="date" className={inputClass} {...register("drankOn")} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-muted">
+                구매일
+                <input type="date" className={inputClass} {...register("purchasedOn")} />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-muted">
+                구매가격(원)
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  className={inputClass}
+                  {...register("purchasePrice")}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-sm text-muted">
+                구매처
+                <input type="text" className={inputClass} {...register("purchasePlace")} />
+              </label>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {serverError ? <p className="mt-3 text-sm text-wine-bright">{serverError}</p> : null}
+
+      {/* 내비 — 언제든 저장 가능(와인만 고르면) */}
+      <div className="sticky bottom-0 mt-6 flex items-center gap-2 bg-gradient-to-t from-background via-background/95 to-transparent py-4">
+        {step > 0 ? (
+          <button
+            type="button"
+            onClick={() => setStep(step - 1)}
+            className="rounded-xl border border-foreground/15 px-4 py-3 text-sm text-muted transition-colors hover:text-foreground"
+          >
+            이전
+          </button>
+        ) : null}
+        {!isLast ? (
+          <button
+            type="button"
+            onClick={() => setStep(step + 1)}
+            disabled={step === 0 && !wineId}
+            className="flex-1 rounded-xl bg-wine px-4 py-3 font-medium text-on-accent transition-colors hover:bg-wine-bright disabled:opacity-40"
+          >
+            다음
+          </button>
+        ) : null}
+        {canSave ? (
+          <button
+            type="button"
+            onClick={save}
+            disabled={formState.isSubmitting}
+            className={`rounded-xl px-4 py-3 font-medium transition-colors disabled:opacity-40 ${
+              isLast
+                ? "flex-1 bg-wine text-on-accent hover:bg-wine-bright"
+                : "border border-wine/40 text-wine hover:bg-wine/10"
+            }`}
+          >
+            {formState.isSubmitting ? "저장 중…" : "저장"}
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}

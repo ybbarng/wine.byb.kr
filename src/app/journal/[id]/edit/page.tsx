@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { AdminGuard } from "@/features/admin/admin-guard";
 import { getTastingNote, getWineOptions } from "@/features/journal/queries";
-import { type ExistingNote, TastingNoteForm } from "@/features/journal/tasting-note-form";
+import type { ExistingNote } from "@/features/journal/tasting-note-form";
 import { toDateInput } from "@/features/journal/tasting-note-schema";
+import { TastingNoteWizard } from "@/features/journal/tasting-note-wizard";
 
 export const metadata: Metadata = {
   title: "기록 수정",
@@ -38,12 +39,9 @@ export default async function EditTastingNotePage({ params }: PageProps<"/journa
   return (
     <div className="flex flex-1 flex-col">
       <SiteHeader />
-      <main className="mx-auto w-full max-w-xl flex-1 px-6 pb-24">
-        <header className="mt-6">
-          <h1 className="font-serif text-3xl tracking-tight text-foreground">기록 수정</h1>
-        </header>
+      <main className="mx-auto w-full max-w-xl flex-1 px-5 pb-6 pt-4">
         <AdminGuard>
-          <TastingNoteForm wines={wines} existing={existing} />
+          <TastingNoteWizard wines={wines} existing={existing} />
         </AdminGuard>
       </main>
     </div>
