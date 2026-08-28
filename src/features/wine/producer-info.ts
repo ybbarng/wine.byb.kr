@@ -122,6 +122,10 @@ const PRODUCER_INFO: Record<string, ProducerDetail> = {
     desc: "뿔리아의 콘티 사니(Conti Sani) 산하 브랜드. 프리미티보·네그로아마로·수수마니엘로 등 남부 토착 품종으로 폭넓게 만든다.",
     homepage: "https://contisani.it/carlo-sani/",
   },
+  // 국내 표기 '뱅상 푸르니에'는 Prunier 의 음역. 실제 생산자는 Vincent Prunier.
+  뱅상푸르니에: {
+    desc: "부르고뉴 옥세 뒤레스의 가족 도멘(원어 Vincent Prunier). 1988년 2헥타르로 시작해 약 13헥타르로 키웠다. 손수확·전통 양조로 부르고뉴 샤르도네와 옥세 뒤레스 피노 누아를 만든다.",
+  },
 };
 
 const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
