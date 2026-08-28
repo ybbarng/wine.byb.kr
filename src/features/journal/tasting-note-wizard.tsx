@@ -107,7 +107,7 @@ export function TastingNoteWizard({
     setServerError(null);
     try {
       const res = await fetch(isEdit ? `/api/tasting-notes/${existing.id}` : "/api/tasting-notes", {
-        method: isEdit ? "PUT" : "POST",
+        method: isEdit ? "PATCH" : "POST",
         headers: { "content-type": "application/json", ...adminHeaders() },
         body: JSON.stringify(data),
       });
