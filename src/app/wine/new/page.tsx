@@ -8,7 +8,12 @@ export const metadata: Metadata = {
   robots: { index: false },
 };
 
-export default function NewWinePage() {
+export const dynamic = "force-dynamic";
+
+export default async function NewWinePage({ searchParams }: PageProps<"/wine/new">) {
+  const sp = await searchParams;
+  const defaultName = typeof sp.name === "string" ? sp.name : undefined;
+
   return (
     <div className="flex flex-1 flex-col">
       <SiteHeader />
@@ -20,7 +25,7 @@ export default function NewWinePage() {
           </p>
         </header>
         <AdminGuard>
-          <WineForm />
+          <WineForm defaultName={defaultName} />
         </AdminGuard>
       </main>
     </div>
