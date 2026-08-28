@@ -120,8 +120,10 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
         ) : null
       }
     >
+      {/* A2: 이 페이지가 '와인'임을 명시(시음 기록 페이지와 구분) */}
+      <p className="text-xs font-medium uppercase tracking-wide text-muted">와인</p>
       {/* 헤더: 이름·타입 */}
-      <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
+      <div className="mt-0.5 flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
         <span className="h-3 w-3 rounded-full border border-foreground/20 bg-wine" />
         {wine.type && WINE_TYPE_LABELS[wine.type] ? (
           <Link
