@@ -59,6 +59,9 @@ export function TastingNoteWizard({
   const [step, setStep] = useState(0);
   const [q, setQ] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
+  // 수정 모드에선 와인을 기본 잠금(다른 와인으로 바꿀 일은 드물다). "와인 변경"을
+  // 눌러야 검색 목록이 열린다 — 실수로 딴 와인 리뷰로 바뀌는 걸 막는 안전장치.
+  const [changingWine, setChangingWine] = useState(false);
   // 데스크톱은 전체 폼을 한 화면에, 모바일은 토스식 단계별로.
   const [isDesktop, setIsDesktop] = useState(false);
   useEffect(() => {
@@ -131,7 +134,37 @@ export function TastingNoteWizard({
 
   // 각 단계의 입력 내용(제목·설명 제외). 데스크톱은 모두 펼치고, 모바일은 현재 단계만.
   const stepBody = (key: string) => {
-    if (key === "wine")
+    if (key === "wine") {
+      // 수정 모드 기본 상태: 기존 와인을 잠금 카드로 보여주고, "와인 변경"으로만 연다.
+      if (isEdit && !changingWine) {
+        const nm = selWine ? wineDisplayName(selWine) : null;
+        return (
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-foreground/12 bg-card/60 px-3 py-3">
+            <div className="min-w-0">
+              {nm ? (
+                <>
+                  <span className="block truncate text-sm text-foreground">{nm.primary}</span>
+                  {nm.alias ? (
+                    <span className="block truncate text-xs text-muted">{nm.alias}</span>
+                  ) : null}
+                </>
+              ) : (
+                <span className="text-sm text-muted">와인 정보를 불러올 수 없어요.</span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setChangingWine(true);
+                setQ("");
+              }}
+              className="shrink-0 rounded-lg border border-foreground/15 px-3 py-1.5 text-sm text-muted transition-colors hover:border-gold/40 hover:text-foreground"
+            >
+              와인 변경
+            </button>
+          </div>
+        );
+      }
       return (
         <div className="flex flex-col gap-2">
           <input
@@ -149,7 +182,9 @@ export function TastingNoteWizard({
                   type="button"
                   onClick={() => {
                     setValue("wineId", w.id, { shouldValidate: true });
-                    if (!isDesktop) setStep(1);
+                    // 수정 모드: 고르면 잠금 카드로 복귀. 새 작성(모바일): 다음 단계로.
+                    if (isEdit) setChangingWine(false);
+                    else if (!isDesktop) setStep(1);
                   }}
                   className={`flex w-full flex-col border-b border-foreground/8 px-3 py-3 text-left last:border-b-0 transition-colors ${
                     wineId === w.id ? "bg-wine/10" : "hover:bg-foreground/5"
@@ -164,15 +199,28 @@ export function TastingNoteWizard({
               <p className="px-3 py-4 text-sm text-muted">목록에 없어요.</p>
             ) : null}
           </div>
-          {/* 찾는 와인이 목록에 없을 때 — 바로 새 와인 등록(검색어를 이름으로 넘김) */}
-          <Link
-            href={q.trim() ? `/wine/new?name=${encodeURIComponent(q.trim())}` : "/wine/new"}
-            className="self-start text-sm text-gold underline decoration-transparent underline-offset-2 transition-colors hover:decoration-gold/50"
-          >
-            찾는 와인이 없어요? 새 와인 등록 →
-          </Link>
+          <div className="flex items-center justify-between gap-3">
+            {/* 찾는 와인이 목록에 없을 때 — 바로 새 와인 등록(검색어를 이름으로 넘김) */}
+            <Link
+              href={q.trim() ? `/wine/new?name=${encodeURIComponent(q.trim())}` : "/wine/new"}
+              className="text-sm text-gold underline decoration-transparent underline-offset-2 transition-colors hover:decoration-gold/50"
+            >
+              찾는 와인이 없어요? 새 와인 등록 →
+            </Link>
+            {/* 수정 모드에서 변경을 취소하고 기존 와인 유지 */}
+            {isEdit ? (
+              <button
+                type="button"
+                onClick={() => setChangingWine(false)}
+                className="shrink-0 text-sm text-muted transition-colors hover:text-foreground"
+              >
+                변경 취소
+              </button>
+            ) : null}
+          </div>
         </div>
       );
+    }
 
     if (key === "rating")
       return (
