@@ -118,6 +118,10 @@ const PRODUCER_INFO: Record<string, ProducerDetail> = {
     desc: "1889년 빅토리아에 세운 호주 가족 와이너리. 킹 밸리를 중심으로 다양한 품종과 스파클링을 만든다.",
     homepage: "https://www.brownbrothers.com.au",
   },
+  까를로사니: {
+    desc: "뿔리아의 콘티 사니(Conti Sani) 산하 브랜드. 프리미티보·네그로아마로·수수마니엘로 등 남부 토착 품종으로 폭넓게 만든다.",
+    homepage: "https://contisani.it/carlo-sani/",
+  },
 };
 
 const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
