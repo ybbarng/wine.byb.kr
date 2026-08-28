@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
 import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
@@ -59,6 +59,15 @@ export function TastingNoteWizard({
   const [step, setStep] = useState(0);
   const [q, setQ] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
+  // 데스크톱은 전체 폼을 한 화면에, 모바일은 토스식 단계별로.
+  const [isDesktop, setIsDesktop] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const sync = () => setIsDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   const { watch, setValue, handleSubmit, register, formState } = useForm<
     TastingNoteFormInput,
@@ -120,6 +129,232 @@ export function TastingNoteWizard({
 
   const cur = STEPS[step];
 
+  // 각 단계의 입력 내용(제목·설명 제외). 데스크톱은 모두 펼치고, 모바일은 현재 단계만.
+  const stepBody = (key: string) => {
+    if (key === "wine")
+      return (
+        <div className="flex flex-col gap-2">
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="와인 이름 검색"
+            className={inputClass}
+          />
+          <div className="max-h-[46vh] overflow-y-auto rounded-xl border border-foreground/10">
+            {filtered.map((w) => {
+              const nm = wineDisplayName(w);
+              return (
+                <button
+                  key={w.id}
+                  type="button"
+                  onClick={() => {
+                    setValue("wineId", w.id, { shouldValidate: true });
+                    if (!isDesktop) setStep(1);
+                  }}
+                  className={`flex w-full flex-col border-b border-foreground/8 px-3 py-3 text-left last:border-b-0 transition-colors ${
+                    wineId === w.id ? "bg-wine/10" : "hover:bg-foreground/5"
+                  }`}
+                >
+                  <span className="text-sm text-foreground">{nm.primary}</span>
+                  {nm.alias ? <span className="text-xs text-muted">{nm.alias}</span> : null}
+                </button>
+              );
+            })}
+            {filtered.length === 0 ? (
+              <p className="px-3 py-4 text-sm text-muted">목록에 없어요.</p>
+            ) : null}
+          </div>
+          {/* 찾는 와인이 목록에 없을 때 — 바로 새 와인 등록(검색어를 이름으로 넘김) */}
+          <Link
+            href={q.trim() ? `/wine/new?name=${encodeURIComponent(q.trim())}` : "/wine/new"}
+            className="self-start text-sm text-gold underline decoration-transparent underline-offset-2 transition-colors hover:decoration-gold/50"
+          >
+            찾는 와인이 없어요? 새 와인 등록 →
+          </Link>
+        </div>
+      );
+
+    if (key === "rating")
+      return (
+        <div className="flex items-center justify-center gap-2 py-6">
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => setValue("rating", n === rating ? undefined : n)}
+              className={`text-5xl transition-colors ${
+                rating != null && n <= rating ? "text-gold" : "text-muted/20 hover:text-muted/40"
+              }`}
+              aria-label={`${n}점`}
+            >
+              ★
+            </button>
+          ))}
+        </div>
+      );
+
+    if (key === "color")
+      return (
+        <div className="flex flex-col gap-3">
+          <div
+            className="relative mx-auto h-72 w-full max-w-[19rem] overflow-hidden rounded-2xl border border-foreground/12"
+            style={{ backgroundColor: CANVAS_RENDERED }}
+          >
+            <FluidLab
+              wineAbsorb={previewAbsorb}
+              glassType={previewGlass}
+              bgColor={CANVAS_BG}
+              swirlScale={0.4}
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="color"
+              value={currentColor}
+              onChange={(e) => setValue("colorHex", e.target.value)}
+              aria-label="와인 색"
+              className="h-10 w-14 shrink-0 cursor-pointer rounded border border-foreground/20 bg-transparent"
+            />
+            <span className="font-mono text-sm text-muted">{currentColor}</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {COLOR_PRESETS.map((hex) => (
+              <button
+                key={hex}
+                type="button"
+                onClick={() => setValue("colorHex", hex)}
+                className="h-8 w-8 rounded-full border border-foreground/20"
+                style={{ background: hex }}
+                aria-label={hex}
+              />
+            ))}
+          </div>
+        </div>
+      );
+
+    if (key === "verdict")
+      return (
+        <div className="flex flex-col gap-6">
+          <div>
+            <p className="mb-2 text-sm text-muted">다시 살까?</p>
+            <div className="flex gap-2">
+              {REPURCHASE_OPTS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setValue("repurchase", opt === repurchase ? undefined : opt)}
+                  className={`flex-1 rounded-xl border py-3 text-base transition-colors ${
+                    repurchase === opt
+                      ? "border-gold/50 bg-gold/10 text-foreground"
+                      : "border-foreground/15 text-muted"
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-sm text-muted">가격 대비</p>
+            <div className="flex gap-2">
+              {VALUE_OPTS.map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  onClick={() => setValue("value", opt === value ? undefined : opt)}
+                  className={`flex-1 rounded-xl border py-3 text-base transition-colors ${
+                    value === opt
+                      ? "border-gold/50 bg-gold/10 text-foreground"
+                      : "border-foreground/15 text-muted"
+                  }`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+
+    if (key === "note")
+      return (
+        <div className="flex flex-col gap-4">
+          <textarea
+            rows={5}
+            placeholder="향·맛·인상, 안주 등"
+            className={`${inputClass} resize-y`}
+            {...register("bodyText")}
+          />
+          <input
+            type="text"
+            placeholder="함께한 음식 (예: 스테이크)"
+            className={inputClass}
+            {...register("foodPaired")}
+          />
+        </div>
+      );
+
+    if (key === "buy")
+      return (
+        <div className="grid grid-cols-2 gap-3">
+          <label className="flex flex-col gap-1 text-sm text-muted">
+            음용일
+            <input type="date" className={inputClass} {...register("drankOn")} />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-muted">
+            구매일
+            <input type="date" className={inputClass} {...register("purchasedOn")} />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-muted">
+            구매가격(원)
+            <input
+              type="number"
+              inputMode="numeric"
+              className={inputClass}
+              {...register("purchasePrice")}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-muted">
+            구매처
+            <input type="text" className={inputClass} {...register("purchasePlace")} />
+          </label>
+        </div>
+      );
+
+    return null;
+  };
+
+  // ── 데스크톱: 전체 폼을 한 화면에(모든 단계 펼침, 저장 한 번). ──
+  if (isDesktop) {
+    return (
+      <div className="mx-auto w-full max-w-2xl">
+        <div className="flex flex-col gap-8">
+          {STEPS.map((s) => (
+            <section key={s.key}>
+              <h2 className="font-serif text-xl leading-tight text-foreground">{s.title}</h2>
+              <p className="mt-0.5 text-sm text-muted">{s.sub}</p>
+              <div className="mt-4">{stepBody(s.key)}</div>
+            </section>
+          ))}
+        </div>
+        {serverError ? <p className="mt-4 text-sm text-wine-bright">{serverError}</p> : null}
+        <div className="sticky bottom-0 mt-8 flex justify-end bg-gradient-to-t from-background via-background/95 to-transparent py-4">
+          {canSave ? (
+            <button
+              type="button"
+              onClick={save}
+              disabled={formState.isSubmitting}
+              className="rounded-xl bg-wine px-6 py-3 font-medium text-on-accent transition-colors hover:bg-wine-bright disabled:opacity-40"
+            >
+              {formState.isSubmitting ? "저장 중…" : "저장"}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
+  // ── 모바일: 토스식 단계별 ──
   return (
     <div className="mx-auto flex min-h-[70vh] w-full max-w-md flex-col">
       {/* 진행 바 — 각 칸을 눌러 그 단계로 바로 이동(특히 수정 시) */}
@@ -141,194 +376,7 @@ export function TastingNoteWizard({
       <div className="mt-6 flex-1">
         <h1 className="font-serif text-2xl leading-tight text-foreground">{cur.title}</h1>
         <p className="mt-1 text-sm text-muted">{cur.sub}</p>
-
-        <div className="mt-6">
-          {cur.key === "wine" ? (
-            <div className="flex flex-col gap-2">
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="와인 이름 검색"
-                className={inputClass}
-              />
-              <div className="max-h-[46vh] overflow-y-auto rounded-xl border border-foreground/10">
-                {filtered.map((w) => {
-                  const nm = wineDisplayName(w);
-                  return (
-                    <button
-                      key={w.id}
-                      type="button"
-                      onClick={() => {
-                        setValue("wineId", w.id, { shouldValidate: true });
-                        setStep(1);
-                      }}
-                      className={`flex w-full flex-col border-b border-foreground/8 px-3 py-3 text-left last:border-b-0 transition-colors ${
-                        wineId === w.id ? "bg-wine/10" : "hover:bg-foreground/5"
-                      }`}
-                    >
-                      <span className="text-sm text-foreground">{nm.primary}</span>
-                      {nm.alias ? <span className="text-xs text-muted">{nm.alias}</span> : null}
-                    </button>
-                  );
-                })}
-                {filtered.length === 0 ? (
-                  <p className="px-3 py-4 text-sm text-muted">목록에 없어요.</p>
-                ) : null}
-              </div>
-              {/* 찾는 와인이 목록에 없을 때 — 바로 새 와인 등록(검색어를 이름으로 넘김) */}
-              <Link
-                href={q.trim() ? `/wine/new?name=${encodeURIComponent(q.trim())}` : "/wine/new"}
-                className="self-start text-sm text-gold underline decoration-transparent underline-offset-2 transition-colors hover:decoration-gold/50"
-              >
-                찾는 와인이 없어요? 새 와인 등록 →
-              </Link>
-            </div>
-          ) : null}
-
-          {cur.key === "rating" ? (
-            <div className="flex items-center justify-center gap-2 py-6">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setValue("rating", n === rating ? undefined : n)}
-                  className={`text-5xl transition-colors ${
-                    rating != null && n <= rating
-                      ? "text-gold"
-                      : "text-muted/20 hover:text-muted/40"
-                  }`}
-                  aria-label={`${n}점`}
-                >
-                  ★
-                </button>
-              ))}
-            </div>
-          ) : null}
-
-          {cur.key === "color" ? (
-            <div className="flex flex-col gap-3">
-              <div
-                className="relative mx-auto h-72 w-full max-w-[19rem] overflow-hidden rounded-2xl border border-foreground/12"
-                style={{ backgroundColor: CANVAS_RENDERED }}
-              >
-                <FluidLab
-                  wineAbsorb={previewAbsorb}
-                  glassType={previewGlass}
-                  bgColor={CANVAS_BG}
-                  swirlScale={0.4}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={currentColor}
-                  onChange={(e) => setValue("colorHex", e.target.value)}
-                  aria-label="와인 색"
-                  className="h-10 w-14 shrink-0 cursor-pointer rounded border border-foreground/20 bg-transparent"
-                />
-                <span className="font-mono text-sm text-muted">{currentColor}</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {COLOR_PRESETS.map((hex) => (
-                  <button
-                    key={hex}
-                    type="button"
-                    onClick={() => setValue("colorHex", hex)}
-                    className="h-8 w-8 rounded-full border border-foreground/20"
-                    style={{ background: hex }}
-                    aria-label={hex}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          {cur.key === "verdict" ? (
-            <div className="flex flex-col gap-6">
-              <div>
-                <p className="mb-2 text-sm text-muted">다시 살까?</p>
-                <div className="flex gap-2">
-                  {REPURCHASE_OPTS.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setValue("repurchase", opt === repurchase ? undefined : opt)}
-                      className={`flex-1 rounded-xl border py-3 text-base transition-colors ${
-                        repurchase === opt
-                          ? "border-gold/50 bg-gold/10 text-foreground"
-                          : "border-foreground/15 text-muted"
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <p className="mb-2 text-sm text-muted">가격 대비</p>
-                <div className="flex gap-2">
-                  {VALUE_OPTS.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setValue("value", opt === value ? undefined : opt)}
-                      className={`flex-1 rounded-xl border py-3 text-base transition-colors ${
-                        value === opt
-                          ? "border-gold/50 bg-gold/10 text-foreground"
-                          : "border-foreground/15 text-muted"
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : null}
-
-          {cur.key === "note" ? (
-            <div className="flex flex-col gap-4">
-              <textarea
-                rows={5}
-                placeholder="향·맛·인상, 안주 등"
-                className={`${inputClass} resize-y`}
-                {...register("bodyText")}
-              />
-              <input
-                type="text"
-                placeholder="함께한 음식 (예: 스테이크)"
-                className={inputClass}
-                {...register("foodPaired")}
-              />
-            </div>
-          ) : null}
-
-          {cur.key === "buy" ? (
-            <div className="grid grid-cols-2 gap-3">
-              <label className="flex flex-col gap-1 text-sm text-muted">
-                음용일
-                <input type="date" className={inputClass} {...register("drankOn")} />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-muted">
-                구매일
-                <input type="date" className={inputClass} {...register("purchasedOn")} />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-muted">
-                구매가격(원)
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  className={inputClass}
-                  {...register("purchasePrice")}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-sm text-muted">
-                구매처
-                <input type="text" className={inputClass} {...register("purchasePlace")} />
-              </label>
-            </div>
-          ) : null}
-        </div>
+        <div className="mt-6">{stepBody(cur.key)}</div>
       </div>
 
       {serverError ? <p className="mt-3 text-sm text-wine-bright">{serverError}</p> : null}
