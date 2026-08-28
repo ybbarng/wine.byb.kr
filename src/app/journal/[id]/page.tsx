@@ -129,8 +129,14 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
         <NoteActions id={note.id} />
       </div>
 
-      {/* 와인 이름 */}
-      <div className="mt-3 flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
+      {/* A2: 이 페이지가 '시음 기록'임을 명시해 와인 페이지와 구분 */}
+      <p className="mt-3 text-xs font-medium uppercase tracking-wide text-gold">시음 기록</p>
+      {/* A1: 기록이 주인공 — 마신 날짜를 제목으로 */}
+      <h1 className="mt-0.5 font-serif text-2xl leading-tight text-foreground">
+        {formatDate(note.drankOn)} 시음 노트
+      </h1>
+      {/* 어떤 와인의 기록인지 — 부제 */}
+      <div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
         <span className="h-3 w-3 rounded-full border border-foreground/20 bg-wine" />
         {wine.type && WINE_TYPE_LABELS[wine.type] ? (
           <Link
@@ -145,9 +151,9 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
         {note.vintageYear ? <span>· {note.vintageYear} 빈티지</span> : null}
         {wine.abv != null ? <span>· {wine.abv}%</span> : null}
       </div>
-      <h1 className="mt-1 font-serif text-2xl leading-tight text-foreground">{name.primary}</h1>
+      <p className="mt-1 font-serif text-lg leading-tight text-foreground/90">{name.primary}</p>
       {name.alias ? <p className="text-sm text-muted">{name.alias}</p> : null}
-      <p className="mt-2 text-sm text-foreground/80">
+      <p className="mt-1 text-sm text-foreground/80">
         {identity.map((part, i) => (
           <span key={i}>
             {i > 0 ? " · " : ""}
@@ -156,9 +162,8 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
         ))}
       </p>
 
-      {/* 이 기록 — 맨 위(이 페이지의 주인공). 골드 카드로 강조 */}
+      {/* 이 기록 — 골드 카드(날짜는 제목으로 올렸으니 별점부터) */}
       <section className="mt-4 rounded-2xl border border-gold/25 bg-gold/[0.06] p-4 shadow-sm shadow-gold/5">
-        <h2 className="mb-2 text-sm font-medium text-gold">{formatDate(note.drankOn)} 시음 노트</h2>
         {note.rating ? (
           <div className="text-xl text-gold">
             {"★".repeat(note.rating)}
