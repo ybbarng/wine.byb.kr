@@ -211,11 +211,11 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     abv: 12.5,
     notesKo: "당분을 넣지 않은 브뤼 나투르 샴페인. 매우 드라이하고 사과·빵 향에 날카로운 산미.",
   },
-  "domaine-vincent-fournier-bourgogne-chardonnay": {
+  "domaine-vincent-prunier-bourgogne-chardonnay": {
     abv: 12.5,
     notesKo: "부르고뉴 샤르도네. 사과·감귤에 은은한 오크, 균형 잡힌 미디엄 화이트.",
   },
-  "domaine-des-ardillers-anjou-blanc": {
+  "domaine-des-hardieres-anjou-blanc": {
     abv: 12.5,
     notesKo: "루아르 슈냉 블랑. 노란 사과·꿀 향에 높은 산미, 드라이하면서 풍미가 있다.",
   },
@@ -501,14 +501,14 @@ const ENTRIES: Entry[] = [
   {
     regionSlug: "bourgogne",
     producer: {
-      slug: "domaine-vincent-fournier",
+      slug: "domaine-vincent-prunier",
       nameKo: "도멘 뱅상 푸르니에",
-      nameLocal: "Domaine Vincent Fournier",
+      nameLocal: "Domaine Vincent Prunier",
     },
     wine: {
-      slug: "domaine-vincent-fournier-bourgogne-chardonnay",
+      slug: "domaine-vincent-prunier-bourgogne-chardonnay",
       nameKo: "도멘 뱅상 푸르니에 부르고뉴 샤르도네",
-      nameLocal: "Domaine Vincent Fournier Bourgogne Chardonnay",
+      nameLocal: "Domaine Vincent Prunier Bourgogne Chardonnay",
       type: "white",
       classification: "Bourgogne AOC",
     },
@@ -523,14 +523,14 @@ const ENTRIES: Entry[] = [
   {
     regionSlug: "anjou",
     producer: {
-      slug: "domaine-des-ardillers",
+      slug: "domaine-des-hardieres",
       nameKo: "도멘 데 아르디에",
-      nameLocal: "Domaine des Ardillers",
+      nameLocal: "Domaine des Hardières",
     },
     wine: {
-      slug: "domaine-des-ardillers-anjou-blanc",
+      slug: "domaine-des-hardieres-anjou-blanc",
       nameKo: "도멘 데 아르디에 앙주 블랑 레 쁘띠 갸르",
-      nameLocal: "Domaine des Ardillers Anjou Blanc Les Petites Gardes",
+      nameLocal: "Domaine des Hardières Anjou Blanc Les Petites Gardes",
       type: "white",
       classification: "Anjou AOC",
     },
@@ -647,6 +647,31 @@ async function main() {
     });
   }
 
+  // 1.7) 원어명 오기 교정에 따른 슬러그 리네임(멱등: 옛 슬러그가 있고 새 슬러그가
+  // 아직 없을 때만 바꾼다). 슬러그가 upsert 키라, 이걸 안 하면 재시드 때 옛 행이
+  // 남고 중복이 생긴다. id는 유지되므로 시음 노트 연결(wineId)도 그대로다.
+  const producerRenames: [string, string][] = [
+    ["domaine-vincent-fournier", "domaine-vincent-prunier"],
+    ["domaine-des-ardillers", "domaine-des-hardieres"],
+  ];
+  const wineRenames: [string, string][] = [
+    [
+      "domaine-vincent-fournier-bourgogne-chardonnay",
+      "domaine-vincent-prunier-bourgogne-chardonnay",
+    ],
+    ["domaine-des-ardillers-anjou-blanc", "domaine-des-hardieres-anjou-blanc"],
+  ];
+  for (const [from, to] of producerRenames) {
+    const old = await db.producer.findUnique({ where: { slug: from }, select: { id: true } });
+    const taken = await db.producer.findUnique({ where: { slug: to }, select: { id: true } });
+    if (old && !taken) await db.producer.update({ where: { slug: from }, data: { slug: to } });
+  }
+  for (const [from, to] of wineRenames) {
+    const old = await db.wine.findUnique({ where: { slug: from }, select: { id: true } });
+    const taken = await db.wine.findUnique({ where: { slug: to }, select: { id: true } });
+    if (old && !taken) await db.wine.update({ where: { slug: from }, data: { slug: to } });
+  }
+
   // 2) 기록.
   for (const e of ENTRIES) {
     const region = await db.region.findUnique({ where: { slug: e.regionSlug } });
@@ -654,7 +679,7 @@ async function main() {
 
     const producer = await db.producer.upsert({
       where: { slug: e.producer.slug },
-      update: {},
+      update: { nameLocal: e.producer.nameLocal },
       create: {
         slug: e.producer.slug,
         nameKo: e.producer.nameKo,
@@ -666,8 +691,9 @@ async function main() {
     const d = WINE_DETAILS[e.wine.slug] ?? {};
     const wine = await db.wine.upsert({
       where: { slug: e.wine.slug },
-      // abv·notesKo·classification 은 재실행 때도 갱신(시드가 단일 소스).
+      // nameLocal·abv·notesKo·classification 은 재실행 때도 갱신(시드가 단일 소스).
       update: {
+        nameLocal: e.wine.nameLocal,
         abv: d.abv ?? null,
         notesKo: d.notesKo ?? null,
         classification: e.wine.classification ?? null,
