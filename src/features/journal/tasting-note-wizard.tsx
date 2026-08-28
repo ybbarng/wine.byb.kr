@@ -2,6 +2,7 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -170,7 +171,17 @@ export function TastingNoteWizard({
                     </button>
                   );
                 })}
+                {filtered.length === 0 ? (
+                  <p className="px-3 py-4 text-sm text-muted">목록에 없어요.</p>
+                ) : null}
               </div>
+              {/* 찾는 와인이 목록에 없을 때 — 바로 새 와인 등록(검색어를 이름으로 넘김) */}
+              <Link
+                href={q.trim() ? `/wine/new?name=${encodeURIComponent(q.trim())}` : "/wine/new"}
+                className="self-start text-sm text-gold underline decoration-transparent underline-offset-2 transition-colors hover:decoration-gold/50"
+              >
+                찾는 와인이 없어요? 새 와인 등록 →
+              </Link>
             </div>
           ) : null}
 

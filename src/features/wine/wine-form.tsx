@@ -20,7 +20,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export function WineForm() {
+export function WineForm({ defaultName }: { defaultName?: string }) {
   const router = useRouter();
   const logout = useAuthStore((s) => s.logout);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -31,6 +31,8 @@ export function WineForm() {
     formState: { errors, isSubmitting },
   } = useForm<WineFormInput, unknown, WineInput>({
     resolver: zodResolver(wineSchema),
+    // 기록 작성 중 "새 와인 등록"으로 왔으면 검색어를 이름에 미리 채운다.
+    defaultValues: { nameKo: defaultName ?? "" },
   });
 
   async function onSubmit(data: WineInput) {
