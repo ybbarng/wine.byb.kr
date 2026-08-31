@@ -1544,8 +1544,9 @@ export default function FluidLab({
         if (rippleActU) rippleActU.value = waveAct; // 정지=매끈, 흔들 때만 잔물결
         if (rippleTimeU) rippleTimeU.value = simT; // 잔물결 이동·명멸 시각
         // 스월 중 표면 거칠기↑ → 오목면의 거울 반사(과녁·회전선) 흐림. 정지=0.14 매끈.
-        // 오목이 깊어진 만큼 거울 링도 강해지므로 계수를 0.25→0.35 로 함께 올린다.
-        if (roughnessU) roughnessU.value = 0.14 + waveAct * 0.35;
+        // 단 너무 올리면(0.49) 오목을 알려주던 반사 왜곡까지 사라져 표면이 볼록처럼
+        // 보인다(중심이 얇아 밝은 것만 남음). 0.18 로 낮춰 오목 반사 단서를 남긴다.
+        if (roughnessU) roughnessU.value = 0.14 + waveAct * 0.18;
         const phi = Math.atan2(sloshZ, sloshX);
         // 스핀다운(회전 관성): 감쇠 진동자는 진폭만 줄고 회전 주파수는 ω로 고정이라,
         // 그냥 두면 수면이 평평해져도 계속 빠르게 도는 것처럼 보인다. 실제 유체는
