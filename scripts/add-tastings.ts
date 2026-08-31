@@ -625,7 +625,6 @@ const ENTRIES: Entry[] = [
     },
     grapeSlugs: [],
     tasting: {
-      drankOn: "2026-09-04",
       purchasedOn: "2026-08-31",
       purchasePrice: 32720,
       purchasePlace: "와인25플러스",
@@ -763,15 +762,26 @@ async function main() {
 
     // 아직 안 마신 와인은 drankOn 없이 구매 기록만 남긴다.
     const drankOn = e.tasting.drankOn ? new Date(`${e.tasting.drankOn}T00:00:00.000Z`) : null;
+    const purchasedOn = e.tasting.purchasedOn
+      ? new Date(`${e.tasting.purchasedOn}T00:00:00.000Z`)
+      : null;
+    // 같은 구매(와인·구매일·가격)를 한 번만 만든다. 음용 여부(drankOn)와 무관하게
+    // 인식해, 나중에 마셔서 음용일이 붙거나 추정일이 바뀌어도 중복이 안 생긴다.
     const dup = await db.tastingNote.findFirst({
-      where: { wineId: wine.id, drankOn, purchasePrice: e.tasting.purchasePrice },
+      where: { wineId: wine.id, purchasedOn, purchasePrice: e.tasting.purchasePrice },
     });
     if (dup) {
-      // 이미 있으면 구매처를 시드값으로 맞춰 갱신하고 넘어간다(시드가 단일 소스).
+      // 이미 있으면 구매처·음용일을 시드값으로 맞춰 갱신한다(시드가 단일 소스).
       const place = e.tasting.purchasePlace ?? null;
-      if (dup.purchasePlace !== place) {
-        await db.tastingNote.update({ where: { id: dup.id }, data: { purchasePlace: place } });
-        console.log(`~ 구매처 갱신: ${e.wine.nameLocal} → ${place ?? "(없음)"}`);
+      const drankChanged = (dup.drankOn?.getTime() ?? null) !== (drankOn?.getTime() ?? null);
+      if (dup.purchasePlace !== place || drankChanged) {
+        await db.tastingNote.update({
+          where: { id: dup.id },
+          data: { purchasePlace: place, drankOn },
+        });
+        console.log(
+          `~ 갱신: ${e.wine.nameLocal} (음용일 ${e.tasting.drankOn ?? "미시음"}, ${place ?? "구매처없음"})`
+        );
       } else {
         console.log(`= 이미 있음: ${e.wine.nameLocal} (${e.tasting.drankOn ?? "미시음"})`);
       }
@@ -781,7 +791,7 @@ async function main() {
       data: {
         wineId: wine.id,
         drankOn,
-        purchasedOn: new Date(`${e.tasting.purchasedOn}T00:00:00.000Z`),
+        purchasedOn,
         purchasePrice: e.tasting.purchasePrice,
         purchasePlace: e.tasting.purchasePlace ?? null,
       },

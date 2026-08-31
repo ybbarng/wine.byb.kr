@@ -26,8 +26,14 @@ export async function getJournalEntries() {
       },
     },
   });
+  // 아직 안 마신(음용일 없는) 구매를 맨 위로. 같은 그룹 안에서는 미음용=구매일,
+  // 음용=음용일 기준 역순(최근이 위).
+  const drank = (n: (typeof notes)[number]) => n.drankOn != null;
   const key = (n: (typeof notes)[number]) => (n.drankOn ?? n.purchasedOn ?? n.createdAt).getTime();
-  return notes.sort((a, b) => key(b) - key(a) || b.createdAt.getTime() - a.createdAt.getTime());
+  return notes.sort((a, b) => {
+    if (drank(a) !== drank(b)) return drank(a) ? 1 : -1; // 미음용이 앞
+    return key(b) - key(a) || b.createdAt.getTime() - a.createdAt.getTime();
+  });
 }
 
 export interface JournalStats {
