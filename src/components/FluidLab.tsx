@@ -1479,16 +1479,20 @@ export default function FluidLab({
         gPrevX = gTiltX;
         gPrevZ = gTiltZ;
         const OMEGA = 8.0;
-        const ZETA = 0.055; // 감쇠 낮춤 — 더 오래·크게 출렁
+        const ZETA = 0.055; // 선형(점성) 감쇠 — 작은 진폭에서 부드럽게 멈춤
+        // 2차(난류) 감쇠: 크게 출렁일수록 손실이 커진다. 놓은 뒤 한두 번 크게
+        // 흐트러졌다 빠르게 잦아들어(젤리처럼 오래 규칙적으로 넘실대지 않게) 액체답다.
+        // 계수 3.0 은 slosh-sim 으로 확인: 초기 진폭 0.49→0.10, ~1.2s 내 정착.
+        const QUAD = 3.0;
         const COUPLE = 2.7; // 잔 움직임 → 와인 슬로싱 결합↑(세게 흔들면 크게)
         const SLOSH_MAX = 0.78; // 최대 수면 기울기↑ — 세게 흔들수록 더 세워짐
         // 두 축 결합 부호는 표면 크레스트가 잔 스월과 "같은 방향"으로 돌게 맞춘다
         // (와인은 잔을 쫓아감). 좌우(roll) 항은 그대로, 앞뒤(pitch) 항 부호만 뒤집어
         // 회전 방향을 바로잡되 선형 정렬은 유지.
-        sloshVX +=
-          (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt - COUPLE * gvz * dt;
-        sloshVZ +=
-          (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt + COUPLE * gvx * dt;
+        const sloshSpeed = Math.hypot(sloshVX, sloshVZ);
+        const damp = 2 * ZETA * OMEGA + QUAD * sloshSpeed; // 속도(진폭) 의존 감쇠
+        sloshVX += (-(OMEGA * OMEGA) * sloshX - damp * sloshVX) * dt - COUPLE * gvz * dt;
+        sloshVZ += (-(OMEGA * OMEGA) * sloshZ - damp * sloshVZ) * dt + COUPLE * gvx * dt;
         sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshX + sloshVX * dt));
         sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshZ + sloshVZ * dt));
         // 잔 기울기 적용(마우스 추종).
