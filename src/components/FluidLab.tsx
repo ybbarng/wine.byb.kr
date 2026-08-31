@@ -874,6 +874,8 @@ export default function FluidLab({
     let glassDripU: any = null; // 흘러내림 진행(0→1)
     // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
     let rippleActU: any = null; // 미세 잔물결 활성도(0=정지 매끈 ~ 1=스월 시)
+    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
+    let rippleTimeU: any = null; // 잔물결 이동·명멸용 시각(렌더 루프서 simT 로 갱신)
     // 둘레별 도달 최고점(수위선 위, 프로파일). 자국은 와인이 실제 오른 방향에만
     // 생긴다(왼쪽 기울이면 왼쪽만). 스칼라 대신 둘레 배열→텍스처로 셰이더에 전달.
     const LEG_NA = 96;
@@ -1319,11 +1321,20 @@ export default function FluidLab({
       // 단, 정지한 와인은 유리처럼 매끈하므로 스월 활성도(rippleActU)로 게이팅한다 —
       // 가만히 있으면 0(매끈), 흔들 때만 잔물결이 돋는다. 세기는 작게(과하면 젤리).
       rippleActU = uniform(0); // 렌더 루프에서 waveAct 로 갱신
+      rippleTimeU = uniform(0); // 렌더 루프에서 simT 로 갱신 — 물결 이동·명멸
       const rippleFreqU = uniform(40); // 잔물결 촘촘함(클수록 잘게)
       const rippleAmpU = uniform(0.12); // 흔들 때 최대 섭동 세기(과하면 울퉁불퉁)
       bodyMat.normalNode = Fn(() => {
         // 사인 겹침은 규칙적 격자(벌집)가 생긴다 → fbm 노이즈로 불규칙한 잔물결.
-        const p = vec3(positionLocal.x, positionLocal.z, float(0)).mul(rippleFreqU).toVar();
+        // 정지 얼룩이 아니라 시간에 따라 흐르고(이동) 모양이 바뀌게(명멸) 한다 —
+        // xy 좌표에 시각을 더해 물결이 스월 방향으로 흐르고, 3번째 옥타브 좌표에
+        // 시각을 넣어 fbm 이 변하며 반짝임이 잘게 명멸한다(scintillation).
+        const tt = rippleTimeU;
+        const p = vec3(
+          positionLocal.x.mul(rippleFreqU).add(tt.mul(0.6)),
+          positionLocal.z.mul(rippleFreqU).sub(tt.mul(0.5)),
+          tt.mul(1.5)
+        ).toVar();
         const h = mx_fractal_noise_float(p, int(3), float(2.0), float(0.5)).toVar();
         // 화면 미분으로 높이장의 기울기를 구해 뷰 법선을 미세하게 튼다(legs와 같은 법).
         // 스월 활성도로 게이팅 → 정지 시 섭동 0(매끈).
@@ -1518,6 +1529,7 @@ export default function FluidLab({
         simT += dt;
         waveAct = Math.min(1, swirlMag * 3.5);
         if (rippleActU) rippleActU.value = waveAct; // 정지=매끈, 흔들 때만 잔물결
+        if (rippleTimeU) rippleTimeU.value = simT; // 잔물결 이동·명멸 시각
         const phi = Math.atan2(sloshZ, sloshX);
         // 스핀다운(회전 관성): 감쇠 진동자는 진폭만 줄고 회전 주파수는 ω로 고정이라,
         // 그냥 두면 수면이 평평해져도 계속 빠르게 도는 것처럼 보인다. 실제 유체는
