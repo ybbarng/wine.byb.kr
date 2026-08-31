@@ -874,6 +874,8 @@ export default function FluidLab({
     let glassDripU: any = null; // 흘러내림 진행(0→1)
     // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
     let rippleActU: any = null; // 미세 잔물결 활성도(0=정지 매끈 ~ 1=스월 시)
+    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
+    let rippleTimeU: any = null; // 잔물결 이동·명멸용 시각(렌더 루프서 simT 로 갱신)
     // 둘레별 도달 최고점(수위선 위, 프로파일). 자국은 와인이 실제 오른 방향에만
     // 생긴다(왼쪽 기울이면 왼쪽만). 스칼라 대신 둘레 배열→텍스처로 셰이더에 전달.
     const LEG_NA = 96;
@@ -1098,6 +1100,7 @@ export default function FluidLab({
     const WAMP1 = 0.08; // 벽 크레스트(mode-1)
     const WAMP2 = 0.024; // mode-2 로브
     const WAMP3 = 0.014; // mode-3 로브
+    const WCREST_SHARP = 0.3; // Stokes 2차 — 주 마루 뾰족·골 완만(troch.js 검증, 평균 0)
     const W2SPD = 3.0; // mode-2 회전 속도
     const W3SPD = 4.2; // mode-3 회전 속도
     let crC = 1; // cosφ (크레스트 방향)
@@ -1120,7 +1123,10 @@ export default function FluidLab({
       const m1 = c * crC + s * crS; // cos(θ-φ)
       const m2 = c2 * l2c + s2 * l2s; // cos(2θ-φ-w2·t)
       const m3 = c3 * l3c + s3 * l3s; // cos(3θ-φ-w3·t)
-      return waveAct * (WAMP1 * rp * rp * m1 + WAMP2 * rp * m2 + WAMP3 * rp * m3);
+      // Stokes 2차 파형: 주 크레스트(mode-1) 마루를 뾰족하게·골을 완만하게 만든다.
+      // 사인파의 둥근 마루(젤리 표면)가 아니라 실제 중력파의 뾰족한 마루. 평균 0 → 부피 보존.
+      const m1s = m1 + WCREST_SHARP * (m1 * m1 - 0.5);
+      return waveAct * (WAMP1 * rp * rp * m1s + WAMP2 * rp * m2 + WAMP3 * rp * m3);
     }
     // biome-ignore lint/suspicious/noExplicitAny: BufferAttribute
     let liquidPosAttr: any;
@@ -1315,11 +1321,20 @@ export default function FluidLab({
       // 단, 정지한 와인은 유리처럼 매끈하므로 스월 활성도(rippleActU)로 게이팅한다 —
       // 가만히 있으면 0(매끈), 흔들 때만 잔물결이 돋는다. 세기는 작게(과하면 젤리).
       rippleActU = uniform(0); // 렌더 루프에서 waveAct 로 갱신
+      rippleTimeU = uniform(0); // 렌더 루프에서 simT 로 갱신 — 물결 이동·명멸
       const rippleFreqU = uniform(40); // 잔물결 촘촘함(클수록 잘게)
       const rippleAmpU = uniform(0.12); // 흔들 때 최대 섭동 세기(과하면 울퉁불퉁)
       bodyMat.normalNode = Fn(() => {
         // 사인 겹침은 규칙적 격자(벌집)가 생긴다 → fbm 노이즈로 불규칙한 잔물결.
-        const p = vec3(positionLocal.x, positionLocal.z, float(0)).mul(rippleFreqU).toVar();
+        // 정지 얼룩이 아니라 시간에 따라 흐르고(이동) 모양이 바뀌게(명멸) 한다 —
+        // xy 좌표에 시각을 더해 물결이 스월 방향으로 흐르고, 3번째 옥타브 좌표에
+        // 시각을 넣어 fbm 이 변하며 반짝임이 잘게 명멸한다(scintillation).
+        const tt = rippleTimeU;
+        const p = vec3(
+          positionLocal.x.mul(rippleFreqU).add(tt.mul(0.6)),
+          positionLocal.z.mul(rippleFreqU).sub(tt.mul(0.5)),
+          tt.mul(1.5)
+        ).toVar();
         const h = mx_fractal_noise_float(p, int(3), float(2.0), float(0.5)).toVar();
         // 화면 미분으로 높이장의 기울기를 구해 뷰 법선을 미세하게 튼다(legs와 같은 법).
         // 스월 활성도로 게이팅 → 정지 시 섭동 0(매끈).
@@ -1479,16 +1494,20 @@ export default function FluidLab({
         gPrevX = gTiltX;
         gPrevZ = gTiltZ;
         const OMEGA = 8.0;
-        const ZETA = 0.055; // 감쇠 낮춤 — 더 오래·크게 출렁
+        const ZETA = 0.055; // 선형(점성) 감쇠 — 작은 진폭에서 부드럽게 멈춤
+        // 2차(난류) 감쇠: 크게 출렁일수록 손실이 커진다. 놓은 뒤 한두 번 크게
+        // 흐트러졌다 빠르게 잦아들어(젤리처럼 오래 규칙적으로 넘실대지 않게) 액체답다.
+        // 계수 3.0 은 slosh-sim 으로 확인: 초기 진폭 0.49→0.10, ~1.2s 내 정착.
+        const QUAD = 3.0;
         const COUPLE = 2.7; // 잔 움직임 → 와인 슬로싱 결합↑(세게 흔들면 크게)
         const SLOSH_MAX = 0.78; // 최대 수면 기울기↑ — 세게 흔들수록 더 세워짐
         // 두 축 결합 부호는 표면 크레스트가 잔 스월과 "같은 방향"으로 돌게 맞춘다
         // (와인은 잔을 쫓아감). 좌우(roll) 항은 그대로, 앞뒤(pitch) 항 부호만 뒤집어
         // 회전 방향을 바로잡되 선형 정렬은 유지.
-        sloshVX +=
-          (-(OMEGA * OMEGA) * sloshX - 2 * ZETA * OMEGA * sloshVX) * dt - COUPLE * gvz * dt;
-        sloshVZ +=
-          (-(OMEGA * OMEGA) * sloshZ - 2 * ZETA * OMEGA * sloshVZ) * dt + COUPLE * gvx * dt;
+        const sloshSpeed = Math.hypot(sloshVX, sloshVZ);
+        const damp = 2 * ZETA * OMEGA + QUAD * sloshSpeed; // 속도(진폭) 의존 감쇠
+        sloshVX += (-(OMEGA * OMEGA) * sloshX - damp * sloshVX) * dt - COUPLE * gvz * dt;
+        sloshVZ += (-(OMEGA * OMEGA) * sloshZ - damp * sloshVZ) * dt + COUPLE * gvx * dt;
         sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshX + sloshVX * dt));
         sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshZ + sloshVZ * dt));
         // 잔 기울기 적용(마우스 추종).
@@ -1510,6 +1529,7 @@ export default function FluidLab({
         simT += dt;
         waveAct = Math.min(1, swirlMag * 3.5);
         if (rippleActU) rippleActU.value = waveAct; // 정지=매끈, 흔들 때만 잔물결
+        if (rippleTimeU) rippleTimeU.value = simT; // 잔물결 이동·명멸 시각
         const phi = Math.atan2(sloshZ, sloshX);
         // 스핀다운(회전 관성): 감쇠 진동자는 진폭만 줄고 회전 주파수는 ω로 고정이라,
         // 그냥 두면 수면이 평평해져도 계속 빠르게 도는 것처럼 보인다. 실제 유체는
