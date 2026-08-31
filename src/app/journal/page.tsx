@@ -84,7 +84,14 @@ export default async function JournalPage() {
                     className="group flex flex-col gap-1 py-4 transition-colors hover:bg-foreground/5 sm:flex-row sm:items-baseline sm:gap-4"
                   >
                     <time className="w-24 shrink-0 font-mono text-sm text-gold/80">
-                      {formatDate(e.drankOn)}
+                      {e.drankOn ? (
+                        formatDate(e.drankOn)
+                      ) : (
+                        <span className="text-muted/70">
+                          {formatDate(e.purchasedOn)}
+                          <span className="ml-1 text-[10px] uppercase tracking-wide">구매</span>
+                        </span>
+                      )}
                     </time>
                     <div className="min-w-0 flex-1">
                       <div className="font-serif text-lg text-foreground group-hover:text-wine">
