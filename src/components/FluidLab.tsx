@@ -876,6 +876,8 @@ export default function FluidLab({
     let rippleActU: any = null; // 미세 잔물결 활성도(0=정지 매끈 ~ 1=스월 시)
     // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
     let rippleTimeU: any = null; // 잔물결 이동·명멸용 시각(렌더 루프서 simT 로 갱신)
+    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
+    let roughnessU: any = null; // 표면 거칠기(스월 중↑ — 오목면 거울 과녁 흐림)
     // 둘레별 도달 최고점(수위선 위, 프로파일). 자국은 와인이 실제 오른 방향에만
     // 생긴다(왼쪽 기울이면 왼쪽만). 스칼라 대신 둘레 배열→텍스처로 셰이더에 전달.
     const LEG_NA = 96;
@@ -1316,6 +1318,11 @@ export default function FluidLab({
       // 노드 재질은 envMapIntensity 를 무시하므로(교훈), 표면 반사 세기는 ior·roughness
       // 로만 제어된다. 전역 scene.environmentIntensity(0.42)는 유리 반짝임용으로 유지.
       bodyMat.envMapIntensity = 0.18;
+      // 스월 중엔 표면을 거칠게 — 움직이는 수면은 미세물결로 난반사한다. 매끈한 오목
+      // 포물면(회전 중심 팸)이 환경을 동심원(과녁)으로 집속하던 것을, 스월 활성도에
+      // 비례해 roughness 를 올려 흐트러뜨린다. 정지 시엔 0.14(유리 같은 매끈함) 유지.
+      roughnessU = uniform(0.14);
+      bodyMat.roughnessNode = roughnessU;
       // 미세 잔물결(capillary ripple): 큰 스월 파동(지오메트리)은 그대로 두고, 표면
       // 법선에 픽셀 단위 고주파 요철을 얹어 매끈한 반사가 반짝이는 조각으로 부서지게.
       // 단, 정지한 와인은 유리처럼 매끈하므로 스월 활성도(rippleActU)로 게이팅한다 —
@@ -1530,6 +1537,8 @@ export default function FluidLab({
         waveAct = Math.min(1, swirlMag * 3.5);
         if (rippleActU) rippleActU.value = waveAct; // 정지=매끈, 흔들 때만 잔물결
         if (rippleTimeU) rippleTimeU.value = simT; // 잔물결 이동·명멸 시각
+        // 스월 중 표면 거칠기↑ → 오목면의 거울 반사(과녁) 흐림. 정지=0.14 매끈.
+        if (roughnessU) roughnessU.value = 0.14 + waveAct * 0.25;
         const phi = Math.atan2(sloshZ, sloshX);
         // 스핀다운(회전 관성): 감쇠 진동자는 진폭만 줄고 회전 주파수는 ω로 고정이라,
         // 그냥 두면 수면이 평평해져도 계속 빠르게 도는 것처럼 보인다. 실제 유체는
