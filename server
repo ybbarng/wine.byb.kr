@@ -49,6 +49,10 @@ pnpm exec tsx scripts/add-tastings.ts || echo "⚠️  tasting seed skipped (non
 echo "🍇 Deduping grapes..."
 pnpm exec tsx scripts/dedupe-grapes.ts || echo "⚠️  grape dedupe skipped (non-fatal)"
 
+# 와인 시음 포인트(notesKo) 보강(멱등, slug 기준 update). 실패해도 배포는 계속.
+echo "🍷 Enriching wine notes..."
+pnpm exec tsx scripts/enrich-wine-notes.ts || echo "⚠️  notes enrich skipped (non-fatal)"
+
 echo "🔨 Building..."
 pnpm run build
 
