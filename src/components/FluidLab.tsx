@@ -1098,6 +1098,7 @@ export default function FluidLab({
     const WAMP1 = 0.08; // 벽 크레스트(mode-1)
     const WAMP2 = 0.024; // mode-2 로브
     const WAMP3 = 0.014; // mode-3 로브
+    const WCREST_SHARP = 0.3; // Stokes 2차 — 주 마루 뾰족·골 완만(troch.js 검증, 평균 0)
     const W2SPD = 3.0; // mode-2 회전 속도
     const W3SPD = 4.2; // mode-3 회전 속도
     let crC = 1; // cosφ (크레스트 방향)
@@ -1120,7 +1121,10 @@ export default function FluidLab({
       const m1 = c * crC + s * crS; // cos(θ-φ)
       const m2 = c2 * l2c + s2 * l2s; // cos(2θ-φ-w2·t)
       const m3 = c3 * l3c + s3 * l3s; // cos(3θ-φ-w3·t)
-      return waveAct * (WAMP1 * rp * rp * m1 + WAMP2 * rp * m2 + WAMP3 * rp * m3);
+      // Stokes 2차 파형: 주 크레스트(mode-1) 마루를 뾰족하게·골을 완만하게 만든다.
+      // 사인파의 둥근 마루(젤리 표면)가 아니라 실제 중력파의 뾰족한 마루. 평균 0 → 부피 보존.
+      const m1s = m1 + WCREST_SHARP * (m1 * m1 - 0.5);
+      return waveAct * (WAMP1 * rp * rp * m1s + WAMP2 * rp * m2 + WAMP3 * rp * m3);
     }
     // biome-ignore lint/suspicious/noExplicitAny: BufferAttribute
     let liquidPosAttr: any;
