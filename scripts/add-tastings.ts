@@ -150,6 +150,16 @@ const REGIONS: RegionSeed[] = [
     latitude: 42.46,
     longitude: -2.45,
   },
+  {
+    slug: "penedes",
+    nameKo: "페네데스",
+    nameLocal: "Penedès",
+    country: "스페인",
+    level: "region",
+    parentSlug: "spain",
+    latitude: 41.35,
+    longitude: 1.7,
+  },
 ];
 
 // 없으면 만들 품종. GRAPE_ABSORB(wine-glass.ts) 색은 nameKo 로 찾으니 nameKo 를 맞춘다.
@@ -159,6 +169,9 @@ const GRAPES: { slug: string; nameKo: string; nameLocal: string; color: string }
   { slug: "chenin-blanc", nameKo: "슈냉 블랑", nameLocal: "Chenin Blanc", color: "white" },
   { slug: "nebbiolo", nameKo: "네비올로", nameLocal: "Nebbiolo", color: "red" },
   { slug: "zweigelt", nameKo: "츠바이겔트", nameLocal: "Zweigelt", color: "red" },
+  { slug: "macabeo", nameKo: "마카베오", nameLocal: "Macabeo", color: "white" },
+  { slug: "xarel-lo", nameKo: "사렐-로", nameLocal: "Xarel·lo", color: "white" },
+  { slug: "parellada", nameKo: "파레야다", nameLocal: "Parellada", color: "white" },
 ];
 
 // 와인별 abv(라벨 기준 추정 — 정확값은 라벨 확인 후 조정)와 시음 포인트.
@@ -235,6 +248,11 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     abv: 13,
     notesKo: "호주 스파클링. 사과·시트러스 향에 상큼한 기포, 가볍고 마시기 편하다.",
   },
+  "marques-de-monistrol-cava-brut": {
+    abv: 11.5,
+    notesKo:
+      "전통방식으로 빚은 스페인 카바. 잔에 따르면 고운 기포가 끊임없이 올라오는지 먼저 보고, 청사과·레몬에 흰 꽃과 은은한 빵 효모 향을 맡아본다. 입에서는 바짝 드라이하고 산미가 또렷해 개운하며, 촘촘한 기포가 부드럽게 감긴다. 6~8도로 차게 해서 식전주나 튀김·해산물과 곁들이면 좋다.",
+  },
 };
 
 type Entry = {
@@ -250,10 +268,10 @@ type Entry = {
   // 단일 품종이거나 대표 품종이 확실할 때만. 애매한 블렌드는 비워 두고 나중에 보강.
   grapeSlugs: { slug: string; percent?: number }[];
   tasting: {
-    drankOn: string; // YYYY-MM-DD (그 주 금요일)
+    drankOn?: string; // YYYY-MM-DD (아직 안 마셨으면 생략)
     purchasedOn: string; // YYYY-MM-DD (픽업/구매일)
     purchasePrice: number;
-    purchasePlace: string;
+    purchasePlace?: string; // 구매처 불명이면 생략
   };
 };
 
@@ -273,7 +291,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2025-09-12",
       purchasedOn: "2025-09-09",
       purchasePrice: 57000,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -290,7 +308,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2025-09-12",
       purchasedOn: "2025-09-11",
       purchasePrice: 10160,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -312,7 +330,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2025-09-19",
       purchasedOn: "2025-09-18",
       purchasePrice: 21120,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -330,7 +348,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2025-09-26",
       purchasedOn: "2025-09-26",
       purchasePrice: 22410,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -347,7 +365,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-01-23",
       purchasedOn: "2026-01-22",
       purchasePrice: 127000,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -365,7 +383,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-01-30",
       purchasedOn: "2026-01-29",
       purchasePrice: 15120,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -383,7 +401,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-02-06",
       purchasedOn: "2026-02-05",
       purchasePrice: 94200,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -401,7 +419,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-02-27",
       purchasedOn: "2026-02-27",
       purchasePrice: 47200,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -419,7 +437,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-05-15",
       purchasedOn: "2026-05-14",
       purchasePrice: 26920,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -441,7 +459,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-05-22",
       purchasedOn: "2026-05-21",
       purchasePrice: 100000,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -458,7 +476,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-05-29",
       purchasedOn: "2026-05-28",
       purchasePrice: 36920,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -477,7 +495,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-07-31",
       purchasedOn: "2026-07-30",
       purchasePrice: 47600,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -495,7 +513,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-08-07",
       purchasedOn: "2026-08-03",
       purchasePrice: 63720,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -517,7 +535,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-08-14",
       purchasedOn: "2026-08-13",
       purchasePrice: 29920,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -539,7 +557,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-08-21",
       purchasedOn: "2026-08-18",
       purchasePrice: 27000,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -557,7 +575,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-08-28",
       purchasedOn: "2026-08-24",
       purchasePrice: 42400,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -575,7 +593,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-08-21",
       purchasedOn: "2026-08-20",
       purchasePrice: 32000,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -593,7 +611,7 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-08-28",
       purchasedOn: "2026-08-27",
       purchasePrice: 51120,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
     },
   },
   {
@@ -610,7 +628,28 @@ const ENTRIES: Entry[] = [
       drankOn: "2026-09-04",
       purchasedOn: "2026-08-31",
       purchasePrice: 32720,
-      purchasePlace: "GS25",
+      purchasePlace: "와인25플러스",
+    },
+  },
+  {
+    regionSlug: "penedes",
+    producer: {
+      slug: "marques-de-monistrol",
+      nameKo: "마르케스 드 모니스트롤",
+      nameLocal: "Marqués de Monistrol",
+    },
+    wine: {
+      slug: "marques-de-monistrol-cava-brut",
+      nameKo: "마르케스 드 모니스트롤 까바 브뤼",
+      nameLocal: "Marqués de Monistrol Cava Brut",
+      type: "sparkling",
+      classification: "Cava DO",
+    },
+    grapeSlugs: [{ slug: "macabeo" }, { slug: "xarel-lo" }, { slug: "parellada" }],
+    tasting: {
+      purchasedOn: "2026-08-31",
+      purchasePrice: 10320,
+      purchasePlace: "와인25플러스",
     },
   },
 ];
@@ -722,12 +761,20 @@ async function main() {
       }
     }
 
-    const drankOn = new Date(`${e.tasting.drankOn}T00:00:00.000Z`);
+    // 아직 안 마신 와인은 drankOn 없이 구매 기록만 남긴다.
+    const drankOn = e.tasting.drankOn ? new Date(`${e.tasting.drankOn}T00:00:00.000Z`) : null;
     const dup = await db.tastingNote.findFirst({
       where: { wineId: wine.id, drankOn, purchasePrice: e.tasting.purchasePrice },
     });
     if (dup) {
-      console.log(`= 이미 있음: ${e.wine.nameLocal} (${e.tasting.drankOn})`);
+      // 이미 있으면 구매처를 시드값으로 맞춰 갱신하고 넘어간다(시드가 단일 소스).
+      const place = e.tasting.purchasePlace ?? null;
+      if (dup.purchasePlace !== place) {
+        await db.tastingNote.update({ where: { id: dup.id }, data: { purchasePlace: place } });
+        console.log(`~ 구매처 갱신: ${e.wine.nameLocal} → ${place ?? "(없음)"}`);
+      } else {
+        console.log(`= 이미 있음: ${e.wine.nameLocal} (${e.tasting.drankOn ?? "미시음"})`);
+      }
       continue;
     }
     await db.tastingNote.create({
@@ -736,11 +783,11 @@ async function main() {
         drankOn,
         purchasedOn: new Date(`${e.tasting.purchasedOn}T00:00:00.000Z`),
         purchasePrice: e.tasting.purchasePrice,
-        purchasePlace: e.tasting.purchasePlace,
+        purchasePlace: e.tasting.purchasePlace ?? null,
       },
     });
     console.log(
-      `+ 추가: ${e.wine.nameLocal} — 마신날 ${e.tasting.drankOn}, ${e.tasting.purchasePrice}원`
+      `+ 추가: ${e.wine.nameLocal} — 마신날 ${e.tasting.drankOn ?? "미시음"}, ${e.tasting.purchasePrice}원`
     );
   }
 }

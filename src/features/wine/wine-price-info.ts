@@ -43,6 +43,11 @@ const PRICES: Record<string, WinePrice> = {
   "luigi-baudana-langhe-rosso": { low: 33000, high: 46000 },
   "muga-reserva": { low: 42000, high: 58000 },
   "brown-brothers-premium-cuvee": { low: 22000, high: 34000 },
+  "marques-de-monistrol-cava-brut": {
+    low: 13000,
+    high: 19000,
+    note: "대중적인 스페인 카바 브뤼(전통방식).",
+  },
 };
 
 export function winePrice(slug: string): WinePrice | null {

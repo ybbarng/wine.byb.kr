@@ -165,6 +165,9 @@ const PRODUCER_INFO: Record<string, ProducerDetail> = {
   domainsmartin: {
     desc: "보르도 생줄리앙의 4등급(1855) 샤또 생피에르를 소유한 도멘(앙리 마르탱 가문). 샤또 글로리아 등도 함께 운영한다.",
   },
+  모니스트롤: {
+    desc: "1882년 산 사두르니 다노이아(페네데스)에 카바 생산을 확립한 스페인의 대표 카바 하우스. 450헥타르 밭에서 전통방식으로 스파클링을 만든다.",
+  },
 };
 
 const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
