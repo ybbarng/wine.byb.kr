@@ -1508,8 +1508,10 @@ export default function FluidLab({
         // 점성(꿀) 인상을 줬다 → 1.5 로 낮춰 물처럼 여러 번 출렁이다 잦아들게.
         const QUAD = 1.5;
         // ω 를 올리면 복원력(ω²)이 세져 같은 구동에 진폭이 줄어든다. 결합을 살짝
-        // 올려(2.7→3.3) 스월 진폭을 보전한다.
-        const COUPLE = 3.3; // 잔 움직임 → 와인 슬로싱 결합(세게 흔들면 크게)
+        // 올려서 스월 진폭을 보전한다. ω 8→11 로 복원력(ω²)이 64→121(1.9배)
+        // 커진 만큼 결합도 2.7→5.0 으로 맞춰(≈ω² 비례) ⑤ 이전 진폭을 회복 —
+        // 진폭이 곧 오목 포물면 깊이라, 덜 보정하면 표면이 과하게 평평해진다.
+        const COUPLE = 5.0; // 잔 움직임 → 와인 슬로싱 결합(세게 흔들면 크게)
         const SLOSH_MAX = 0.78; // 최대 수면 기울기↑ — 세게 흔들수록 더 세워짐
         // 두 축 결합 부호는 표면 크레스트가 잔 스월과 "같은 방향"으로 돌게 맞춘다
         // (와인은 잔을 쫓아감). 좌우(roll) 항은 그대로, 앞뒤(pitch) 항 부호만 뒤집어
@@ -1532,16 +1534,18 @@ export default function FluidLab({
         const M5 = el[5] - a * el[4] - b * el[6];
         const M9 = el[9] - a * el[8] - b * el[10];
         // 회전 오목 포물면: 스월 세기(수면 기울기 크기)에 비례해 벽 쪽 차오름.
+        // 계수를 1.1→1.4 로 키워 "안쪽으로 오목했다가 평평 복귀"가 또렷하게.
         const swirlMag = Math.hypot(sloshX, sloshZ);
-        const K = swirlMag * 1.1;
+        const K = swirlMag * 1.4;
         // 회전 파동: 정지=평면, 흔들면 활성. 크레스트 방향 φ=슬로싱 벡터각(스월
         // 방향) → 마루가 잔을 돈다. mode-2,3 은 그 위를 시간에 따라 더 돈다.
         simT += dt;
         waveAct = Math.min(1, swirlMag * 3.5);
         if (rippleActU) rippleActU.value = waveAct; // 정지=매끈, 흔들 때만 잔물결
         if (rippleTimeU) rippleTimeU.value = simT; // 잔물결 이동·명멸 시각
-        // 스월 중 표면 거칠기↑ → 오목면의 거울 반사(과녁) 흐림. 정지=0.14 매끈.
-        if (roughnessU) roughnessU.value = 0.14 + waveAct * 0.25;
+        // 스월 중 표면 거칠기↑ → 오목면의 거울 반사(과녁·회전선) 흐림. 정지=0.14 매끈.
+        // 오목이 깊어진 만큼 거울 링도 강해지므로 계수를 0.25→0.35 로 함께 올린다.
+        if (roughnessU) roughnessU.value = 0.14 + waveAct * 0.35;
         const phi = Math.atan2(sloshZ, sloshX);
         // 스핀다운(회전 관성): 감쇠 진동자는 진폭만 줄고 회전 주파수는 ω로 고정이라,
         // 그냥 두면 수면이 평평해져도 계속 빠르게 도는 것처럼 보인다. 실제 유체는
