@@ -160,6 +160,46 @@ const REGIONS: RegionSeed[] = [
     latitude: 41.35,
     longitude: 1.7,
   },
+  {
+    slug: "pedernal",
+    nameKo: "페데르날 밸리",
+    nameLocal: "Valle de Pedernal",
+    country: "아르헨티나",
+    level: "region",
+    parentSlug: "argentina",
+    latitude: -31.75,
+    longitude: -68.95,
+  },
+  {
+    slug: "mendocino",
+    nameKo: "멘도시노 카운티",
+    nameLocal: "Mendocino County",
+    country: "미국",
+    level: "region",
+    parentSlug: "usa",
+    latitude: 39.15,
+    longitude: -123.11,
+  },
+  {
+    slug: "clare-valley",
+    nameKo: "클레어 밸리",
+    nameLocal: "Clare Valley",
+    country: "호주",
+    level: "region",
+    parentSlug: "australia",
+    latitude: -33.83,
+    longitude: 138.61,
+  },
+  {
+    slug: "chianti-classico",
+    nameKo: "키안티 클라시코",
+    nameLocal: "Chianti Classico",
+    country: "이탈리아",
+    level: "region",
+    parentSlug: "italy",
+    latitude: 43.585,
+    longitude: 11.316,
+  },
 ];
 
 // 없으면 만들 품종. GRAPE_ABSORB(wine-glass.ts) 색은 nameKo 로 찾으니 nameKo 를 맞춘다.
@@ -172,6 +212,8 @@ const GRAPES: { slug: string; nameKo: string; nameLocal: string; color: string }
   { slug: "macabeo", nameKo: "마카베오", nameLocal: "Macabeo", color: "white" },
   { slug: "xarel-lo", nameKo: "사렐-로", nameLocal: "Xarel·lo", color: "white" },
   { slug: "parellada", nameKo: "파레야다", nameLocal: "Parellada", color: "white" },
+  { slug: "canaiolo", nameKo: "카나이올로", nameLocal: "Canaiolo", color: "red" },
+  { slug: "semillon", nameKo: "세미용", nameLocal: "Sémillon", color: "white" },
 ];
 
 // 와인별 abv(라벨 기준 추정 — 정확값은 라벨 확인 후 조정)와 시음 포인트.
@@ -197,7 +239,7 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     notesKo: "마이포 고지대 카베르네. 블랙커런트·삼나무 향에 짜임새 있는 타닌, 진하고 길다.",
   },
   "carlo-sani-susumaniello": {
-    abv: 13.5,
+    abv: 15,
     notesKo: "뿔리아 토착 품종의 진한 레드. 잘 익은 붉은 과실과 향신료, 부드러운 질감.",
   },
   "gosset-grand-rose-brut": {
@@ -253,6 +295,17 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     notesKo:
       "전통방식으로 빚은 스페인 카바. 잔에 따르면 고운 기포가 끊임없이 올라오는지 먼저 보고, 청사과·레몬에 흰 꽃과 은은한 빵 효모 향을 맡아본다. 입에서는 바짝 드라이하고 산미가 또렷해 개운하며, 촘촘한 기포가 부드럽게 감긴다. 6~8도로 차게 해서 식전주나 튀김·해산물과 곁들이면 좋다.",
   },
+  "pyros-vineyard-block-n4-malbec-2022": { abv: 14 },
+  "bel-air-bordeaux-2023": { abv: 13.5 },
+  "bigios-moscato-passion-fruit": { abv: 5.5 },
+  "tosti-moscato-black-edition-spumante": { abv: 6.5 },
+  "bonterra-sauvignon-blanc": { abv: 13 },
+  lovely: { abv: 11 },
+  "canti-estate-brachetto": { abv: 6 },
+  "pikes-clare-valley-riesling": { abv: 11.5 },
+  "carpineto-chianti-classico-riserva-2019": { abv: 14 },
+  "te-henga-sauvignon-blanc-2025": { abv: 12.5 },
+  "carmel-road-pinot-noir": { abv: 13.5 },
 };
 
 type Entry = {
@@ -269,8 +322,8 @@ type Entry = {
   grapeSlugs: { slug: string; percent?: number }[];
   tasting: {
     drankOn?: string; // YYYY-MM-DD (아직 안 마셨으면 생략)
-    purchasedOn: string; // YYYY-MM-DD (픽업/구매일)
-    purchasePrice: number;
+    purchasedOn?: string; // YYYY-MM-DD (픽업/구매일; 편의점 직접구매 등 모르면 생략)
+    purchasePrice?: number; // 모르면 생략
     purchasePlace?: string; // 구매처 불명이면 생략
   };
 };
@@ -398,7 +451,7 @@ const ENTRIES: Entry[] = [
     },
     grapeSlugs: [],
     tasting: {
-      drankOn: "2026-02-06",
+      drankOn: "2026-02-20",
       purchasedOn: "2026-02-05",
       purchasePrice: 94200,
       purchasePlace: "와인25플러스",
@@ -416,7 +469,7 @@ const ENTRIES: Entry[] = [
     },
     grapeSlugs: [{ slug: "샤르도네", percent: 100 }],
     tasting: {
-      drankOn: "2026-02-27",
+      drankOn: "2026-03-01",
       purchasedOn: "2026-02-27",
       purchasePrice: 47200,
       purchasePlace: "와인25플러스",
@@ -650,6 +703,168 @@ const ENTRIES: Entry[] = [
       purchasePrice: 10320,
       purchasePlace: "와인25플러스",
     },
+  },
+  {
+    regionSlug: "pedernal",
+    producer: { slug: "pyros-wines", nameKo: "피로스 와인", nameLocal: "Pyros Wines" },
+    wine: {
+      slug: "pyros-vineyard-block-n4-malbec-2022",
+      nameKo: "피로스 빈야드 블록 N4 말벡 2022",
+      nameLocal: "PYROS Vineyard Block N4 Malbec 2022",
+      type: "red",
+      classification: "Valle de Pedernal (San Juan GI)",
+    },
+    grapeSlugs: [{ slug: "malvec" }],
+    tasting: { drankOn: "2026-07-24" },
+  },
+  {
+    regionSlug: "bordeaux",
+    producer: { slug: "maison-sichel", nameKo: "메종 시셸", nameLocal: "Maison Sichel" },
+    wine: {
+      slug: "bel-air-bordeaux-2023",
+      nameKo: "벨 에어 보르도 2023",
+      nameLocal: "Bel Air Bordeaux 2023",
+      type: "red",
+      classification: "Bordeaux AOC",
+    },
+    grapeSlugs: [{ slug: "메를로" }, { slug: "까베르네-소비뇽" }],
+    tasting: { drankOn: "2026-07-10" },
+  },
+  {
+    regionSlug: "italy",
+    producer: { slug: "bigios", nameKo: "비지오스", nameLocal: "Bigio's" },
+    wine: {
+      slug: "bigios-moscato-passion-fruit",
+      nameKo: "비지오스 모스카토 패션프루트",
+      nameLocal: "Bigio's Moscato Wine + Passion Fruit",
+      type: "dessert",
+    },
+    grapeSlugs: [{ slug: "무스캇" }],
+    tasting: { drankOn: "2026-07-03" },
+  },
+  {
+    regionSlug: "piemonte",
+    producer: { slug: "tosti", nameKo: "또스띠", nameLocal: "Tosti1820" },
+    wine: {
+      slug: "tosti-moscato-black-edition-spumante",
+      nameKo: "또스띠 모스카토 블랙 에디션 스푸만테",
+      nameLocal: "Tosti Moscato Black Edition Vino Spumante",
+      type: "dessert",
+      classification: "Vino Spumante",
+    },
+    grapeSlugs: [{ slug: "무스캇" }],
+    tasting: { drankOn: "2026-06-19" },
+  },
+  {
+    regionSlug: "mendocino",
+    producer: {
+      slug: "bonterra",
+      nameKo: "본테라 오가닉 이스테이트",
+      nameLocal: "Bonterra Organic Estates",
+    },
+    wine: {
+      slug: "bonterra-sauvignon-blanc",
+      nameKo: "본테라 소비뇽 블랑",
+      nameLocal: "Bonterra Sauvignon Blanc",
+      type: "white",
+    },
+    grapeSlugs: [{ slug: "sauvignon-blanc" }],
+    tasting: { drankOn: "2026-05-08" },
+  },
+  {
+    regionSlug: "bordeaux",
+    producer: {
+      slug: "gcf",
+      nameKo: "그랑 셰 드 프랑스",
+      nameLocal: "Les Grands Chais de France",
+    },
+    wine: {
+      slug: "lovely",
+      nameKo: "러블리",
+      nameLocal: "LOVELY",
+      type: "white",
+      classification: "Vin de France",
+    },
+    grapeSlugs: [{ slug: "sauvignon-blanc" }, { slug: "semillon" }],
+    tasting: { drankOn: "2026-05-08" },
+  },
+  {
+    regionSlug: "piemonte",
+    producer: { slug: "canti", nameKo: "칸티", nameLocal: "CANTI" },
+    wine: {
+      slug: "canti-estate-brachetto",
+      nameKo: "칸티 에스테이트 브라케토",
+      nameLocal: "CANTI Estate Brachetto",
+      type: "dessert",
+      classification: "Piemonte Brachetto DOC",
+    },
+    grapeSlugs: [{ slug: "brachetto" }],
+    tasting: { drankOn: "2026-04-24" },
+  },
+  {
+    regionSlug: "clare-valley",
+    producer: { slug: "pikes-wines", nameKo: "파이크스", nameLocal: "Pikes Wines" },
+    wine: {
+      slug: "pikes-clare-valley-riesling",
+      nameKo: "파이크스 클레어 밸리 리슬링",
+      nameLocal: "Pikes Clare Valley Riesling",
+      type: "white",
+    },
+    grapeSlugs: [{ slug: "리즐링" }],
+    tasting: { drankOn: "2026-02-27" },
+  },
+  {
+    regionSlug: "chianti-classico",
+    producer: { slug: "carpineto", nameKo: "카르피네토", nameLocal: "Carpineto" },
+    wine: {
+      slug: "carpineto-chianti-classico-riserva-2019",
+      nameKo: "카르피네토 키안티 클라시코 리세르바 2019",
+      nameLocal: "Carpineto Chianti Classico Riserva 2019",
+      type: "red",
+      classification: "Chianti Classico Riserva DOCG",
+    },
+    grapeSlugs: [{ slug: "산지오베제" }, { slug: "canaiolo" }],
+    tasting: { drankOn: "2026-02-13" },
+  },
+  {
+    regionSlug: "말보로",
+    producer: { slug: "te-henga-wines", nameKo: "테 헹가 와인즈", nameLocal: "Te Henga Wines" },
+    wine: {
+      slug: "te-henga-sauvignon-blanc-2025",
+      nameKo: "테 헹가 소비뇽 블랑 2025",
+      nameLocal: "Te Henga Sauvignon Blanc 2025",
+      type: "white",
+    },
+    grapeSlugs: [{ slug: "sauvignon-blanc" }],
+    tasting: { drankOn: "2026-02-01" },
+  },
+  {
+    regionSlug: "미국-캘리포니아-몬테레이",
+    producer: {
+      slug: "잭슨-패밀리-와이너리",
+      nameKo: "잭슨 패밀리 와이너리",
+      nameLocal: "Jackson Family Wines",
+    },
+    wine: {
+      slug: "carmel-road-pinot-noir",
+      nameKo: "카멜로드 피노누아",
+      nameLocal: "Carmel Road Pinot Noir",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "피노누아" }],
+    tasting: { drankOn: "2026-06-26" },
+  },
+  {
+    regionSlug: "australia",
+    producer: { slug: "brown-brothers", nameKo: "브라운 브라더스", nameLocal: "Brown Brothers" },
+    wine: {
+      slug: "brown-brothers-premium-cuvee",
+      nameKo: "브라운 브라더스 프리미엄 뀌베",
+      nameLocal: "Brown Brothers Premium Cuvée",
+      type: "sparkling",
+    },
+    grapeSlugs: [],
+    tasting: { drankOn: "2026-07-17" },
   },
 ];
 
