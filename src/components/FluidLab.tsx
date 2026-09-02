@@ -1455,7 +1455,8 @@ export default function FluidLab({
         let gtz = 0;
         if (autoSwirl) {
           // 자동 스월: 잔 기울기를 원으로 3바퀴(진폭 ramp in/out).
-          const TOTAL = 2.0;
+          // 3바퀴/2.7초 ≈ 1회전 0.9초(초당 1.1바퀴) — 사람이 손으로 스월하는 속도.
+          const TOTAL = 2.7;
           const ROT = 3;
           const ph = (2 * Math.PI * ROT * autoSwirlT) / TOTAL;
           const env = Math.max(
