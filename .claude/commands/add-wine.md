@@ -31,6 +31,7 @@ description: 준 와인을 사이트에 추가 — 상세·산지·생산자·�
      - 이미 있는 와인(재구매/추가 시음)은 `ENTRIES` 에 항목만 더한다(와인·생산자·산지는 재사용).
    - `WINE_DETAILS`: `{ abv?, notesKo }` — 시음 포인트는 "이 와인을 마실 때 무엇에
      주목할지"(첫 향→입안→여운, 온도·잔, 놓치기 쉬운 점). 웹 검증, 자연스러운 한국어.
+     **작성 원칙 전문: `docs/wine-notes-style.md`** (반드시 이 톤·구조로).
 
 3. **큐레이션 (해당 산지/생산자/품종이 없으면 추가)**
    - `src/features/wine/region-info.ts` — `RegionDetail { desc, climate?, soil?, classification?, keyGrapes?, styles? }`. 키=한국어 산지명(regionName.includes 매칭).
