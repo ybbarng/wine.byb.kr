@@ -96,6 +96,7 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
 
   return (
     <WineDetailView
+      variant="shell"
       absorb={absorb}
       glass={glass}
       country={country}
