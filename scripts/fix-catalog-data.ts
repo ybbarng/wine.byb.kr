@@ -36,6 +36,9 @@ async function main() {
   await setType("tosti-moscato-d-asti", "dessert", "#e8d98a"); // 옅은 황금(약발포 스위트)
   await setType("patricius-tokaji-late-harvest-katinka", "dessert", "#d9a63c"); // 늦수확 호박빛
   await setType("fontanafredda-le-fronde-brachetto-dacqui", "dessert", "#a8324a"); // 브라케토 밝은 체리레드
+  await setType("bigios-moscato-passion-fruit", "dessert", "#ecd98f"); // 모스카토+패션프루트 옅은 황금
+  await setType("tosti-moscato-black-edition-spumante", "dessert", "#ecdd8c"); // 모스카토 스푸만테 옅은 황금
+  await setType("canti-estate-brachetto", "dessert", "#a8324a"); // 브라케토 밝은 체리레드
 
   // 3) 지저분한 산지명 정리(뿔리아 — 신퀀타·신퀀티나·까를로 사니 공용)
   await db.region
