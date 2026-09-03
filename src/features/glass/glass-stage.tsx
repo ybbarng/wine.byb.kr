@@ -20,6 +20,7 @@ import { useGlassOptional } from "./glass-context";
 const CANVAS_RENDERED = "#bda588";
 const SLIDE_MS = 700; // 잔 슬라이드 인/아웃
 const MOVE_MS = 700; // 홈→상세에서 창이 이동·축소하는 시간
+const REVEAL_MS = 500; // 콘텐츠 fade-in 시간(WineDetailView 의 duration-500 과 맞춤)
 
 // 창(프레임)의 위치·크기: 홈은 화면 좌우로 넓게(잔이 넓은 공간을 미끄러져 화면 끝에서
 // 자연스럽게 사라지도록), 상세는 왼쪽 칸/상단(모바일). 잔 자체 크기는 창 높이에 맞춰
@@ -106,6 +107,9 @@ export function GlassStage() {
   }));
   const [exiting, setExiting] = useState<(Pane & { dir: Dir }) | null>(null);
   const [enterDir, setEnterDir] = useState<Dir | null>(null);
+  // 창(프레임)의 홈 여부를 pathname 과 분리해 상태로 든다. 상세→홈 역순에서 창이
+  // 바로 홈으로 튀지 않고, 잔 교체가 끝난 뒤 홈 위치로 이동하도록 시점을 늦추기 위함.
+  const [frameHome, setFrameHome] = useState(isHome);
 
   const curRef = useRef(current);
   curRef.current = current;
@@ -114,6 +118,7 @@ export function GlassStage() {
   const moveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const frameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const glass = ctx?.state.glass;
   const absorb = ctx?.state.absorb;
@@ -146,6 +151,7 @@ export function GlassStage() {
     if (moveTimer.current) clearTimeout(moveTimer.current);
     if (exitTimer.current) clearTimeout(exitTimer.current);
     if (revealTimer.current) clearTimeout(revealTimer.current);
+    if (frameTimer.current) clearTimeout(frameTimer.current);
 
     // 잔을 교체(이전 잔은 swapDir 쪽으로 나가고, 새 잔은 반대편에서 들어온다).
     const startSwap = (from: Pane, swapDir: Dir) => {
@@ -159,21 +165,32 @@ export function GlassStage() {
       }, SLIDE_MS);
     };
 
-    // 홈 → 상세: 순서대로 — ① 창이 왼쪽으로 이동·축소(MOVE_MS) → ② 잔 교체 슬라이드
-    // (SLIDE_MS) → ③ 상세 콘텐츠 fade-in. 각 단계가 겹치지 않게 시간을 벌린다.
+    // 홈 → 상세: 순서대로 — ① 창이 왼쪽으로 이동·축소(MOVE_MS) → ② 콘텐츠 먼저
+    // fade-in(REVEAL_MS) → ③ 잔 교체 슬라이드. 잔이 빈 배경이 아니라 채워진 화면
+    // 위에서 넘어가도록 콘텐츠를 앞세운다.
     if (wasHome && !isHome) {
       setReveal?.(false); // 페인트 전에 콘텐츠 숨김
+      setFrameHome(false); // ① 창을 왼쪽으로 이동·축소 시작
       moveTimer.current = setTimeout(() => {
-        // ② 창 이동이 끝나면 잔 교체
-        startSwap(curRef.current, "left");
-        // ③ 잔 교체가 끝나면 콘텐츠 등장
-        revealTimer.current = setTimeout(() => setReveal?.(true), SLIDE_MS);
+        setReveal?.(true); // ② 창 이동이 끝나면 콘텐츠 먼저 등장
+        revealTimer.current = setTimeout(() => {
+          startSwap(curRef.current, "left"); // ③ 콘텐츠가 뜬 뒤 잔 교체
+        }, REVEAL_MS);
       }, MOVE_MS);
       return;
     }
 
-    // 상세 → 상세(및 뒤로 가기): 창 고정, 콘텐츠는 계속 보이고, 바로 잔 교체.
+    // 상세 → 홈(역순): ① 잔부터 홈 잔으로 교체(창은 아직 상세 위치) → ② 잔 교체가
+    // 끝나면 창을 홈 위치로 이동·확대. 상세 콘텐츠는 홈 전환으로 이미 사라진 상태다.
+    if (!wasHome && isHome) {
+      startSwap(cur, "right"); // 뒤로 가기 = 오른쪽으로 나가고 왼쪽에서 홈 잔 등장
+      frameTimer.current = setTimeout(() => setFrameHome(true), SLIDE_MS);
+      return;
+    }
+
+    // 상세 → 상세: 창 고정(frameHome 그대로), 콘텐츠는 계속 보이고, 바로 잔 교체.
     setReveal?.(true);
+    setFrameHome(false);
     startSwap(cur, dir);
   }, [glass, absorb, isHome, pathname, setReveal]);
 
@@ -182,6 +199,7 @@ export function GlassStage() {
       if (moveTimer.current) clearTimeout(moveTimer.current);
       if (exitTimer.current) clearTimeout(exitTimer.current);
       if (revealTimer.current) clearTimeout(revealTimer.current);
+      if (frameTimer.current) clearTimeout(frameTimer.current);
     };
   }, []);
 
@@ -189,7 +207,7 @@ export function GlassStage() {
 
   return (
     <div
-      className={`pointer-events-none absolute z-10 overflow-hidden rounded-2xl transition-all ease-in-out ${frameClass(isHome)}`}
+      className={`pointer-events-none absolute z-10 overflow-hidden rounded-2xl transition-all ease-in-out ${frameClass(frameHome)}`}
       style={{ background: CANVAS_RENDERED, transitionDuration: `${MOVE_MS}ms` }}
     >
       {exiting ? (
