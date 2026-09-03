@@ -14,13 +14,23 @@ export type GlassState = {
 // 홈 기본 잔(메를로 색·보르도 잔). 상세에서 홈으로 돌아오면 이 값으로 복귀한다.
 export const HOME_GLASS: GlassState = { absorb: [16, 78, 98], glass: 1, swirlScale: 0.8 };
 
-type Ctx = { state: GlassState; setGlass: (s: GlassState) => void };
+type Ctx = {
+  state: GlassState;
+  setGlass: (s: GlassState) => void;
+  // 상세 콘텐츠(지도·글)를 화면에 보일지. 홈→상세 진입 때 창(캔버스)이 왼쪽으로
+  // 이동하는 동안은 false 로 숨겨 겹침을 막고, 이동이 끝나면 true 로 fade-in 한다.
+  revealContent: boolean;
+  setRevealContent: (v: boolean) => void;
+};
 const GlassContext = createContext<Ctx | null>(null);
 
 export function GlassProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GlassState>(HOME_GLASS);
+  const [revealContent, setRevealContent] = useState(true);
   return (
-    <GlassContext.Provider value={{ state, setGlass: setState }}>{children}</GlassContext.Provider>
+    <GlassContext.Provider value={{ state, setGlass: setState, revealContent, setRevealContent }}>
+      {children}
+    </GlassContext.Provider>
   );
 }
 

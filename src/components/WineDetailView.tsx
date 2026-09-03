@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { type ReactNode, useEffect, useState } from "react";
-import { GlassSetter } from "@/features/glass/glass-context";
+import { GlassSetter, useGlassOptional } from "@/features/glass/glass-context";
 import { RegionMap } from "@/features/wine/region-map";
 import { ShowcaseHeader } from "./ShowcaseHeader";
 
@@ -64,6 +64,11 @@ export function WineDetailView({
   }, []);
   const swirlScale = isDesktop ? 0.5 : 0.8;
 
+  // shell 에서 홈→상세로 막 들어오면, 창(캔버스)이 왼쪽으로 이동하는 동안 콘텐츠를
+  // 숨겼다가(revealContent=false) 이동이 끝나면 fade-in 한다. standalone 은 항상 보인다.
+  const glassCtx = useGlassOptional();
+  const reveal = variant === "shell" ? (glassCtx?.revealContent ?? true) : true;
+
   const hasMap = country != null || fallback != null;
   const map = hasMap ? (
     <RegionMap
@@ -89,7 +94,12 @@ export function WineDetailView({
 
   const body = (
     // 데스크톱: 한 화면 3칸(글라스·지도·상세). 모바일: 세로로 쌓고 페이지가 스크롤된다.
-    <div className="flex flex-col gap-4 px-4 pb-10 pt-20 md:absolute md:inset-x-0 md:bottom-0 md:top-16 md:flex-row md:px-6 md:pb-6 md:pt-0">
+    // reveal=false 동안(홈→상세 창 이동 중)에는 콘텐츠를 숨겼다가 fade-in 한다.
+    <div
+      className={`flex flex-col gap-4 px-4 pb-10 pt-20 transition-opacity duration-500 ease-out md:absolute md:inset-x-0 md:bottom-0 md:top-16 md:flex-row md:px-6 md:pb-6 md:pt-0 ${
+        reveal ? "opacity-100" : "pointer-events-none opacity-0"
+      }`}
+    >
       {/* 글라스 — 모바일은 고정 높이, 데스크톱은 왼쪽 칸 (shell 이면 셸 잔이 겹쳐 옴) */}
       <div
         className={`relative h-72 w-full shrink-0 md:h-auto md:w-[19%] md:min-w-[180px] ${glassOrder}`}

@@ -21,10 +21,12 @@ const CANVAS_RENDERED = "#bda588";
 const SLIDE_MS = 700; // 잔 슬라이드 인/아웃
 const MOVE_MS = 700; // 홈→상세에서 창이 이동·축소하는 시간
 
-// 창(프레임)의 위치·크기: 홈은 화면 중앙 크게, 상세는 왼쪽 칸/상단(모바일).
+// 창(프레임)의 위치·크기: 홈은 화면 좌우로 넓게(잔이 넓은 공간을 미끄러져 화면 끝에서
+// 자연스럽게 사라지도록), 상세는 왼쪽 칸/상단(모바일). 잔 자체 크기는 창 높이에 맞춰
+// 고정 비율이라 창 폭이 넓어도 커지지 않고 중앙에 놓인다.
 function frameClass(isHome: boolean) {
   return isHome
-    ? "left-1/2 top-[6vh] h-[76vh] w-[68vh] max-w-full -translate-x-1/2"
+    ? "inset-x-0 top-[6vh] h-[76vh]"
     : "left-4 right-4 top-20 h-72 md:left-6 md:right-auto md:top-16 md:bottom-6 md:h-auto md:w-[19%] md:min-w-[180px]";
 }
 
@@ -77,9 +79,10 @@ function GlassPane({
         transitionDuration: `${SLIDE_MS}ms`,
       }}
     >
-      {/* 프로토타입 잔(3D FluidLab 자리): 단색 블록 + 잔 종류 번호 */}
+      {/* 프로토타입 잔(3D FluidLab 자리): 단색 블록 + 잔 종류 번호. 창 높이에 맞춘
+          고정 비율(aspect)이라 창 폭이 넓어도 커지지 않고 중앙에 놓인다. */}
       <div
-        className="flex h-4/5 w-3/5 flex-col items-center justify-center rounded-[45%] text-white shadow-xl"
+        className="flex aspect-[3/5] h-4/5 max-w-[90%] flex-col items-center justify-center rounded-[45%] text-white shadow-xl"
         style={{ background: paneColor(pane.absorb) }}
       >
         <span className="text-sm font-medium opacity-90">잔 #{pane.glass}</span>
@@ -110,6 +113,7 @@ export function GlassStage() {
 
   const glass = ctx?.state.glass;
   const absorb = ctx?.state.absorb;
+  const setReveal = ctx?.setRevealContent;
 
   useEffect(() => {
     if (glass == null || absorb == null) return;
@@ -149,16 +153,22 @@ export function GlassStage() {
       }, SLIDE_MS);
     };
 
-    // 홈 → 상세: 창이 먼저 왼쪽으로 이동·축소(frameClass 가 isHome=false 로 전환)한 뒤,
-    // 이동이 끝나면 잔을 교체한다.
+    // 홈 → 상세: 창이 먼저 왼쪽으로 이동·축소(frameClass 가 isHome=false 로 전환)하는
+    // 동안 상세 콘텐츠를 숨겨(겹침 방지) 두었다가, 이동이 끝나면 잔을 교체하고 콘텐츠를
+    // fade-in 한다.
     if (wasHome && !isHome) {
-      moveTimer.current = setTimeout(() => startSwap(curRef.current, "left"), MOVE_MS);
+      setReveal?.(false);
+      moveTimer.current = setTimeout(() => {
+        startSwap(curRef.current, "left");
+        setReveal?.(true);
+      }, MOVE_MS);
       return;
     }
 
-    // 상세 → 상세(및 뒤로 가기): 창 고정, 바로 잔 교체.
+    // 상세 → 상세(및 뒤로 가기): 창 고정, 콘텐츠는 계속 보이고, 바로 잔 교체.
+    setReveal?.(true);
     startSwap(cur, dir);
-  }, [glass, absorb, isHome, pathname]);
+  }, [glass, absorb, isHome, pathname, setReveal]);
 
   useEffect(() => {
     return () => {
