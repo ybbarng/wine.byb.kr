@@ -981,6 +981,17 @@ export default function FluidLab({
         slideX: 0,
         slideTarget: 0,
         exiting: false,
+        // 교차 슬라이드(addGlass/slideOut)는 시간 기반 ease-in-out(가속→등속→감속)로
+        // 움직인다. slideFrom=출발 위치, slideTo=도착 위치, slideT=진행(0~1),
+        // slideDur=총 시간(초), sliding=진행 중 여부. 손 슬라이더 경로는 지수 이징을 쓴다.
+        slideFrom: 0,
+        slideTo: 0,
+        slideT: 0,
+        slideDur: 0.7,
+        sliding: false,
+        // 슬라이드 가속도 수치미분용 — 이전 두 프레임의 slideX.
+        slidePrev1: 0,
+        slidePrev2: 0,
         // legs 배열/텍스처 — setupGlass 에서 채움
         pwCol: null,
         wetTopArr: new Float32Array(LEG_NA),
@@ -1596,6 +1607,17 @@ export default function FluidLab({
       gg.legTex?.dispose();
     }
 
+    // 교차 슬라이드(가속→등속→감속)를 시작한다. 현재 slideX 에서 to 까지
+    // 시간 기반 smootherstep 으로 움직이며, 그 가속도가 액체 슬로싱을 구동한다.
+    function startCrossSlide(gg: GlassRuntime, to: number) {
+      gg.slideFrom = gg.slideX;
+      gg.slideTo = to;
+      gg.slideTarget = to;
+      gg.slideT = 0;
+      gg.slideDur = 0.7;
+      gg.sliding = true;
+    }
+
     // ── imperative API (lab 검증용) ─────────────────────────────────────
     // 반대편 화면 밖에서 slideTarget 0 으로 이징 진입하는 새 잔을 추가한다.
     function addGlass(
@@ -1606,8 +1628,13 @@ export default function FluidLab({
       const gg = buildGlass(glassTypeArg, absorbArg);
       const off = offscreenSlide();
       gg.slideX = fromDir === "right" ? off : -off; // 화면 밖에서 시작
-      gg.slideTarget = 0; // 중앙으로 이징
+      gg.slideTarget = 0; // 중앙으로 진입
+      // 시간 기반 ease-in-out(가속→등속→감속) 교차 슬라이드 시작.
+      startCrossSlide(gg, 0);
       applySlide(gg);
+      // 가속도 수치미분 초기화(첫 두 프레임은 가속 0으로 처리).
+      gg.slidePrev1 = gg.slideX;
+      gg.slidePrev2 = gg.slideX;
       scene.add(gg.glassGroup);
       glasses.push(gg);
     }
@@ -1615,7 +1642,7 @@ export default function FluidLab({
     function slideOut(dir: "left" | "right") {
       const off = offscreenSlide();
       for (const gg of glasses) {
-        gg.slideTarget = dir === "right" ? off : -off;
+        startCrossSlide(gg, dir === "right" ? off : -off);
         gg.exiting = true; // 도착하면 dispose 대상
       }
     }
@@ -1652,11 +1679,27 @@ export default function FluidLab({
         // 잔별 GlassRuntime 을 가리키고, 입력(gtx/gtz)이 활성 잔에만 들어갈 뿐.
         for (const g of glasses) {
           const isActive = g === active;
-          // 슬라이드 이징: 각 잔의 slideX 를 slideTarget 으로 매 프레임 이징(리렌더 없이).
-          // 활성(중앙) 잔은 lab 슬라이더 값을 목표로 삼아 손으로 검증할 수 있게 한다.
-          // 단 내보내는(exiting) 잔은 슬라이더가 목표를 덮지 않게 둔다.
-          if (isActive && !g.exiting) g.slideTarget = slideXRef.current;
-          g.slideX += (g.slideTarget - g.slideX) * 0.12;
+          // 슬라이드 이징 — 두 종류.
+          //  ① 교차(addGlass/slideOut): 시간 기반 ease-in-out(가속→등속→감속).
+          //     smootherstep 으로 slideFrom→slideTo. 그 가속도가 액체를 출렁이게 한다.
+          //  ② 손 슬라이더(잔 1개, 활성): 연속 조작이라 지수 이징(부드럽게 따라가기).
+          if (g.sliding) {
+            g.slideT = Math.min(1, g.slideT + dt / g.slideDur);
+            const t = g.slideT;
+            const s = t * t * t * (t * (t * 6 - 15) + 10); // smootherstep
+            g.slideX = g.slideFrom + (g.slideTo - g.slideFrom) * s;
+            if (g.slideT >= 1) g.sliding = false;
+          } else {
+            // 활성(중앙) 잔은 lab 슬라이더 값을 목표로 삼아 손으로 검증할 수 있게 한다.
+            // 단 내보내는(exiting) 잔은 슬라이더가 목표를 덮지 않게 둔다.
+            if (isActive && !g.exiting && glasses.length === 1) g.slideTarget = slideXRef.current;
+            g.slideX += (g.slideTarget - g.slideX) * 0.14;
+          }
+          // 슬라이드 가속도(수치 2차 미분) — 액체 관성 구동에 쓴다. 첫 두 프레임은
+          // 이전 값이 채워지지 않아 0 처리(slidePrev1/2 를 slideX 로 초기화해 둔다).
+          const slideAccel = (g.slideX - 2 * g.slidePrev1 + g.slidePrev2) / (dt * dt);
+          g.slidePrev2 = g.slidePrev1;
+          g.slidePrev1 = g.slideX;
           // ── 스월링 ── 드래그로 잔(그룹)을 기울이고, 액체 수면은 월드 수평 유지.
           // 잔 = 마우스 추종. 드래그 시작점 기준 오프셋으로 기울고, 놓으면 세워진다.
           const GAMP = 0.007; // px → rad
@@ -1725,6 +1768,10 @@ export default function FluidLab({
           // 진폭이 곧 오목 포물면 깊이라, 덜 보정하면 표면이 과하게 평평해진다.
           const COUPLE = 5.0; // 잔 움직임 → 와인 슬로싱 결합(세게 흔들면 크게)
           const SLOSH_MAX = 0.78; // 최대 수면 기울기↑ — 세게 흔들수록 더 세워짐
+          // 슬라이드 가속도 → 슬로싱 결합. 잔이 옆으로 가속하면 안의 액체가 관성으로
+          // 반대쪽으로 쏠린다(출발 때 뒤로, 도착 때 앞으로 쏠렸다 잦아듦). 부호·크기는
+          // lab 캡처로 튜닝하므로 상수로 둔다. sloshX/Z 는 SLOSH_MAX 로 clamp 돼 폭주 없음.
+          const COUPLE_SLIDE = 0.02;
           // 두 축 결합 부호는 표면 크레스트가 잔 스월과 "같은 방향"으로 돌게 맞춘다
           // (와인은 잔을 쫓아감). 좌우(roll) 항은 그대로, 앞뒤(pitch) 항 부호만 뒤집어
           // 회전 방향을 바로잡되 선형 정렬은 유지.
@@ -1732,6 +1779,16 @@ export default function FluidLab({
           const damp = 2 * ZETA * OMEGA + QUAD * sloshSpeed; // 속도(진폭) 의존 감쇠
           g.sloshVX += (-(OMEGA * OMEGA) * g.sloshX - damp * g.sloshVX) * dt - COUPLE * gvz * dt;
           g.sloshVZ += (-(OMEGA * OMEGA) * g.sloshZ - damp * g.sloshVZ) * dt + COUPLE * gvx * dt;
+          // 슬라이드 관성 항 추가(스월 수식·상수는 위 그대로 유지). slideX 는 화면 수평
+          // = 카메라 화면-오른쪽 벡터를 world y=0 에 투영한 방향(applySlide 와 동일).
+          // 슬라이드 가속의 world 성분으로 나눠, 잔이 +방향 가속하면 액체는 −방향으로 쏠림.
+          // sloshX/Z 는 각각 world x·z 수면 기울기라 aWx→sloshVX, aWz→sloshVZ 로 직접 매핑.
+          const rElS = camera.matrixWorld.elements;
+          const rlenS = Math.hypot(rElS[0], rElS[2]) || 1;
+          const aWx = (rElS[0] / rlenS) * slideAccel;
+          const aWz = (rElS[2] / rlenS) * slideAccel;
+          g.sloshVX += -COUPLE_SLIDE * aWx * dt;
+          g.sloshVZ += -COUPLE_SLIDE * aWz * dt;
           g.sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, g.sloshX + g.sloshVX * dt));
           g.sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, g.sloshZ + g.sloshVZ * dt));
           // 잔 기울기 적용(마우스 추종).
