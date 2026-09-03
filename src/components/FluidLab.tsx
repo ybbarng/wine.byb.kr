@@ -253,12 +253,16 @@ export default function FluidLab({
   bgColor,
   swirlScale,
   bgIntensity,
+  slideX,
 }: {
   glassType?: number;
   wineAbsorb?: [number, number, number];
   bgColor?: string; // 지정 시 배경을 이 단색으로(사이트 배경과 매끄럽게). 미지정=따뜻한 HDR.
   swirlScale?: number; // 최대 스월 기울기 배율(기본 1). 좁은 컨테이너(홈)에선 <1 로 줄여 영역 이탈 방지.
   bgIntensity?: number; // 배경(HDR) 밝기 배율(기본 1). 좁은 프레임이 어두운 영역을 비출 때 ↑.
+  // 잔을 캔버스 안에서 x축(world)으로 옮긴다. 0=중앙. 컨베이어 슬라이드 검증용.
+  // y(높이)·회전(스월)은 건드리지 않으므로 위아래 흔들림이 생기지 않는다.
+  slideX?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // 와인 흡수계수 uniform(실시간 색 변경). setup 에서 채워지고 prop 으로 갱신.
@@ -278,6 +282,12 @@ export default function FluidLab({
   useEffect(() => {
     swirlRef.current = swirlScale ?? 1;
   }, [swirlScale]);
+
+  // 슬라이드 x 위치 — 매 프레임 render 가 glassGroup.position.x 에 반영(리렌더/재초기화 없음).
+  const slideXRef = useRef(slideX ?? 0);
+  useEffect(() => {
+    slideXRef.current = slideX ?? 0;
+  }, [slideX]);
 
   // 색(wineAbsorb)은 위 별도 effect 로 실시간 반영 — 여기(씬 셋업)는 glassType 변경 시에만 재빌드.
   // biome-ignore lint/correctness/useExhaustiveDependencies: 색은 별도 effect로 실시간 반영, glassType 변경 시에만 재빌드
@@ -1525,6 +1535,15 @@ export default function FluidLab({
         sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshZ + sloshVZ * dt));
         // 잔 기울기 적용(마우스 추종).
         glassGroup.rotation.set(gTiltX, 0, gTiltZ);
+        // 슬라이드: 화면 "수평"으로 옮긴다. 카메라가 대각(-1.9,1.7,-1.9)이라 world x 를
+        // 그대로 쓰면 화면에서 위아래로 비껴 움직인다. 카메라의 화면-오른쪽 벡터를 world
+        // 수평면(y=0)에 투영한 방향으로 slideX 만큼 옮기면 화면상 순수 좌우 슬라이드가 된다.
+        {
+          const rEl = camera.matrixWorld.elements;
+          const rlen = Math.hypot(rEl[0], rEl[2]) || 1;
+          const sx = slideXRef.current;
+          glassGroup.position.set((rEl[0] / rlen) * sx, glass.worldY, (rEl[2] / rlen) * sx);
+        }
         glassGroup.updateMatrix();
         // 와인 수면 = 월드 (수평 + 슬로싱 기울기). 잔이 기울어도(회전 R) 로컬
         // 프레임에서 그 월드 평면을 표현하도록 계수 계산. a,b=슬로싱 월드 기울기.

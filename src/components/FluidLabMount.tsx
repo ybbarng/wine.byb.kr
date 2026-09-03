@@ -60,6 +60,7 @@ type WineRow = {
 export default function FluidLabMount() {
   const [color, setColor] = useState<string>(WINE_PRESETS[1].color); // 현재 색(프리셋 or 커스텀)
   const [glassIdx, setGlassIdx] = useState(WINE_PRESETS[1].glass);
+  const [slideX, setSlideX] = useState(0); // 잔 x 슬라이드 검증(-3~3, 0=중앙)
   const [wines, setWines] = useState<WineRow[]>([]);
   const [selSlug, setSelSlug] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -104,7 +105,29 @@ export default function FluidLabMount() {
 
   return (
     <div className="relative h-full w-full" style={{ backgroundColor: CANVAS_RENDERED }}>
-      <FluidLab wineAbsorb={absorb} glassType={glassIdx} bgColor={CANVAS_BG} />
+      <FluidLab wineAbsorb={absorb} glassType={glassIdx} bgColor={CANVAS_BG} slideX={slideX} />
+
+      {/* slideX 검증 슬라이더 (상단 중앙) — 잔이 x 만 부드럽게 움직이고 위아래는 없어야 */}
+      <div className="-translate-x-1/2 absolute top-3 left-1/2 z-10 flex w-64 max-w-[50vw] flex-col items-center gap-1 rounded-2xl border border-white/20 bg-black/45 p-3 backdrop-blur">
+        <span className="font-mono text-[11px] text-white/80">slideX = {slideX.toFixed(2)}</span>
+        <input
+          type="range"
+          min={-3}
+          max={3}
+          step={0.05}
+          value={slideX}
+          onChange={(e) => setSlideX(Number(e.target.value))}
+          aria-label="slideX"
+          className="w-full"
+        />
+        <button
+          type="button"
+          onClick={() => setSlideX(0)}
+          className="rounded border border-white/25 px-2 py-0.5 text-[11px] text-white/70 hover:text-white"
+        >
+          가운데(0)
+        </button>
+      </div>
 
       {/* 작은 프리뷰 — 와인 페이지와 같은 평평한 웜 배경(HDR 그라데이션 없이 깔끔). */}
       <div className="absolute bottom-3 right-3 z-10 flex flex-col items-center gap-1">
