@@ -987,7 +987,7 @@ export default function FluidLab({
         slideFrom: 0,
         slideTo: 0,
         slideT: 0,
-        slideDur: 0.7,
+        slideDur: 1.3,
         sliding: false,
         // 슬라이드 가속도 수치미분용 — 이전 두 프레임의 slideX.
         slidePrev1: 0,
@@ -1583,10 +1583,13 @@ export default function FluidLab({
     // 비껴 움직인다(과거 버그). 카메라 화면-오른쪽 벡터를 world 수평면(y=0)에
     // 투영한 방향으로 slideX 만큼 옮겨야 화면상 순수 좌우 슬라이드가 된다.
     function applySlide(gg: GlassRuntime) {
+      // 잔을 "화면 x축"(카메라 뷰 평면의 오른쪽) 방향으로 옮긴다. world 수평면(y=0)으로
+      // 옮기면 대각 카메라라 화면에서 호(원근 곡선)로 굽어 보인다. 카메라 right basis
+      // (matrixWorld col0, 단위벡터)를 그대로 쓰면 잔이 화면상 순수 수평 직선으로 미끄러진다.
+      // (world y 성분(rEl[1])도 반영 — 공간상으론 비스듬하지만 화면 투영은 정확히 수평.)
       const rEl = camera.matrixWorld.elements;
-      const rlen = Math.hypot(rEl[0], rEl[2]) || 1;
       const sx = gg.slideX;
-      gg.glassGroup.position.set((rEl[0] / rlen) * sx, gg.glass.worldY, (rEl[2] / rlen) * sx);
+      gg.glassGroup.position.set(rEl[0] * sx, gg.glass.worldY + rEl[1] * sx, rEl[2] * sx);
     }
 
     // 카메라 가로 시야 기준 "화면 밖" 슬라이드 거리 — 잔이 완전히 사라질 만큼.
@@ -1614,7 +1617,7 @@ export default function FluidLab({
       gg.slideTo = to;
       gg.slideTarget = to;
       gg.slideT = 0;
-      gg.slideDur = 0.7;
+      gg.slideDur = 1.3;
       gg.sliding = true;
     }
 
@@ -1771,7 +1774,7 @@ export default function FluidLab({
           // 슬라이드 가속도 → 슬로싱 결합. 잔이 옆으로 가속하면 안의 액체가 관성으로
           // 반대쪽으로 쏠린다(출발 때 뒤로, 도착 때 앞으로 쏠렸다 잦아듦). 부호·크기는
           // lab 캡처로 튜닝하므로 상수로 둔다. sloshX/Z 는 SLOSH_MAX 로 clamp 돼 폭주 없음.
-          const COUPLE_SLIDE = 0.02;
+          const COUPLE_SLIDE = 0.08;
           // 두 축 결합 부호는 표면 크레스트가 잔 스월과 "같은 방향"으로 돌게 맞춘다
           // (와인은 잔을 쫓아감). 좌우(roll) 항은 그대로, 앞뒤(pitch) 항 부호만 뒤집어
           // 회전 방향을 바로잡되 선형 정렬은 유지.
@@ -2093,17 +2096,18 @@ export default function FluidLab({
 
       scene = new THREE.Scene();
       camera = new THREE.PerspectiveCamera(
-        40,
+        22,
         container.clientWidth / container.clientHeight,
         0.01,
-        10
+        20
       );
-      // 병(큰 편)이 옆에 있으니 줌아웃 + 잔·병 사이를 타깃으로.
-      camera.position.set(-1.9, 1.7, -1.9);
+      // 시야각을 좁혀(망원) 원근 왜곡을 줄인다 — 잔이 옆으로 슬라이드해도 기울어/휘어
+      // 보이지 않고 화면상 직선처럼 미끄러진다. FOV 를 좁힌 만큼 거리를 늘려 잔 크기 유지.
+      camera.position.set(-3.56, 3.19, -3.56);
 
       controls = new OrbitControls(camera, renderer.domElement);
       controls.minDistance = 1;
-      controls.maxDistance = 5;
+      controls.maxDistance = 12;
       controls.maxPolarAngle = Math.PI * 0.5;
       controls.target.set(0, 0.55, 0); // x=0: 글라스를 프레임 수평 중앙에
       controls.enableRotate = false; // 드래그는 카메라 회전이 아니라 스월(잔 기울임)
