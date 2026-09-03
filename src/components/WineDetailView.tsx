@@ -96,8 +96,11 @@ export function WineDetailView({
     // 데스크톱: 한 화면 3칸(글라스·지도·상세). 모바일: 세로로 쌓고 페이지가 스크롤된다.
     // reveal=false 동안(홈→상세 창 이동 중)에는 콘텐츠를 숨겼다가 fade-in 한다.
     <div
-      className={`flex flex-col gap-4 px-4 pb-10 pt-20 transition-opacity duration-500 ease-out md:absolute md:inset-x-0 md:bottom-0 md:top-16 md:flex-row md:px-6 md:pb-6 md:pt-0 ${
-        reveal ? "opacity-100" : "pointer-events-none opacity-0"
+      className={`flex flex-col gap-4 px-4 pb-10 pt-20 md:absolute md:inset-x-0 md:bottom-0 md:top-16 md:flex-row md:px-6 md:pb-6 md:pt-0 ${
+        // 숨김은 즉시(transition 없음), 등장만 fade-in — 숨겨지는 과정이 보이지 않게 한다.
+        reveal
+          ? "opacity-100 transition-opacity duration-500 ease-out"
+          : "pointer-events-none opacity-0"
       }`}
     >
       {/* 글라스 — 모바일은 고정 높이, 데스크톱은 왼쪽 칸 (shell 이면 셸 잔이 겹쳐 옴) */}

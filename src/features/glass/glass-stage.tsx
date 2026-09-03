@@ -13,7 +13,7 @@
 // 3D(FluidLab)로 바꿀 때는 이 단색 블록 자리에 잔을 넣고, 슬라이드는 CSS 대신 3D
 // 좌표 이동으로 옮긴다(나간 잔은 제거, 전환 후 좌표 재정규화).
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useGlassOptional } from "./glass-context";
 
 // 글라스 캔버스 렌더색(3D 배경이 화면에 보이는 색)과 맞춘 프레임 배경.
@@ -24,10 +24,13 @@ const MOVE_MS = 700; // 홈→상세에서 창이 이동·축소하는 시간
 // 창(프레임)의 위치·크기: 홈은 화면 좌우로 넓게(잔이 넓은 공간을 미끄러져 화면 끝에서
 // 자연스럽게 사라지도록), 상세는 왼쪽 칸/상단(모바일). 잔 자체 크기는 창 높이에 맞춰
 // 고정 비율이라 창 폭이 넓어도 커지지 않고 중앙에 놓인다.
+//
+// 주의: CSS transition 은 right/bottom/inset 의 auto 전환을 애니메이션하지 못한다.
+// 창이 부드럽게 이동·축소되도록 left·top·width·height 를 모두 명시적 길이로만 잡는다.
 function frameClass(isHome: boolean) {
   return isHome
-    ? "inset-x-0 top-[6vh] h-[76vh]"
-    : "left-4 right-4 top-20 h-72 md:left-6 md:right-auto md:top-16 md:bottom-6 md:h-auto md:w-[19%] md:min-w-[180px]";
+    ? "left-0 top-[6vh] h-[76vh] w-full"
+    : "left-4 top-20 h-72 w-[calc(100%-2rem)] md:left-6 md:top-16 md:h-[calc(100vh-5.5rem)] md:w-[19%] md:min-w-[180px]";
 }
 
 type Pane = { key: number; glass: number; absorb: [number, number, number] };
@@ -110,12 +113,14 @@ export function GlassStage() {
   const histRef = useRef<string[]>([pathname]);
   const moveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const glass = ctx?.state.glass;
   const absorb = ctx?.state.absorb;
   const setReveal = ctx?.setRevealContent;
 
-  useEffect(() => {
+  // useLayoutEffect: 페인트 전에 실행해, 홈→상세 진입 순간 콘텐츠를 먼저 숨긴다(깜빡 방지).
+  useLayoutEffect(() => {
     if (glass == null || absorb == null) return;
     const cur = curRef.current;
     const hist = histRef.current;
@@ -140,6 +145,7 @@ export function GlassStage() {
 
     if (moveTimer.current) clearTimeout(moveTimer.current);
     if (exitTimer.current) clearTimeout(exitTimer.current);
+    if (revealTimer.current) clearTimeout(revealTimer.current);
 
     // 잔을 교체(이전 잔은 swapDir 쪽으로 나가고, 새 잔은 반대편에서 들어온다).
     const startSwap = (from: Pane, swapDir: Dir) => {
@@ -153,14 +159,15 @@ export function GlassStage() {
       }, SLIDE_MS);
     };
 
-    // 홈 → 상세: 창이 먼저 왼쪽으로 이동·축소(frameClass 가 isHome=false 로 전환)하는
-    // 동안 상세 콘텐츠를 숨겨(겹침 방지) 두었다가, 이동이 끝나면 잔을 교체하고 콘텐츠를
-    // fade-in 한다.
+    // 홈 → 상세: 순서대로 — ① 창이 왼쪽으로 이동·축소(MOVE_MS) → ② 잔 교체 슬라이드
+    // (SLIDE_MS) → ③ 상세 콘텐츠 fade-in. 각 단계가 겹치지 않게 시간을 벌린다.
     if (wasHome && !isHome) {
-      setReveal?.(false);
+      setReveal?.(false); // 페인트 전에 콘텐츠 숨김
       moveTimer.current = setTimeout(() => {
+        // ② 창 이동이 끝나면 잔 교체
         startSwap(curRef.current, "left");
-        setReveal?.(true);
+        // ③ 잔 교체가 끝나면 콘텐츠 등장
+        revealTimer.current = setTimeout(() => setReveal?.(true), SLIDE_MS);
       }, MOVE_MS);
       return;
     }
@@ -174,6 +181,7 @@ export function GlassStage() {
     return () => {
       if (moveTimer.current) clearTimeout(moveTimer.current);
       if (exitTimer.current) clearTimeout(exitTimer.current);
+      if (revealTimer.current) clearTimeout(revealTimer.current);
     };
   }, []);
 
