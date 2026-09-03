@@ -478,6 +478,79 @@ export default function FluidLab({
     const innerRadiusAt = (py: number): number =>
       Math.max(outerRadiusAt(py) - glass.wallThickness, 0);
 
+    // ── 한 "잔"의 가변 상태·상수·메쉬를 하나로 묶은 런타임 객체 ──────────────
+    // 다음 단계(두 잔 컨베이어)에서 배열화하기 쉽게, 잔마다 달라지는 상태를 한
+    // 객체로 모은다. 지금은 잔이 1개라 단일 변수(glass1)로 둔다.
+    // biome-ignore lint/suspicious/noExplicitAny: TSL/three 노드·메쉬·유니폼 타입 불완전
+    type GlassRuntime = { [k: string]: any };
+    // 잔 파생 상수(잔 교체 시만 바뀜) — 배열화 대비해 객체에 함께 담는다.
+    const GLASS_WINE_BOTTOM = gdef.stemLen; // 컵 내부 바닥(=볼 바닥, 프로파일 y)
+    const GLASS_WINE_FILL = gdef.stemLen + gdef.fillLevel; // 수면(잔별 적정 채움)
+    const glass1: GlassRuntime = {
+      // 잔 파생 상수
+      glass,
+      gMaxY,
+      innerRadiusAt,
+      GLASS_WINE_BOTTOM,
+      GLASS_WINE_FILL,
+      // 파동 위상 캐시(surfWaveH 가 읽음) — 초기 수직 상태값
+      crC: 1, // cosφ (크레스트 방향)
+      crS: 0, // sinφ
+      l2c: 1, // cos(φ+w2·t) (mode-2 로브)
+      l2s: 0,
+      l3c: 1, // cos(φ+w3·t) (mode-3 로브)
+      l3s: 0,
+      // 스월 상태
+      sloshX: 0,
+      sloshZ: 0,
+      sloshVX: 0,
+      sloshVZ: 0,
+      rotSmooth: 0,
+      w2ph: 0,
+      w3ph: 0,
+      crestPh: 0,
+      spinE: 0,
+      simT: 0,
+      waveAct: 0,
+      // legs(눈물)
+      wetness: 0,
+      dripT: 0,
+      wasWet: false,
+      // 잔 기울기(마우스 추종)
+      gTiltX: 0,
+      gTiltZ: 0,
+      gPrevX: 0,
+      gPrevZ: 0,
+      // 액체 부피 상태(setupGlassWine 에서 확정)
+      liqV0: 0,
+      liqH: GLASS_WINE_FILL,
+      liqVol: 0,
+      liqFoot: 1,
+      // legs 배열/텍스처 — setupGlass 에서 채움
+      pwCol: null,
+      wetTopArr: null,
+      legTex: null,
+      // mesh/geometry/material — setup 에서 채움
+      glassMesh: null,
+      liquidMesh: null,
+      glassGroup: null,
+      liquidGeo: null,
+      liquidPosAttr: null,
+      wineBackMat: null,
+      liquidBodyMat: null,
+      // uniform 핸들 — setupGlass/setupGlassWine 에서 채움
+      glassWetU: null,
+      glassWlU: null,
+      glassDripU: null,
+      rippleActU: null,
+      rippleTimeU: null,
+      roughnessU: null,
+      absorbU,
+      // 이 잔의 상태/상수를 캡처하는 함수 — setup 에서 채움
+      surfWaveH: null,
+      rebuild: null,
+    };
+
     let bowlRmax = 0;
     for (let py = glass.bowlBottomY; py <= glass.bowlTopY; py += 0.01) {
       bowlRmax = Math.max(bowlRmax, innerRadiusAt(py));
@@ -552,7 +625,7 @@ export default function FluidLab({
       deltaPKernel: any,
       velocityKernel: any;
     let particleMesh: THREE.Mesh;
-    let glassMesh: THREE.Mesh; // 잔(직접 굴절용 — render에서 숨겼다 그림)
+    // 잔(직접 굴절용 — render에서 숨겼다 그림)은 이제 glass1.glassMesh 에 담긴다.
     let fluidScene: THREE.Scene;
     // biome-ignore lint/suspicious/noExplicitAny: TSL RenderTarget/QuadMesh
     let depthRT: any, sceneRT: any; // sceneRT: 잔 뺀 장면(굴절 샘플용)
@@ -876,24 +949,12 @@ export default function FluidLab({
 
     // 와인 legs(눈물) — 유리 벽 젖은 자리에서 투과 배경을 와인색으로 흡수(감쇠).
     // 발광 아님. 젖음=0 이면 감쇠 없음 → 마른 유리와 동일. render 가 갱신.
-    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
-    let glassWetU: any = null; // 젖음(0~1, 스월 후 스파이크→감쇠)
-    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
-    let glassWlU: any = null; // 수위선(프로파일 y)
-    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
-    let glassDripU: any = null; // 흘러내림 진행(0→1)
-    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
-    let rippleActU: any = null; // 미세 잔물결 활성도(0=정지 매끈 ~ 1=스월 시)
-    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
-    let rippleTimeU: any = null; // 잔물결 이동·명멸용 시각(렌더 루프서 simT 로 갱신)
-    // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
-    let roughnessU: any = null; // 표면 거칠기(스월 중↑ — 오목면 거울 과녁 흐림)
+    // 유니폼 핸들(glassWetU/glassWlU/glassDripU/rippleActU/rippleTimeU/roughnessU)과
+    // 도달 최고점 배열·텍스처(wetTopArr/legTex)는 이제 glass1 에 담긴다.
     // 둘레별 도달 최고점(수위선 위, 프로파일). 자국은 와인이 실제 오른 방향에만
     // 생긴다(왼쪽 기울이면 왼쪽만). 스칼라 대신 둘레 배열→텍스처로 셰이더에 전달.
     const LEG_NA = 96;
-    const wetTopArr = new Float32Array(LEG_NA);
-    // biome-ignore lint/suspicious/noExplicitAny: DataTexture
-    let legTex: any = null;
+    glass1.wetTopArr = new Float32Array(LEG_NA);
 
     function setupGlass() {
       const curve = new THREE.CatmullRomCurve3(
@@ -925,24 +986,35 @@ export default function FluidLab({
       // ── 와인 legs(눈물) ── 젖은 자리에서 투과 감쇠(attenuation)를 와인색으로 —
       // 유리를 통과하는 배경 빛을 흡수해 어둡게·붉게 물들인다(발광 아님). 마른 곳은
       // 감쇠 없음(맑음). 수위선 위 벽에 막(아치)+흘러내리는 줄기를 만든다.
-      glassWetU = uniform(0);
-      glassWlU = uniform(GLASS_WINE_FILL);
-      glassDripU = uniform(0);
+      glass1.glassWetU = uniform(0);
+      glass1.glassWlU = uniform(GLASS_WINE_FILL);
+      glass1.glassDripU = uniform(0);
       // 둘레별 도달 최고점 텍스처(1D, R=수위선 위 높이). 방향별로 자국 범위가 다름.
-      legTex = new THREE.DataTexture(wetTopArr, LEG_NA, 1, THREE.RedFormat, THREE.FloatType);
+      const legTex = new THREE.DataTexture(
+        glass1.wetTopArr,
+        LEG_NA,
+        1,
+        THREE.RedFormat,
+        THREE.FloatType
+      );
       legTex.magFilter = THREE.LinearFilter;
       legTex.minFilter = THREE.LinearFilter;
       legTex.wrapS = THREE.RepeatWrapping;
       legTex.needsUpdate = true;
+      glass1.legTex = legTex;
       const filmMask = Fn(() => {
         const yl = positionLocal.y.toVar(); // 프로파일 높이(0~2.92)
-        const up = yl.sub(glassWlU).toVar(); // 수위선 위 높이
+        const up = yl.sub(glass1.glassWlU).toVar(); // 수위선 위 높이
         const th = atan(positionLocal.z, positionLocal.x).toVar(); // -π..π
         // 이 방위(θ)에서 와인이 실제 도달한 최고점(절대 프로파일 y)을 텍스처에서
         // 읽고, 수위선 위 높이로 변환. 오르지 않은 방향은 top≈0 → 자국 없음.
         const u = th.div(Math.PI * 2).toVar(); // 컬럼 인덱싱(RepeatWrapping)
         // 최고점의 4/5 높이에 자국 위쪽이 오게(peak 그대로면 조금 높아 보임).
-        const top = texture(legTex, vec2(u, 0.5)).x.sub(glassWlU).max(0).mul(0.8).toVar();
+        const top = texture(glass1.legTex, vec2(u, 0.5))
+          .x.sub(glass1.glassWlU)
+          .max(0)
+          .mul(0.8)
+          .toVar();
         // 자국은 "그 방위의 도달점 ~ 수위선" 범위에만.
         const topGate = smoothstep(float(0.02), float(0.05), top).toVar(); // 오른 방위만
         // 밴드 아래 경계를 수면에서 살짝 띄운다(0.03~0.07). 수면 바로 위까지 막이
@@ -958,7 +1030,7 @@ export default function FluidLab({
         // ── 흘러내림 애니메이션 ── 방울 머리가 최고점(frac=1)→수위선(0)으로 내려간다.
         // 줄기마다 시차(phase)를 둬 동시에 안 내려감. dripT(glassDripU) 진행.
         const phase = sin(th.mul(7.0)).mul(0.5).add(0.5).mul(0.4).toVar();
-        const prog = glassDripU.sub(phase).clamp(0, 1).toVar();
+        const prog = glass1.glassDripU.sub(phase).clamp(0, 1).toVar();
         const head = float(1).sub(prog).toVar(); // 내려가는 아래 끝
         const stripe = pow(sin(th.mul(11.0)).max(0), float(8.0)).toVar();
         // 자취: 머리 위쪽(frac>head)이 젖어 있다. 머리: 밝은 방울.
@@ -966,7 +1038,7 @@ export default function FluidLab({
         const dH = frac.sub(head).div(0.05).toVar();
         const bead = dH.mul(dH).negate().exp().toVar();
         const leg = stripe.mul(trail.mul(0.35).add(bead.mul(0.85))).toVar();
-        return glassWetU
+        return glass1.glassWetU
           .mul(topGate)
           .mul(bandGate)
           .mul(archLine.mul(0.4).add(leg.mul(0.9)))
@@ -981,11 +1053,12 @@ export default function FluidLab({
         const bump = vec3(dFdx(m), dFdy(m), float(0)).mul(-7.0).toVar();
         return normalize(normalView.add(bump));
       })();
-      glassMesh = new THREE.Mesh(geometry, material);
+      const glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
       glassMesh.frustumCulled = false;
       scene.add(glassMesh);
+      glass1.glassMesh = glassMesh;
     }
 
     // 실제 750ml 와인병 — 잔 옆에 세워서(반투명) 렌더. 잔 크기 대비 정확한 비율.
@@ -1084,11 +1157,7 @@ export default function FluidLab({
     // 잔 속 와인 — 표면·부피 기반. 잔 내벽 프로파일 lathe 를 "수면까지만" 생성
     // (클립은 WebGPU 노드머티리얼에서 안 먹어 지오메트리로 제한) + 수면 disc.
     // 깊은 버건디 + 프레넬 가장자리(얇은 곳 밝은 레드 = 흡수 근사).
-    const GLASS_WINE_BOTTOM = gdef.stemLen; // 컵 내부 바닥(=볼 바닥, 프로파일 y)
-    const GLASS_WINE_FILL = gdef.stemLen + gdef.fillLevel; // 수면(잔별 적정 채움)
-    let liquidMesh: THREE.Mesh;
-    let liquidGeo: THREE.BufferGeometry;
-    let glassGroup: THREE.Group; // 유리+액체를 함께 기울이는 그룹(드래그 스월)
+    // GLASS_WINE_BOTTOM/GLASS_WINE_FILL 은 glass1 에 담겼다(잔 파생 상수).
     // 액체 그리드(파라메트릭): 각도 L_SEG × (벽 L_NV + 표면 L_NS). 매 프레임
     // 각도별 수위선을 구해 "기운 잔 안 + 수평면 아래"로 다시 채운다(강체 아님).
     const L_SEG = 96;
@@ -1103,26 +1172,22 @@ export default function FluidLab({
       L_SIN.push(Math.sin(ang));
     }
     // 방위별 수위선(벽∩와인표면 높이) — legs 가 실제 젖은 높이로 생기게(rebuildLiquid 채움).
-    const pwCol = new Float32Array(L_SEG + 1);
+    glass1.pwCol = new Float32Array(L_SEG + 1);
     // 스월 회전 파동(자연스러운 스월). 고정 방향 평면파(연못 물결처럼 교차 →
     // 부자연)를 버리고, 잔을 도는 응집 파동으로 대체:
     //  - mode-1: 벽을 타고 오르는 크레스트(rp² · cos(θ-φ)), φ=스월 방향.
     //  - mode-2,3: 그 위를 천천히 도는 회전 로브(rp · cos(mθ-φ-w·t)).
-    // 정지(waveAct=0)=평면. 위상 트리그는 render 에서 프레임마다 갱신.
+    // 정지(waveAct=0)=평면. 위상 트리그(crC/crS/l2c…l3s)는 glass1 에 담기고
+    // render 에서 프레임마다 갱신.
     const WAMP1 = 0.08; // 벽 크레스트(mode-1)
     const WAMP2 = 0.024; // mode-2 로브
     const WAMP3 = 0.014; // mode-3 로브
     const WCREST_SHARP = 0.3; // Stokes 2차 — 주 마루 뾰족·골 완만(troch.js 검증, 평균 0)
     const W2SPD = 3.0; // mode-2 회전 속도
     const W3SPD = 4.2; // mode-3 회전 속도
-    let crC = 1; // cosφ (크레스트 방향)
-    let crS = 0; // sinφ
-    let l2c = 1; // cos(φ+w2·t) (mode-2 로브)
-    let l2s = 0;
-    let l3c = 1; // cos(φ+w3·t) (mode-3 로브)
-    let l3s = 0;
     // 표면 파동 높이. c,s=cosθ,sinθ(컬럼각), c2..s3=2θ·3θ 트리그, rp=r/rw(0중심~1벽).
-    function surfWaveH(
+    // 이 잔(glass1)의 파동 위상·활성도를 캡처해 render/rebuildLiquid 가 공유한다.
+    glass1.surfWaveH = (
       c: number,
       s: number,
       c2: number,
@@ -1130,67 +1195,41 @@ export default function FluidLab({
       c3: number,
       s3: number,
       rp: number
-    ) {
-      if (waveAct <= 1e-4) return 0;
-      const m1 = c * crC + s * crS; // cos(θ-φ)
-      const m2 = c2 * l2c + s2 * l2s; // cos(2θ-φ-w2·t)
-      const m3 = c3 * l3c + s3 * l3s; // cos(3θ-φ-w3·t)
+    ): number => {
+      if (glass1.waveAct <= 1e-4) return 0;
+      const m1 = c * glass1.crC + s * glass1.crS; // cos(θ-φ)
+      const m2 = c2 * glass1.l2c + s2 * glass1.l2s; // cos(2θ-φ-w2·t)
+      const m3 = c3 * glass1.l3c + s3 * glass1.l3s; // cos(3θ-φ-w3·t)
       // Stokes 2차 파형: 주 크레스트(mode-1) 마루를 뾰족하게·골을 완만하게 만든다.
       // 사인파의 둥근 마루(젤리 표면)가 아니라 실제 중력파의 뾰족한 마루. 평균 0 → 부피 보존.
       const m1s = m1 + WCREST_SHARP * (m1 * m1 - 0.5);
-      return waveAct * (WAMP1 * rp * rp * m1s + WAMP2 * rp * m2 + WAMP3 * rp * m3);
-    }
-    // biome-ignore lint/suspicious/noExplicitAny: BufferAttribute
-    let liquidPosAttr: any;
+      return glass1.waveAct * (WAMP1 * rp * rp * m1s + WAMP2 * rp * m2 + WAMP3 * rp * m3);
+    };
     // Beer–Lambert: 와인 뒷면 거리 버퍼(두께=back−front) + 뒷면 재질 + 본 재질.
+    // wineBackMat/liquidBodyMat/liquidMesh/liquidGeo/liquidPosAttr/glassGroup 은
+    // glass1 에 담긴다. liqV0/liqH/liqVol/liqFoot(부피 상태)도 glass1.
     // biome-ignore lint/suspicious/noExplicitAny: TSL RT/Material
     let wineThickRT: any;
     // 와인 뒤 장면(와인만 숨김) — 와인이 이걸 굴절+흡수로 샘플 → 투과(화이트와인 비침).
     // biome-ignore lint/suspicious/noExplicitAny: TSL RT
     let bgRT: any;
-    // biome-ignore lint/suspicious/noExplicitAny: TSL material
-    let wineBackMat: any;
-    // biome-ignore lint/suspicious/noExplicitAny: TSL material
-    let liquidBodyMat: any;
-    let liqV0 = 0; // 목표 부피(upright 기준) — 기울여도 이만큼 유지
-    let liqH = GLASS_WINE_FILL; // 현재 수면 높이(부피 보존으로 조절)
-    let liqVol = 0; // 이번 rebuild 의 부피
-    let liqFoot = 1; // 수면 수평 단면적(dV/dH ≈ 이 값)
     // 스월 상태(WineGlass.tsx 방식 이식): 드래그로 잔을 기울이고, 액체 수면은
     // 월드 수평(중력)을 유지 → 잔 벽을 타고 출렁. 관성 진동(a)으로 넘실.
     // 슬로싱: 수면 기울기(sloshX,Z)=2D 감쇠 진동자. 마우스 움직임이 구동 →
     // 원으로 흔들면 기울기가 세차(회전)해 수면 크레스트가 돌고, 멈추면 잦아듦.
-    // 잔은 세운 채, 와인 표면만 기울어 돈다(실제 스월).
-    let sloshX = 0;
-    let sloshZ = 0;
-    let sloshVX = 0;
-    let sloshVZ = 0;
-    let rotSmooth = 0; // 슬로싱이 얼마나·어느 쪽으로 "도는가"(−1=CW ~ 0=선형 ~ +1=CCW)
-    let w2ph = 0; // mode-2 회전 위상 누적 — 회전할 때만, 스월 방향으로
-    let w3ph = 0; // mode-3 회전 위상 누적
-    let crestPh = 0; // 크레스트 회전 각도 — 슬로싱 방향(φ)을 회전 관성 속도로 추종
-    let spinE = 0; // 회전 관성(0~1) — 잔 움직이면 충전, 놓으면 서서히 방전(스핀다운)
+    // 잔은 세운 채, 와인 표면만 기울어 돈다(실제 스월). 스월 상태·잔 기울기·legs
+    // 상태(sloshX…gPrevZ, simT, waveAct, wetness, dripT, wasWet)는 glass1 에 담긴다.
     // 드래그→잔 기울기 매핑용: 카메라의 화면 오른쪽·위를 월드 수평면에 투영(재사용).
     const swR = new THREE.Vector3();
     const swU = new THREE.Vector3();
-    // 진행성 잔물결: 정지=평면, 흔들면 활성. simT=파동 위상용 시각, waveAct=활성도.
-    let simT = 0;
-    let waveAct = 0;
-    // legs(눈물): wetness=벽 젖음(스월 시↑, 이후 서서히↓), dripT=줄기 흘러내림 진행.
-    // 방위별 도달 최고점은 wetTopArr(둘레 배열, setupGlass 근처) 로 추적.
-    let wetness = 0;
-    let dripT = 0;
-    let wasWet = false; // 젖음 에피소드 시작 감지(흘러내림을 그때만 리셋)
     // 마우스 = 잔 제어. 잔은 마우스 오프셋을 추종해 기울고, 놓으면 세워진다.
+    // 이 마우스 입력 상태(mStart…downX/Y·swDragging·autoSwirl)는 "잔"이 아니라
+    // 캔버스 전역 입력이므로 glass1 에 담지 않고 클로저에 그대로 둔다.
     // 와인 슬로싱은 잔의 움직임(속도)에 구동 → 놓으면 잔은 멈추고 와인만 출렁.
     let mStartX = 0;
     let mStartY = 0;
     let mCurX = 0;
     let mCurY = 0;
-    let gTiltX = 0; // 잔 기울기(마우스 추종)
-    let gTiltZ = 0;
-    let gPrevX = 0; // 이전 프레임 잔 기울기(속도 계산)
-    let gPrevZ = 0;
     let swDragging = false;
     // 클릭(거의 안 움직임) → 자동 스월 3바퀴(일관된 동작 보기용).
     let autoSwirl = false;
@@ -1201,8 +1240,8 @@ export default function FluidLab({
     // 고정 토폴로지 그리드 생성(정점 위치는 rebuildLiquid 가 매 프레임 채움).
     function buildLiquid() {
       const nCol = L_SEG + 1;
-      liquidGeo = new THREE.BufferGeometry();
-      liquidPosAttr = new THREE.BufferAttribute(new Float32Array(nCol * L_PPC * 3), 3);
+      const liquidGeo = new THREE.BufferGeometry();
+      const liquidPosAttr = new THREE.BufferAttribute(new Float32Array(nCol * L_PPC * 3), 3);
       liquidGeo.setAttribute("position", liquidPosAttr);
       const idx: number[] = [];
       for (let i = 0; i < L_SEG; i++)
@@ -1212,14 +1251,23 @@ export default function FluidLab({
           idx.push(a, b, a + 1, b, b + 1, a + 1);
         }
       liquidGeo.setIndex(idx);
-      rebuildLiquid(0, 1, 0, GLASS_WINE_FILL, 0); // 초기(수직) 채움
+      glass1.liquidGeo = liquidGeo;
+      glass1.liquidPosAttr = liquidPosAttr;
+      rebuildLiquid(0, 1, 0, glass1.GLASS_WINE_FILL, 0); // 초기(수직) 채움
     }
 
     // 각도별 수위선(벽∩수평면)을 구해 잔 내부를 수평면 아래로 채운다. m1,m5,m9 는
     // glassGroup 회전행렬 y행 → 수평면을 액체 로컬 프레임의 기운 평면으로 표현.
     // K: 회전 오목 포물면 계수(스월 세기). 표면 = 평면 + K·r²(벽 쪽 차오름).
+    // 이 잔(glass1)의 상태·상수를 캡처한다 → render 는 glass1.rebuild 로 호출.
     function rebuildLiquid(m1: number, m5: number, m9: number, H0: number, K: number) {
-      const arr = liquidPosAttr.array as Float32Array;
+      const arr = glass1.liquidPosAttr.array as Float32Array;
+      const liquidGeo = glass1.liquidGeo;
+      const innerRadiusAt = glass1.innerRadiusAt;
+      const surfWaveH = glass1.surfWaveH;
+      const pwCol = glass1.pwCol;
+      const GLASS_WINE_BOTTOM = glass1.GLASS_WINE_BOTTOM;
+      const gMaxY = glass1.gMaxY;
       const m5s = m5 || 1;
       const dPhi = (Math.PI * 2) / L_SEG;
       let foot = 0;
@@ -1268,7 +1316,7 @@ export default function FluidLab({
           base += 3;
         }
       }
-      liquidPosAttr.needsUpdate = true;
+      glass1.liquidPosAttr.needsUpdate = true;
       liquidGeo.computeVertexNormals(); // 표면 파동 법선은 이걸로 정확히 얻음.
       // 다만 수위선 정점(j=L_NV)은 벽(수직)+수면(수평) 평균(~45°)이 돼 그 테두리
       // 한 줄만 어두운 환경을 반사 → "원반 테" 어두운 선. 그 정점 법선을 바로 안쪽
@@ -1285,7 +1333,7 @@ export default function FluidLab({
         }
         liquidGeo.attributes.normal.needsUpdate = true;
       }
-      liqFoot = foot;
+      glass1.liqFoot = foot;
       // 부피(닫힌 메쉬 signed volume) — 중심이 r=0 로 공유돼 닫힘.
       const ix = liquidGeo.index.array as ArrayLike<number>;
       let vol = 0;
@@ -1298,13 +1346,14 @@ export default function FluidLab({
           arr[a + 1] * (arr[b] * arr[d + 2] - arr[b + 2] * arr[d]) +
           arr[a + 2] * (arr[b] * arr[d + 1] - arr[b + 1] * arr[d]);
       }
-      liqVol = Math.abs(vol) / 6;
+      glass1.liqVol = Math.abs(vol) / 6;
     }
+    glass1.rebuild = rebuildLiquid;
 
     function setupGlassWine() {
       buildLiquid();
-      liqV0 = liqVol; // upright 부피를 목표로(기울여도 유지)
-      liqH = GLASS_WINE_FILL;
+      glass1.liqV0 = glass1.liqVol; // upright 부피를 목표로(기울여도 유지)
+      glass1.liqH = glass1.GLASS_WINE_FILL;
       // 액체 재질: 불투명(유리 뒤로 확실히 보임) + 물리적 Beer–Lambert 흡수.
       // 색을 프레넬로 흉내내지 않고, 시선이 와인을 실제로 통과하는 두께 d 로부터
       // exp(−absorb·d) 로 계산 → 두꺼운 곳(수면 아래·중심) 검붉게, 얇은 가장자리
@@ -1331,14 +1380,14 @@ export default function FluidLab({
       // 스월 중엔 표면을 거칠게 — 움직이는 수면은 미세물결로 난반사한다. 매끈한 오목
       // 포물면(회전 중심 팸)이 환경을 동심원(과녁)으로 집속하던 것을, 스월 활성도에
       // 비례해 roughness 를 올려 흐트러뜨린다. 정지 시엔 0.14(유리 같은 매끈함) 유지.
-      roughnessU = uniform(0.14);
-      bodyMat.roughnessNode = roughnessU;
+      glass1.roughnessU = uniform(0.14);
+      bodyMat.roughnessNode = glass1.roughnessU;
       // 미세 잔물결(capillary ripple): 큰 스월 파동(지오메트리)은 그대로 두고, 표면
       // 법선에 픽셀 단위 고주파 요철을 얹어 매끈한 반사가 반짝이는 조각으로 부서지게.
       // 단, 정지한 와인은 유리처럼 매끈하므로 스월 활성도(rippleActU)로 게이팅한다 —
       // 가만히 있으면 0(매끈), 흔들 때만 잔물결이 돋는다. 세기는 작게(과하면 젤리).
-      rippleActU = uniform(0); // 렌더 루프에서 waveAct 로 갱신
-      rippleTimeU = uniform(0); // 렌더 루프에서 simT 로 갱신 — 물결 이동·명멸
+      glass1.rippleActU = uniform(0); // 렌더 루프에서 waveAct 로 갱신
+      glass1.rippleTimeU = uniform(0); // 렌더 루프에서 simT 로 갱신 — 물결 이동·명멸
       const rippleFreqU = uniform(40); // 잔물결 촘촘함(클수록 잘게)
       const rippleAmpU = uniform(0.12); // 흔들 때 최대 섭동 세기(과하면 울퉁불퉁)
       bodyMat.normalNode = Fn(() => {
@@ -1346,7 +1395,7 @@ export default function FluidLab({
         // 정지 얼룩이 아니라 시간에 따라 흐르고(이동) 모양이 바뀌게(명멸) 한다 —
         // xy 좌표에 시각을 더해 물결이 스월 방향으로 흐르고, 3번째 옥타브 좌표에
         // 시각을 넣어 fbm 이 변하며 반짝임이 잘게 명멸한다(scintillation).
-        const tt = rippleTimeU;
+        const tt = glass1.rippleTimeU;
         const p = vec3(
           positionLocal.x.mul(rippleFreqU).add(tt.mul(0.6)),
           positionLocal.z.mul(rippleFreqU).sub(tt.mul(0.5)),
@@ -1355,7 +1404,7 @@ export default function FluidLab({
         const h = mx_fractal_noise_float(p, int(3), float(2.0), float(0.5)).toVar();
         // 화면 미분으로 높이장의 기울기를 구해 뷰 법선을 미세하게 튼다(legs와 같은 법).
         // 스월 활성도로 게이팅 → 정지 시 섭동 0(매끈).
-        const amp = rippleAmpU.mul(rippleActU).toVar();
+        const amp = rippleAmpU.mul(glass1.rippleActU).toVar();
         const bump = vec3(dFdx(h), dFdy(h), float(0)).mul(amp).toVar();
         return normalize(normalView.add(bump));
       })();
@@ -1371,29 +1420,33 @@ export default function FluidLab({
         // Beer–Lambert 투과율 exp(−absorb·t) (0~1). 배경이 와인을 통과하며 흡수돼
         // 물든다: 화이트(흡수 작음)=뒤 비침, 레드(흡수 큼)=깊은 붉은색. absorbU=프리셋.
         const trans = vec3(
-          t.mul(absorbU.x).negate().exp(),
-          t.mul(absorbU.y).negate().exp(),
-          t.mul(absorbU.z).negate().exp()
+          t.mul(glass1.absorbU.x).negate().exp(),
+          t.mul(glass1.absorbU.y).negate().exp(),
+          t.mul(glass1.absorbU.z).negate().exp()
         ).toVar();
         return bg.mul(trans);
       })();
-      liquidBodyMat = bodyMat;
+      glass1.liquidBodyMat = bodyMat;
       // 뒷면(먼 면) 거리 — winding 상 FrontSide 가 먼 면. view 거리 R 채널에.
-      wineBackMat = new A.MeshBasicNodeMaterial();
+      const wineBackMat = new A.MeshBasicNodeMaterial();
       wineBackMat.colorNode = Fn(() => vec4(positionView.z.negate(), 0, 0, 1))();
       wineBackMat.side = THREE.FrontSide;
+      glass1.wineBackMat = wineBackMat;
       void frontFacing;
-      liquidMesh = new THREE.Mesh(liquidGeo, bodyMat);
+      const glassMesh = glass1.glassMesh;
+      const liquidMesh = new THREE.Mesh(glass1.liquidGeo, bodyMat);
       liquidMesh.scale.setScalar(glass.worldScale);
       liquidMesh.frustumCulled = false;
+      glass1.liquidMesh = liquidMesh;
       // 유리+액체를 그룹에 담아 함께 기울인다(드래그 스월).
-      glassGroup = new THREE.Group();
+      const glassGroup = new THREE.Group();
       glassGroup.position.set(0, glass.worldY, 0);
       scene.remove(glassMesh);
       glassMesh.position.set(0, 0, 0); // 그룹 로컬 원점
       glassGroup.add(glassMesh);
       glassGroup.add(liquidMesh);
       scene.add(glassGroup);
+      glass1.glassGroup = glassGroup;
     }
 
     // 붓기 물줄기 — 단위 원통(Y축, 아래로 가늘어짐). 매 프레임 스포우트→잔 표면
@@ -1453,6 +1506,8 @@ export default function FluidLab({
       // 튄다. 고정 스텝이면 프레임률과 무관하게 항상 같은 물리 → 튐 원천 차단.
       // (느린 기기에선 살짝 슬로모션이지만 안정적. 표준 물리엔진 방식.)
       if (!FLUID_ON) {
+        // 이 잔의 가변 상태·메쉬·유니폼을 한 객체(glass1)에서 꺼내 쓴다.
+        const g = glass1;
         // 병·붓기는 지금 숨김(코드는 보존 — 나중에 사용).
         if (bottleGroup) bottleGroup.visible = false;
         if (streamMesh) streamMesh.visible = false;
@@ -1503,14 +1558,14 @@ export default function FluidLab({
         }
         // 자동 스월 중엔 잔이 프로그램대로 돌게 빠르게 추종.
         const gEase = swDragging || autoSwirl ? 0.5 : 0.14;
-        gTiltX += (gtx - gTiltX) * gEase;
-        gTiltZ += (gtz - gTiltZ) * gEase;
+        g.gTiltX += (gtx - g.gTiltX) * gEase;
+        g.gTiltZ += (gtz - g.gTiltZ) * gEase;
         // 잔 기울기 속도 → 와인 슬로싱 구동. 잔을 움직이면 와인이 출렁이고,
         // 놓으면 잔은 세워지며 와인만 관성으로 계속 출렁이다 잦아든다.
-        const gvx = (gTiltX - gPrevX) / dt;
-        const gvz = (gTiltZ - gPrevZ) / dt;
-        gPrevX = gTiltX;
-        gPrevZ = gTiltZ;
+        const gvx = (g.gTiltX - g.gPrevX) / dt;
+        const gvz = (g.gTiltZ - g.gPrevZ) / dt;
+        g.gPrevX = g.gTiltX;
+        g.gPrevZ = g.gTiltZ;
         // 와인잔 1차 슬로싱은 실제 ~3Hz 대다. 8(1.3Hz)은 물치고 느려 점성 있어
         // 보였다 → 11(≈1.75Hz)로 올려 물답게 빠릿하게(오일러 안정: ω·dt=0.18).
         const OMEGA = 11.0;
@@ -1527,14 +1582,14 @@ export default function FluidLab({
         // 두 축 결합 부호는 표면 크레스트가 잔 스월과 "같은 방향"으로 돌게 맞춘다
         // (와인은 잔을 쫓아감). 좌우(roll) 항은 그대로, 앞뒤(pitch) 항 부호만 뒤집어
         // 회전 방향을 바로잡되 선형 정렬은 유지.
-        const sloshSpeed = Math.hypot(sloshVX, sloshVZ);
+        const sloshSpeed = Math.hypot(g.sloshVX, g.sloshVZ);
         const damp = 2 * ZETA * OMEGA + QUAD * sloshSpeed; // 속도(진폭) 의존 감쇠
-        sloshVX += (-(OMEGA * OMEGA) * sloshX - damp * sloshVX) * dt - COUPLE * gvz * dt;
-        sloshVZ += (-(OMEGA * OMEGA) * sloshZ - damp * sloshVZ) * dt + COUPLE * gvx * dt;
-        sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshX + sloshVX * dt));
-        sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, sloshZ + sloshVZ * dt));
+        g.sloshVX += (-(OMEGA * OMEGA) * g.sloshX - damp * g.sloshVX) * dt - COUPLE * gvz * dt;
+        g.sloshVZ += (-(OMEGA * OMEGA) * g.sloshZ - damp * g.sloshVZ) * dt + COUPLE * gvx * dt;
+        g.sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, g.sloshX + g.sloshVX * dt));
+        g.sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, g.sloshZ + g.sloshVZ * dt));
         // 잔 기울기 적용(마우스 추종).
-        glassGroup.rotation.set(gTiltX, 0, gTiltZ);
+        g.glassGroup.rotation.set(g.gTiltX, 0, g.gTiltZ);
         // 슬라이드: 화면 "수평"으로 옮긴다. 카메라가 대각(-1.9,1.7,-1.9)이라 world x 를
         // 그대로 쓰면 화면에서 위아래로 비껴 움직인다. 카메라의 화면-오른쪽 벡터를 world
         // 수평면(y=0)에 투영한 방향으로 slideX 만큼 옮기면 화면상 순수 좌우 슬라이드가 된다.
@@ -1542,32 +1597,32 @@ export default function FluidLab({
           const rEl = camera.matrixWorld.elements;
           const rlen = Math.hypot(rEl[0], rEl[2]) || 1;
           const sx = slideXRef.current;
-          glassGroup.position.set((rEl[0] / rlen) * sx, glass.worldY, (rEl[2] / rlen) * sx);
+          g.glassGroup.position.set((rEl[0] / rlen) * sx, glass.worldY, (rEl[2] / rlen) * sx);
         }
-        glassGroup.updateMatrix();
+        g.glassGroup.updateMatrix();
         // 와인 수면 = 월드 (수평 + 슬로싱 기울기). 잔이 기울어도(회전 R) 로컬
         // 프레임에서 그 월드 평면을 표현하도록 계수 계산. a,b=슬로싱 월드 기울기.
-        const el = glassGroup.matrix.elements;
-        const a = sloshX;
-        const b = sloshZ;
+        const el = g.glassGroup.matrix.elements;
+        const a = g.sloshX;
+        const b = g.sloshZ;
         const M1 = el[1] - a * el[0] - b * el[2];
         const M5 = el[5] - a * el[4] - b * el[6];
         const M9 = el[9] - a * el[8] - b * el[10];
         // 회전 오목 포물면: 스월 세기(수면 기울기 크기)에 비례해 벽 쪽 차오름.
         // 계수를 1.1→1.4 로 키워 "안쪽으로 오목했다가 평평 복귀"가 또렷하게.
-        const swirlMag = Math.hypot(sloshX, sloshZ);
+        const swirlMag = Math.hypot(g.sloshX, g.sloshZ);
         const K = swirlMag * 1.4;
         // 회전 파동: 정지=평면, 흔들면 활성. 크레스트 방향 φ=슬로싱 벡터각(스월
         // 방향) → 마루가 잔을 돈다. mode-2,3 은 그 위를 시간에 따라 더 돈다.
-        simT += dt;
-        waveAct = Math.min(1, swirlMag * 3.5);
-        if (rippleActU) rippleActU.value = waveAct; // 정지=매끈, 흔들 때만 잔물결
-        if (rippleTimeU) rippleTimeU.value = simT; // 잔물결 이동·명멸 시각
+        g.simT += dt;
+        g.waveAct = Math.min(1, swirlMag * 3.5);
+        if (g.rippleActU) g.rippleActU.value = g.waveAct; // 정지=매끈, 흔들 때만 잔물결
+        if (g.rippleTimeU) g.rippleTimeU.value = g.simT; // 잔물결 이동·명멸 시각
         // 스월 중 표면 거칠기↑ → 오목면의 거울 반사(과녁·회전선) 흐림. 정지=0.14 매끈.
         // 단 너무 올리면(0.49) 오목을 알려주던 반사 왜곡까지 사라져 표면이 볼록처럼
         // 보인다(중심이 얇아 밝은 것만 남음). 0.18 로 낮춰 오목 반사 단서를 남긴다.
-        if (roughnessU) roughnessU.value = 0.14 + waveAct * 0.18;
-        const phi = Math.atan2(sloshZ, sloshX);
+        if (g.roughnessU) g.roughnessU.value = 0.14 + g.waveAct * 0.18;
+        const phi = Math.atan2(g.sloshZ, g.sloshX);
         // 스핀다운(회전 관성): 감쇠 진동자는 진폭만 줄고 회전 주파수는 ω로 고정이라,
         // 그냥 두면 수면이 평평해져도 계속 빠르게 도는 것처럼 보인다. 실제 유체는
         // 각운동량을 잃으며 잦아든다. 크레스트 각도(crestPh)를 슬로싱 방향 φ에 붙이되,
@@ -1577,92 +1632,94 @@ export default function FluidLab({
         //    느려지면 더 빨리 줄어 깔끔히 멈춘다(마른 마찰·접촉선 정지 느낌).
         const glassMove = Math.hypot(gvx, gvz);
         const charge = Math.min(1, glassMove / 0.8);
-        if (charge > spinE) spinE += (charge - spinE) * 0.3;
-        else spinE = Math.max(0, spinE - (0.18 + 0.6 * (1 - spinE)) * dt);
-        let dPhi = phi - crestPh;
+        if (charge > g.spinE) g.spinE += (charge - g.spinE) * 0.3;
+        else g.spinE = Math.max(0, g.spinE - (0.18 + 0.6 * (1 - g.spinE)) * dt);
+        let dPhi = phi - g.crestPh;
         while (dPhi > Math.PI) dPhi -= Math.PI * 2;
         while (dPhi < -Math.PI) dPhi += Math.PI * 2;
-        const maxStep = OMEGA * spinE * dt;
-        crestPh += Math.max(-maxStep, Math.min(maxStep, dPhi));
-        crC = Math.cos(crestPh);
-        crS = Math.sin(crestPh);
+        const maxStep = OMEGA * g.spinE * dt;
+        g.crestPh += Math.max(-maxStep, Math.min(maxStep, dPhi));
+        g.crC = Math.cos(g.crestPh);
+        g.crS = Math.sin(g.crestPh);
         // "얼마나·어느 쪽으로 도나" 판별: 슬로싱 벡터의 부호 있는 각속도
         // (각운동량/‖s‖²·ω). 원형 스월이면 ±1, 한 축 왕복(선형)이면 ~0. 부호를
         // 살려 로브가 스월 방향으로 돌게 하고, 선형이면 거의 안 돈다.
-        const angMom = sloshX * sloshVZ - sloshZ * sloshVX;
+        const angMom = g.sloshX * g.sloshVZ - g.sloshZ * g.sloshVX;
         const rotInstant =
           swirlMag > 0.06 ? Math.max(-1, Math.min(1, angMom / (swirlMag * swirlMag * OMEGA))) : 0;
-        rotSmooth += (rotInstant - rotSmooth) * 0.08;
+        g.rotSmooth += (rotInstant - g.rotSmooth) * 0.08;
         // 로브 회전도 회전 관성으로 함께 잦아들게. 크레스트(crestPh) 위를 더 돈다.
-        w2ph += W2SPD * rotSmooth * spinE * dt;
-        w3ph += W3SPD * rotSmooth * spinE * dt;
-        const a2 = crestPh + w2ph;
-        l2c = Math.cos(a2);
-        l2s = Math.sin(a2);
-        const a3 = crestPh + w3ph;
-        l3c = Math.cos(a3);
-        l3s = Math.sin(a3);
+        g.w2ph += W2SPD * g.rotSmooth * g.spinE * dt;
+        g.w3ph += W3SPD * g.rotSmooth * g.spinE * dt;
+        const a2 = g.crestPh + g.w2ph;
+        g.l2c = Math.cos(a2);
+        g.l2s = Math.sin(a2);
+        const a3 = g.crestPh + g.w3ph;
+        g.l3c = Math.cos(a3);
+        g.l3s = Math.sin(a3);
         // legs: 스월 중엔 벽이 젖고(빠르게↑, 흘러내림 리셋), 멈추면 서서히 마르며
         // 줄기가 아래로 흘러내린다(dripT↑). 유리 감쇠 필름 uniform 갱신.
         // 벽 젖음(legs): 각 방위에서 와인이 벽과 만난 높이(pwCol)가 정착 수위보다
         // 높으면 그 자리 벽이 젖는다. 방위별 최고점(절대 y)을 wetTopArr 에 누적 —
         // 느리게 기울여도 pw 가 오르면 기록되므로 자국이 생긴다(속도 무관).
         let curMax = 0;
+        const pwCol = g.pwCol;
+        const wetTopArr = g.wetTopArr;
         for (let b = 0; b < LEG_NA; b++) {
           const pw = pwCol[b];
           if (pw > wetTopArr[b]) wetTopArr[b] = pw;
-          const rr = pw - GLASS_WINE_FILL; // 정착 수위 위로 얼마나 올랐나
+          const rr = pw - g.GLASS_WINE_FILL; // 정착 수위 위로 얼마나 올랐나
           if (rr > curMax) curMax = rr;
         }
-        if (legTex) legTex.needsUpdate = true;
+        if (g.legTex) g.legTex.needsUpdate = true;
         // 지금 어딘가 정착보다 높으면(기울어 젖는 중) wetness↑, 아니면 서서히 마름.
         if (curMax > 0.02) {
-          wetness = Math.min(1, wetness + dt * 2.5);
+          g.wetness = Math.min(1, g.wetness + dt * 2.5);
         } else {
-          wetness = Math.max(0, wetness - dt * 0.12);
-          if (wetness <= 0.001) wetTopArr.fill(0); // 완전히 마르면 초기화
+          g.wetness = Math.max(0, g.wetness - dt * 0.12);
+          if (g.wetness <= 0.001) wetTopArr.fill(0); // 완전히 마르면 초기화
         }
         // 흘러내림: 벽이 젖는 즉시(아주 짧은 지연 후) 바로 시작. 새 젖음 에피소드가
         // 시작될 때만(마른 상태→젖음) 리셋 → 스월이 끝날 때까지 기다리지 않음.
-        if (wetness > 0.05) {
-          if (!wasWet) dripT = -0.12; // 짧은 지연(음수 구간=대기, 셰이더서 clamp 0)
-          dripT = Math.min(1, dripT + dt * 0.4);
-          wasWet = true;
+        if (g.wetness > 0.05) {
+          if (!g.wasWet) g.dripT = -0.12; // 짧은 지연(음수 구간=대기, 셰이더서 clamp 0)
+          g.dripT = Math.min(1, g.dripT + dt * 0.4);
+          g.wasWet = true;
         } else {
-          dripT = 0;
-          wasWet = false;
+          g.dripT = 0;
+          g.wasWet = false;
         }
-        if (glassWetU) {
-          glassWetU.value = wetness;
-          glassDripU.value = dripT;
+        if (g.glassWetU) {
+          g.glassWetU.value = g.wetness;
+          g.glassDripU.value = g.dripT;
           // 눈물은 유리 벽의 고정 자국 → 출렁이는 수면(liqH)이 아니라 정지 수위선에
           // 앵커. 이전엔 liqH 로 갱신해 수면 따라 눈물이 위아래로 움직여 어색했다.
-          glassWlU.value = GLASS_WINE_FILL;
+          g.glassWlU.value = g.GLASS_WINE_FILL;
         }
         for (let it = 0; it < 4; it++) {
-          rebuildLiquid(M1, M5, M9, liqH, K);
-          liqH += (liqV0 - liqVol) / (liqFoot || 1);
-          liqH = Math.max(GLASS_WINE_BOTTOM + 0.1, Math.min(liqH, gMaxY - 0.05));
+          g.rebuild(M1, M5, M9, g.liqH, K);
+          g.liqH += (g.liqV0 - g.liqVol) / (g.liqFoot || 1);
+          g.liqH = Math.max(g.GLASS_WINE_BOTTOM + 0.1, Math.min(g.liqH, g.gMaxY - 0.05));
         }
         // 와인 뒷면 거리 → wineThickRT (Beer–Lambert 두께용). 유리·병·배경 끔.
         scene.background = null;
-        glassMesh.visible = false;
-        liquidMesh.material = wineBackMat;
+        g.glassMesh.visible = false;
+        g.liquidMesh.material = g.wineBackMat;
         renderer.setRenderTarget(wineThickRT);
         renderer.setClearColor(0x000000, 1);
         renderer.clear();
         renderer.render(scene, camera);
-        glassMesh.visible = true;
-        liquidMesh.material = liquidBodyMat;
+        g.glassMesh.visible = true;
+        g.liquidMesh.material = g.liquidBodyMat;
         // 와인 뒤 장면 → bgRT: 따뜻한 HDR(warmBg)로 렌더해 와인이 빛나게(투과 backlit).
         // 와인·유리 숨김 → 배경만. 유리를 빼는 이유: 빈 잔 굴절 X자 방지.
         scene.background = warmBg;
-        liquidMesh.visible = false;
-        glassMesh.visible = false;
+        g.liquidMesh.visible = false;
+        g.glassMesh.visible = false;
         renderer.setRenderTarget(bgRT);
         renderer.render(scene, camera);
-        glassMesh.visible = true;
-        liquidMesh.visible = true;
+        g.glassMesh.visible = true;
+        g.liquidMesh.visible = true;
         // 화면에 보이는 최종 렌더: 배경은 pageBg(사이트 색과 매칭). 유리 뒤로는
         // 어두운 페이지 색이 보이지만, 와인은 warmBg 로 이미 빛나는 상태로 합성됨.
         scene.background = pageBg;
@@ -1718,10 +1775,10 @@ export default function FluidLab({
         blurPong.render(renderer); // 세로: blurRT2 → blurRT
       }
       // 잔 직접 굴절용 sceneRT(잔 뺀 장면=배경+병) 렌더
-      glassMesh.visible = false;
+      glass1.glassMesh.visible = false;
       renderer.setRenderTarget(sceneRT);
       renderer.render(scene, camera);
-      glassMesh.visible = true;
+      glass1.glassMesh.visible = true;
       // 배경 HDR + 병 + 유리잔 렌더 → 그 위에 유체 표면(알파) 합성
       renderer.setRenderTarget(null);
       renderer.render(scene, camera);
