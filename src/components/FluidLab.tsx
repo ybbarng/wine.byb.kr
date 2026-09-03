@@ -313,7 +313,10 @@ export default function FluidLab({
 
     let renderer: THREE.WebGPURenderer;
     let scene: THREE.Scene;
-    let camera: THREE.PerspectiveCamera;
+    // 직교(orthographic) 카메라 — 원근 왜곡이 없어 잔이 화면 어디로 슬라이드해도 기울지
+    // 않고 똑같은 모양으로 직선 이동한다. VIEW_H = 세로로 담는 world 높이(줌 역할).
+    let camera: THREE.OrthographicCamera;
+    const VIEW_H = 1.9;
     let ro: ResizeObserver | undefined; // 컨테이너 크기 관찰
     // 배경 두 겹: warmBg=와인 투과(bgRT) 샘플용 따뜻한 HDR(와인이 빛남),
     // pageBg=화면에 보이는 배경(사이트 색과 매칭). bgColor 없으면 둘 다 따뜻한 HDR.
@@ -1594,9 +1597,8 @@ export default function FluidLab({
 
     // 카메라 가로 시야 기준 "화면 밖" 슬라이드 거리 — 잔이 완전히 사라질 만큼.
     function offscreenSlide(): number {
-      const dist = camera.position.distanceTo(controls.target);
-      const halfW = Math.tan((camera.fov * Math.PI) / 180 / 2) * dist * camera.aspect;
-      return halfW + 1.2; // 잔 폭 여유
+      // 직교 카메라: 우측 frustum 경계(world 폭 절반)가 곧 화면 오른쪽 끝.
+      return camera.right + 1.2; // 잔 폭 여유
     }
 
     // 잔 하나의 GPU 자원을 모두 반환하고 scene 에서 뺀다.
@@ -1651,7 +1653,11 @@ export default function FluidLab({
     }
 
     function onWindowResize() {
-      camera.aspect = container!.clientWidth / container!.clientHeight;
+      const aspect = container!.clientWidth / container!.clientHeight;
+      camera.left = (-VIEW_H * aspect) / 2;
+      camera.right = (VIEW_H * aspect) / 2;
+      camera.top = VIEW_H / 2;
+      camera.bottom = -VIEW_H / 2;
       camera.updateProjectionMatrix();
       renderer.setSize(container!.clientWidth, container!.clientHeight);
     }
@@ -2095,14 +2101,18 @@ export default function FluidLab({
       window.addEventListener("pointermove", onSwMove);
 
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(
-        22,
-        container.clientWidth / container.clientHeight,
-        0.01,
-        20
-      );
-      // 시야각을 좁혀(망원) 원근 왜곡을 줄인다 — 잔이 옆으로 슬라이드해도 기울어/휘어
-      // 보이지 않고 화면상 직선처럼 미끄러진다. FOV 를 좁힌 만큼 거리를 늘려 잔 크기 유지.
+      {
+        const aspect0 = container.clientWidth / container.clientHeight;
+        camera = new THREE.OrthographicCamera(
+          (-VIEW_H * aspect0) / 2,
+          (VIEW_H * aspect0) / 2,
+          VIEW_H / 2,
+          -VIEW_H / 2,
+          0.01,
+          30
+        );
+      }
+      // 직교 카메라: 위치는 "방향"만 의미(거리는 줌에 무관). 기존과 같은 대각 시점 유지.
       camera.position.set(-3.56, 3.19, -3.56);
 
       controls = new OrbitControls(camera, renderer.domElement);
