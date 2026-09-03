@@ -124,6 +124,14 @@ export function GlassStage() {
   const absorb = ctx?.state.absorb;
   const setReveal = ctx?.setRevealContent;
 
+  // 잔 상태를 항상 최신으로 참조한다. 잔 교체(startSwap)는 지연 실행되므로, 그 시점의
+  // "가장 최신" 잔을 넣어야 한다. 새 페이지의 GlassSetter 가 잔 상태를 넣기 전에
+  // 교체를 예약해도, 실제 교체는 최신 상태로 이뤄지게 한다.
+  const stateRef = useRef({ glass: glass ?? 1, absorb: absorb ?? ([16, 78, 98] as const) });
+  if (glass != null && absorb != null) {
+    stateRef.current = { glass, absorb };
+  }
+
   // useLayoutEffect: 페인트 전에 실행해, 홈→상세 진입 순간 콘텐츠를 먼저 숨긴다(깜빡 방지).
   useLayoutEffect(() => {
     if (glass == null || absorb == null) return;
@@ -154,10 +162,12 @@ export function GlassStage() {
     if (frameTimer.current) clearTimeout(frameTimer.current);
 
     // 잔을 교체(이전 잔은 swapDir 쪽으로 나가고, 새 잔은 반대편에서 들어온다).
+    // 새로 들어오는 잔은 stateRef 의 최신값을 쓴다(지연 실행 시점의 실제 잔).
     const startSwap = (from: Pane, swapDir: Dir) => {
+      const { glass: g, absorb: a } = stateRef.current;
       keyRef.current += 1;
       setExiting({ ...from, dir: swapDir });
-      setCurrent({ key: keyRef.current, glass, absorb });
+      setCurrent({ key: keyRef.current, glass: g, absorb: a });
       setEnterDir(swapDir);
       exitTimer.current = setTimeout(() => {
         setExiting(null);
@@ -180,18 +190,23 @@ export function GlassStage() {
       return;
     }
 
-    // 상세 → 홈(역순): ① 잔부터 홈 잔으로 교체(창은 아직 상세 위치) → ② 잔 교체가
-    // 끝나면 창을 홈 위치로 이동·확대. 상세 콘텐츠는 홈 전환으로 이미 사라진 상태다.
+    // 상세 → 홈: ① 상세 콘텐츠는 홈 전환으로 이미 사라진 상태 → ② 창을 홈(화면 전체)
+    // 으로 넓힌 뒤 → ③ 넓어진 창에서 홈 잔이 화면 밖에서 미끄러져 들어온다(상세 잔은
+    // 반대쪽 화면 밖으로 나간다). 넓은 창이라 잔이 화면 끝에서 진입해 자연스럽다.
     if (!wasHome && isHome) {
-      startSwap(cur, "right"); // 뒤로 가기 = 오른쪽으로 나가고 왼쪽에서 홈 잔 등장
-      frameTimer.current = setTimeout(() => setFrameHome(true), SLIDE_MS);
+      setFrameHome(true); // ② 창을 홈 위치·크기로 넓힘
+      moveTimer.current = setTimeout(() => {
+        startSwap(cur, "right"); // ③ 창이 넓어진 뒤 홈 잔이 화면 밖에서 진입
+      }, MOVE_MS);
       return;
     }
 
-    // 상세 → 상세: 창 고정(frameHome 그대로), 콘텐츠는 계속 보이고, 바로 잔 교체.
+    // 상세 → 상세: 창 고정(frameHome 그대로), 콘텐츠는 계속 보이고 잔만 교체한다.
+    // 새 페이지의 GlassSetter 가 새 잔 상태를 넣은 뒤(다음 틱) 최신 잔으로 교체하도록
+    // 아주 짧게 미룬다(사실상 즉시).
     setReveal?.(true);
     setFrameHome(false);
-    startSwap(cur, dir);
+    revealTimer.current = setTimeout(() => startSwap(cur, dir), 48);
   }, [glass, absorb, isHome, pathname, setReveal]);
 
   useEffect(() => {
