@@ -253,12 +253,16 @@ export default function FluidLab({
   bgColor,
   swirlScale,
   bgIntensity,
+  transparent,
 }: {
   glassType?: number;
   wineAbsorb?: [number, number, number];
   bgColor?: string; // 지정 시 배경을 이 단색으로(사이트 배경과 매끄럽게). 미지정=따뜻한 HDR.
   swirlScale?: number; // 최대 스월 기울기 배율(기본 1). 좁은 컨테이너(홈)에선 <1 로 줄여 영역 이탈 방지.
   bgIntensity?: number; // 배경(HDR) 밝기 배율(기본 1). 좁은 프레임이 어두운 영역을 비출 때 ↑.
+  // 화면 최종 배경을 투명하게(캔버스 alpha). 여러 잔이 겹쳐 슬라이드 전환할 때 배경
+  // 사각형 없이 잔만 보이게 한다. 와인 투과용 warmBg(HDR)는 그대로라 색은 정상.
+  transparent?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // 와인 흡수계수 uniform(실시간 색 변경). setup 에서 채워지고 prop 으로 갱신.
@@ -1646,7 +1650,13 @@ export default function FluidLab({
         liquidMesh.visible = true;
         // 화면에 보이는 최종 렌더: 배경은 pageBg(사이트 색과 매칭). 유리 뒤로는
         // 어두운 페이지 색이 보이지만, 와인은 warmBg 로 이미 빛나는 상태로 합성됨.
-        scene.background = pageBg;
+        // transparent 면 배경을 투명하게 비워(잔·와인만) 뒤 페이지 배경이 그대로 비친다.
+        if (transparent) {
+          scene.background = null;
+          renderer.setClearColor(0x000000, 0);
+        } else {
+          scene.background = pageBg;
+        }
         frameCount++;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
@@ -1758,6 +1768,7 @@ export default function FluidLab({
     async function init() {
       renderer = new THREE.WebGPURenderer({
         antialias: true,
+        alpha: transparent ?? false,
         requiredLimits: { maxStorageBuffersInVertexStage: 1 },
       });
       renderer.setPixelRatio(window.devicePixelRatio);
