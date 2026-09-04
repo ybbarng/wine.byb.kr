@@ -7,6 +7,32 @@ import { useEffect, useRef } from "react";
 import { englishCountry } from "./country-names";
 import { countryGeo } from "./wine-geo";
 
+// 지도가 뜨기 전(타일 로드 전) 컨테이너를 채울 색. maplibre 기본 흰 배경이 탄 톤
+// 테마와 대비돼 "흰 플래시"처럼 보이던 걸 없앤다. 로드된 지도의 옅은 땅 색과도 가깝다.
+const MAP_LOADING_BG = "#e7ded2";
+
+// 산지 폴리곤(약 856KB)은 어느 나라든 같은 파일을 쓴다. 페이지를 옮길 때마다 다시
+// 받고 파싱하면 지도가 늦게 떠 깜빡인다 → 모듈 수준에서 한 번만 받아 캐시한다.
+// (undefined=아직 안 받음, null=받기 실패)
+let regionShapesCache: FeatureCollection | null | undefined;
+let regionShapesPending: Promise<FeatureCollection | null> | null = null;
+async function loadRegionShapes(): Promise<FeatureCollection | null> {
+  if (regionShapesCache !== undefined) return regionShapesCache;
+  if (!regionShapesPending) {
+    regionShapesPending = fetch("/geo/region-shapes.geojson")
+      .then((r) => r.json() as Promise<FeatureCollection>)
+      .then((data) => {
+        regionShapesCache = data;
+        return data;
+      })
+      .catch(() => {
+        regionShapesCache = null;
+        return null;
+      });
+  }
+  return regionShapesPending;
+}
+
 interface Props {
   country: string | null;
   /** 이 와인의 지역 이름(주요 산지 중 하나와 맞으면 강조색). */
@@ -49,6 +75,7 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
 
     let map: MlMap | undefined;
     let cancelled = false;
+    let revealFallback: ReturnType<typeof setTimeout> | undefined;
 
     (async () => {
       const maplibregl = await import("maplibre-gl");
@@ -60,18 +87,13 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
       // 이 나라의 산지 폴리곤(있으면 원형 대신 실제 경계로 채색). 없으면 null → 원형.
       let regionShapes: FeatureCollection | null = null;
       if (country) {
-        try {
-          const all = (await fetch("/geo/region-shapes.geojson").then((r) =>
-            r.json()
-          )) as FeatureCollection;
+        const all = await loadRegionShapes();
+        if (cancelled || !ref.current) return;
+        if (all) {
           const mine = all.features.filter((f) => f.properties?.country === country);
           if (mine.length > 0) regionShapes = { type: "FeatureCollection", features: mine };
-        } catch {
-          regionShapes = null;
         }
-        if (cancelled || !ref.current) return;
       }
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       // 처음부터 국가에 맞춰 열어 스케일이 어긋나지 않게 한다.
       const bounds: LngLatBoundsLike | undefined = geo
@@ -92,6 +114,22 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
       });
       map = m;
       m.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+
+      // 준비되면 페이드인 — 타일이 다 그려질 때까지 지도를 숨긴다(그동안 컨테이너의
+      // 테마색이 보인다). "흰 빈 박스 → 폴리곤만 뜬 상태 → 베이스 타일 팝인" 순서가
+      // 그대로 노출돼 깜빡이던 걸 없앤다. idle(타일·소스 모두 정착)에서 켜되, 혹시
+      // idle 이 안 오는 경우를 대비해 타임아웃으로도 켠다.
+      const canvas = m.getCanvas();
+      canvas.style.opacity = "0";
+      canvas.style.transition = "opacity 450ms ease-out";
+      let shown = false;
+      const reveal = () => {
+        if (shown || cancelled) return;
+        shown = true;
+        canvas.style.opacity = "1";
+      };
+      m.once("idle", reveal);
+      revealFallback = setTimeout(reveal, 2500);
 
       // 스타일 JSON이 파싱되면 레이어를 얹는다("load"는 sprite/glyphs까지 기다리므로
       // 더 이른 "style.load"에서 추가한다. 글자 라벨은 glyphs 로드 후 자연히 나타난다).
@@ -237,15 +275,14 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
             },
           });
         }
-
-        if (bounds && !reduce) {
-          m.fitBounds(bounds, { padding: 24, duration: 1200 });
-        }
+        // 카메라는 생성자 bounds(+fitBoundsOptions)로 이미 이 나라에 맞춰 열렸다.
+        // 여기서 다시 fitBounds 로 애니메이션하면 살짝 재-팬이 생기므로 하지 않는다.
       });
     })();
 
     return () => {
       cancelled = true;
+      clearTimeout(revealFallback);
       map?.remove();
     };
   }, [country, regionName, fallback]);
@@ -254,6 +291,9 @@ export function RegionMap({ country, regionName, fallback, label, className }: P
     <section
       ref={ref}
       aria-label={`${label} 산지 지도`}
+      // 타일이 다 그려질 때까지 지도(canvas)는 투명하고, 그동안 이 배경색이 보인다
+      // (흰 플래시 방지). 지도가 뜨면 그 위로 페이드인된다.
+      style={{ background: MAP_LOADING_BG }}
       className={className ?? "h-80 w-full overflow-hidden rounded-xl border border-rose/15"}
     />
   );
