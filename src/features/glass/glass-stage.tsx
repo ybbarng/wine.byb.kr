@@ -83,6 +83,10 @@ export function GlassStage() {
   // API 가 아직 준비되기 전(WebGPU 초기화 중)에 전환이 일어나면 마지막 교체를 여기 담아
   // onReady 에서 흘려보낸다.
   const pendingRef = useRef<{ dir: Dir; snap: GlassSnapshot } | null>(null);
+  // 페이지 전환의 잔 교체가 예약돼 있는지. 전환 직후 새 페이지의 GlassSetter 가 색을
+  // 넣으면 pathname===last(같은 페이지) 분기가 곧바로 한 번 더 걸린다 — 이때 이 플래그가
+  // true 면 건너뛴다(예약된 단일 교체가 그 최신 색을 읽어 처리하므로 이중 교체 방지).
+  const navPendingRef = useRef(false);
   // 현재 화면 중앙에 보이는 잔(같은 페이지 색 보정에서 "정말 달라졌는지" 판별용).
   const shownRef = useRef<GlassSnapshot>(initialRef.current);
 
@@ -129,6 +133,8 @@ export function GlassStage() {
     // 같은 페이지에서 색·잔만 바뀜(주로 딥링크 첫 진입) → 슬라이드 없이 보정만.
     // 실제로 잔/색이 달라졌을 때만 교체한다(responsive swirlScale 은 live prop 이 처리).
     if (pathname === last) {
+      // 방금 페이지를 옮겨 교체가 예약된 상태라면, 그 예약이 새 색을 처리한다 — 건너뛴다.
+      if (navPendingRef.current) return;
       const shown = shownRef.current;
       const changed =
         shown.glass !== glass ||
@@ -157,10 +163,12 @@ export function GlassStage() {
     if (wasHome && !isHome) {
       setReveal?.(false);
       setFrameHome(false);
+      navPendingRef.current = true;
       moveTimer.current = setTimeout(() => {
         setReveal?.(true);
         revealTimer.current = setTimeout(() => {
           doSwap("left");
+          navPendingRef.current = false;
         }, REVEAL_MS);
       }, MOVE_MS);
       return;
@@ -170,8 +178,10 @@ export function GlassStage() {
     // → ③ 넓어진 창에서 홈 잔이 화면 밖에서 진입.
     if (!wasHome && isHome) {
       setFrameHome(true);
+      navPendingRef.current = true;
       moveTimer.current = setTimeout(() => {
         doSwap("right");
+        navPendingRef.current = false;
       }, MOVE_MS);
       return;
     }
@@ -180,7 +190,11 @@ export function GlassStage() {
     // 넣은 뒤(다음 틱) 최신 잔으로 교체하도록 아주 짧게 미룬다(사실상 즉시).
     setReveal?.(true);
     setFrameHome(false);
-    revealTimer.current = setTimeout(() => doSwap(dir), 48);
+    navPendingRef.current = true;
+    revealTimer.current = setTimeout(() => {
+      doSwap(dir);
+      navPendingRef.current = false;
+    }, 48);
   }, [glass, absorb, swirlScale, isHome, pathname, setReveal]);
 
   useEffect(() => {
