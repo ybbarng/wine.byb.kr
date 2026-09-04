@@ -325,6 +325,15 @@ export default function FluidLab({
     let controls: OrbitControls;
     let disposed = false;
     let frameCount = 0;
+    // 캔버스 백버퍼(backing) 크기 — 화면에 보이는 프레임 크기와 분리한다. 프레임이
+    // width/height 로 애니메이션될 때 매 프레임 renderer.setSize 를 부르면 WebGPU 가
+    // 백버퍼를 재구성하며 깜빡인다. 그래서 setSize 는 "더 커질 때만" 디바운스로 부르고,
+    // 작아지는 전환은 큰 백버퍼를 그대로 다운스케일한다(선명·재구성 없음·깜빡임 없음).
+    // 왜곡은 매 틱 카메라 종횡비를 화면 크기로 맞춰 막는다(백버퍼가 고정이어도 잔은 둥글다).
+    let backingW = 0;
+    let backingH = 0;
+    let resizeTid: ReturnType<typeof setTimeout> | undefined;
+    let onWindowResize: (() => void) | undefined; // 창 리사이즈 핸들러(cleanup 에서 제거)
     // 한 캔버스 안의 잔들. 초기 1개, addGlass 로 두 번째 잔을 넣어 각자 독립 스월·슬라이드.
     // biome-ignore lint/suspicious/noExplicitAny: GlassRuntime 은 아래에서 선언
     const glasses: any[] = [];
@@ -1652,14 +1661,41 @@ export default function FluidLab({
       }
     }
 
-    function onWindowResize() {
+    // 카메라 종횡비를 "화면에 보이는" 프레임 크기에 맞춘다(백버퍼 크기와 무관).
+    // 직교 카메라라 이렇게만 해도 백버퍼가 고정이든 바뀌든 잔은 화면에서 둥글게 보인다.
+    function updateCamera() {
       const aspect = container!.clientWidth / container!.clientHeight;
       camera.left = (-VIEW_H * aspect) / 2;
       camera.right = (VIEW_H * aspect) / 2;
       camera.top = VIEW_H / 2;
       camera.bottom = -VIEW_H / 2;
       camera.updateProjectionMatrix();
-      renderer.setSize(container!.clientWidth, container!.clientHeight);
+    }
+
+    // 백버퍼 크기 반영(재구성 발생). updateStyle=false 로 캔버스 CSS 는 항상 프레임을
+    // 100% 채우게 두고(브라우저가 백버퍼→표시 크기로 스케일), 백버퍼만 여기서 바꾼다.
+    function applyBacking(w: number, h: number) {
+      renderer.setSize(w, h, false);
+      backingW = w;
+      backingH = h;
+    }
+
+    // 프레임 크기가 바뀌면: 매 틱 카메라 종횡비만 갱신(재구성 없음 → 깜빡임 없음).
+    // 백버퍼는 프레임이 현재 백버퍼보다 커질 때만 디바운스로 키운다(업스케일 블러 방지).
+    // allowShrink=true(브라우저 창 리사이즈)면 작아질 때도 맞춰 메모리를 아낀다.
+    function onContainerResize(allowShrink: boolean) {
+      updateCamera();
+      const w = container!.clientWidth;
+      const h = container!.clientHeight;
+      const grow = w > backingW || h > backingH;
+      const shrink = allowShrink && (w < backingW || h < backingH);
+      if (!grow && !shrink) return;
+      const tw = allowShrink ? w : Math.max(w, backingW);
+      const th = allowShrink ? h : Math.max(h, backingH);
+      clearTimeout(resizeTid);
+      resizeTid = setTimeout(() => {
+        if (!disposed) applyBacking(tw, th);
+      }, 200);
     }
 
     async function render() {
@@ -2065,11 +2101,14 @@ export default function FluidLab({
         requiredLimits: { maxStorageBuffersInVertexStage: 1 },
       });
       renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setSize(container.clientWidth, container.clientHeight);
+      applyBacking(container.clientWidth, container.clientHeight);
       renderer.localClippingEnabled = true; // 와인 수면 클립(부피 채움 표현)
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.35;
       container.appendChild(renderer.domElement);
+      // 캔버스는 프레임을 항상 100% 채운다(백버퍼는 고정, 브라우저가 표시 크기로 스케일).
+      renderer.domElement.style.width = "100%";
+      renderer.domElement.style.height = "100%";
 
       // 스월링 입력: 드래그로 잔을 기울인다(WineGlass.tsx 방식).
       const onSwDown = (e: PointerEvent) => {
@@ -2290,9 +2329,12 @@ export default function FluidLab({
 
       setupParticles();
 
+      // 브라우저 창 리사이즈: 작아지면 백버퍼도 줄여 메모리를 아낀다(전환이 아니므로 OK).
+      onWindowResize = () => onContainerResize(true);
       window.addEventListener("resize", onWindowResize);
-      // 컨테이너 크기 변화(레이아웃 전환 등)에도 캔버스를 맞춘다.
-      ro = new ResizeObserver(() => onWindowResize());
+      // 컨테이너(프레임) 크기 변화(홈↔상세 전환 등): 카메라 종횡비만 맞추고 백버퍼는
+      // 커질 때만 반영 → 애니메이션 내내 재구성이 없어 깜빡이지 않는다.
+      ro = new ResizeObserver(() => onContainerResize(false));
       ro.observe(container);
       controls.update();
       // imperative API 노출(lab 검증용). onReady 를 안 주면 지금처럼 동작(잔 1개).
@@ -2310,7 +2352,8 @@ export default function FluidLab({
 
     return () => {
       disposed = true;
-      window.removeEventListener("resize", onWindowResize);
+      if (onWindowResize) window.removeEventListener("resize", onWindowResize);
+      if (resizeTid) clearTimeout(resizeTid);
       if (ro) ro.disconnect();
       for (const gg of glasses.slice()) disposeGlass(gg); // 잔 GPU 자원 반환
       glasses.length = 0;
