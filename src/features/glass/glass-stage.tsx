@@ -216,6 +216,7 @@ export function GlassStage() {
         glassType={initialRef.current.glass}
         bgColor={CANVAS_BG}
         swirlScale={swirlScale ?? HOME_GLASS.swirlScale}
+        backingToViewport
         onReady={(api) => {
           apiRef.current = api;
           const p = pendingRef.current;

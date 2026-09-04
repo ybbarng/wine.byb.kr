@@ -255,12 +255,17 @@ export default function FluidLab({
   bgIntensity,
   slideX,
   onReady,
+  backingToViewport,
 }: {
   glassType?: number;
   wineAbsorb?: [number, number, number];
   bgColor?: string; // 지정 시 배경을 이 단색으로(사이트 배경과 매끄럽게). 미지정=따뜻한 HDR.
   swirlScale?: number; // 최대 스월 기울기 배율(기본 1). 좁은 컨테이너(홈)에선 <1 로 줄여 영역 이탈 방지.
   bgIntensity?: number; // 배경(HDR) 밝기 배율(기본 1). 좁은 프레임이 어두운 영역을 비출 때 ↑.
+  // 백버퍼를 프레임이 아닌 화면(viewport) 크기로 잡는다. 셸(홈↔상세)처럼 프레임이 작게
+  // 시작해 크게 자라는 경우, 처음부터 화면 크기로 잡아 두면 전환 중 항상 다운스케일만
+  // 해(선명) 재구성·업스케일 블러가 없다. 미지정=프레임 크기 기준(작은 프리뷰 등에 적합).
+  backingToViewport?: boolean;
   // 잔을 캔버스 안에서 x축(world)으로 옮긴다. 0=중앙. 컨베이어 슬라이드 검증용.
   // y(높이)·회전(스월)은 건드리지 않으므로 위아래 흔들림이 생기지 않는다.
   slideX?: number;
@@ -1680,21 +1685,28 @@ export default function FluidLab({
       backingH = h;
     }
 
+    // 목표 백버퍼 크기 — 셸이면 화면(viewport), 아니면 프레임 크기.
+    function backingTarget(): [number, number] {
+      return backingToViewport
+        ? [window.innerWidth, window.innerHeight]
+        : [container!.clientWidth, container!.clientHeight];
+    }
+
     // 프레임 크기가 바뀌면: 매 틱 카메라 종횡비만 갱신(재구성 없음 → 깜빡임 없음).
-    // 백버퍼는 프레임이 현재 백버퍼보다 커질 때만 디바운스로 키운다(업스케일 블러 방지).
+    // 백버퍼는 목표보다 작을 때만 디바운스로 키운다(업스케일 블러 방지). 셸은 목표가
+    // 화면 크기라 프레임이 자라도 이미 충분 → 전환 중 재구성이 아예 없다.
     // allowShrink=true(브라우저 창 리사이즈)면 작아질 때도 맞춰 메모리를 아낀다.
     function onContainerResize(allowShrink: boolean) {
       updateCamera();
-      const w = container!.clientWidth;
-      const h = container!.clientHeight;
-      const grow = w > backingW || h > backingH;
-      const shrink = allowShrink && (w < backingW || h < backingH);
+      const [tw, th] = backingTarget();
+      const grow = tw > backingW || th > backingH;
+      const shrink = allowShrink && (tw < backingW || th < backingH);
       if (!grow && !shrink) return;
-      const tw = allowShrink ? w : Math.max(w, backingW);
-      const th = allowShrink ? h : Math.max(h, backingH);
+      const nw = allowShrink ? tw : Math.max(tw, backingW);
+      const nh = allowShrink ? th : Math.max(th, backingH);
       clearTimeout(resizeTid);
       resizeTid = setTimeout(() => {
-        if (!disposed) applyBacking(tw, th);
+        if (!disposed) applyBacking(nw, nh);
       }, 200);
     }
 
@@ -2101,7 +2113,7 @@ export default function FluidLab({
         requiredLimits: { maxStorageBuffersInVertexStage: 1 },
       });
       renderer.setPixelRatio(window.devicePixelRatio);
-      applyBacking(container.clientWidth, container.clientHeight);
+      applyBacking(...backingTarget());
       renderer.localClippingEnabled = true; // 와인 수면 클립(부피 채움 표현)
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.35;
