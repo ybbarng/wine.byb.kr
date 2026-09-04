@@ -87,6 +87,7 @@ export default async function RegionPage({ params }: PageProps<"/region/[slug]">
 
   return (
     <WineDetailView
+      variant="shell"
       absorb={absorb}
       glass={glass}
       country={countryName}

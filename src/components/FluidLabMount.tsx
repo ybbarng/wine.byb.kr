@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
 import { hexToAbsorb } from "@/features/wine/wine-glass";
 
@@ -60,10 +60,26 @@ type WineRow = {
 export default function FluidLabMount() {
   const [color, setColor] = useState<string>(WINE_PRESETS[1].color); // 현재 색(프리셋 or 커스텀)
   const [glassIdx, setGlassIdx] = useState(WINE_PRESETS[1].glass);
+  const [slideX, setSlideX] = useState(0); // 잔 x 슬라이드 검증(-3~3, 0=중앙)
   const [wines, setWines] = useState<WineRow[]>([]);
   const [selSlug, setSelSlug] = useState("");
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const isAdmin = useAuthStore((s) => !!s.password);
+  // 두 잔 검증용 imperative 핸들(FluidLab.onReady 로 받음).
+  type LabApi = {
+    addGlass: (
+      glassType: number,
+      absorb?: [number, number, number],
+      fromDir?: "left" | "right"
+    ) => void;
+    slideOut: (dir: "left" | "right") => void;
+    getCount: () => number;
+  };
+  const apiRef = useRef<LabApi | null>(null);
+  const [glassCount, setGlassCount] = useState(1);
+  const refreshCount = () => {
+    if (apiRef.current) setGlassCount(apiRef.current.getCount());
+  };
 
   // 색 도구용 와인 목록.
   useEffect(() => {
@@ -104,7 +120,75 @@ export default function FluidLabMount() {
 
   return (
     <div className="relative h-full w-full" style={{ backgroundColor: CANVAS_RENDERED }}>
-      <FluidLab wineAbsorb={absorb} glassType={glassIdx} bgColor={CANVAS_BG} />
+      <FluidLab
+        wineAbsorb={absorb}
+        glassType={glassIdx}
+        bgColor={CANVAS_BG}
+        slideX={slideX}
+        onReady={(api) => {
+          apiRef.current = api;
+          setGlassCount(api.getCount());
+        }}
+      />
+
+      {/* slideX 검증 + 두 잔 검증 (상단 중앙) */}
+      <div className="-translate-x-1/2 absolute top-3 left-1/2 z-10 flex w-72 max-w-[70vw] flex-col items-center gap-2 rounded-2xl border border-white/20 bg-black/45 p-3 backdrop-blur">
+        <span className="font-mono text-[11px] text-white/80">
+          slideX = {slideX.toFixed(2)} · 잔 {glassCount}개
+        </span>
+        <input
+          type="range"
+          min={-3}
+          max={3}
+          step={0.05}
+          value={slideX}
+          onChange={(e) => setSlideX(Number(e.target.value))}
+          aria-label="slideX"
+          className="w-full"
+        />
+        <button
+          type="button"
+          onClick={() => setSlideX(0)}
+          className="rounded border border-white/25 px-2 py-0.5 text-[11px] text-white/70 hover:text-white"
+        >
+          가운데(0)
+        </button>
+        {/* 두 잔 검증: 반대편에서 잔을 넣거나(각자 출렁), 컨베이어처럼 교차시킨다. */}
+        <div className="flex w-full flex-wrap justify-center gap-1.5 border-white/15 border-t pt-2">
+          <button
+            type="button"
+            onClick={() => {
+              apiRef.current?.addGlass(glassIdx, absorb, "left");
+              refreshCount();
+            }}
+            className="rounded border border-white/25 px-2 py-0.5 text-[11px] text-white/80 hover:text-white"
+          >
+            잔 추가(왼쪽에서)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              apiRef.current?.addGlass(glassIdx, absorb, "right");
+              refreshCount();
+            }}
+            className="rounded border border-white/25 px-2 py-0.5 text-[11px] text-white/80 hover:text-white"
+          >
+            잔 추가(오른쪽에서)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              // 컨베이어 교차: 기존 잔을 왼쪽으로 내보내고 새 잔을 오른쪽에서 넣는다.
+              apiRef.current?.slideOut("left");
+              apiRef.current?.addGlass(glassIdx, absorb, "right");
+              refreshCount();
+            }}
+            className="rounded border border-white/40 bg-white/10 px-2 py-0.5 text-[11px] text-white hover:bg-white/20"
+          >
+            교차 슬라이드
+          </button>
+        </div>
+      </div>
 
       {/* 작은 프리뷰 — 와인 페이지와 같은 평평한 웜 배경(HDR 그라데이션 없이 깔끔). */}
       <div className="absolute bottom-3 right-3 z-10 flex flex-col items-center gap-1">
