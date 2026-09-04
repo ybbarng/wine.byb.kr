@@ -208,6 +208,7 @@ export function GlassStage() {
 
   return (
     <div
+      data-testid="glass-stage"
       className={`pointer-events-none absolute z-10 overflow-hidden transition-all ease-in-out ${frameClass(frameHome)}`}
       style={{ background: CANVAS_RENDERED, transitionDuration: `${MOVE_MS}ms` }}
     >

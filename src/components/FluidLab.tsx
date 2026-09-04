@@ -2121,6 +2121,12 @@ export default function FluidLab({
       // 캔버스는 프레임을 항상 100% 채운다(백버퍼는 고정, 브라우저가 표시 크기로 스케일).
       renderer.domElement.style.width = "100%";
       renderer.domElement.style.height = "100%";
+      // 스월(드래그·탭)을 받으려면 캔버스가 포인터 입력을 받아야 한다. 셸(GlassStage)은
+      // 프레임 오버레이가 페이지 클릭을 막지 않도록 래퍼에 pointer-events:none 을 준다.
+      // 그러면 그 안의 캔버스도 입력을 못 받아 스월이 죽는다(과거 회귀). 캔버스만 auto 로
+      // 되돌려, 래퍼가 어떤 상태든 잔은 항상 상호작용 가능하게 한다(헤더가 z-30 으로 위에
+      // 있어 검색·내비는 안 막힌다). standalone 은 원래 auto 라 영향 없다.
+      renderer.domElement.style.pointerEvents = "auto";
 
       // 스월링 입력: 드래그로 잔을 기울인다(WineGlass.tsx 방식).
       const onSwDown = (e: PointerEvent) => {
