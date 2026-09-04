@@ -11,6 +11,9 @@ import { countryGeo } from "./wine-geo";
 // 테마와 대비돼 "흰 플래시"처럼 보이던 걸 없앤다. 로드된 지도의 옅은 땅 색과도 가깝다.
 const MAP_LOADING_BG = "#e7ded2";
 
+// 페이지 전환 때 새 나라로 카메라가 옮겨가는(fitBounds) 시간. 느긋하게 이어지도록 길게.
+const PAN_MS = 1600;
+
 // 큰 GeoJSON(산지 폴리곤 약 856KB·세계 국경)은 어느 나라든 같은 파일을 쓴다. 페이지를
 // 옮길 때마다 다시 받고 파싱하면 지도가 늦게 떠 깜빡인다 → 모듈 수준에서 한 번만 받아
 // 캐시하고, 소스에 URL 대신 이 캐시 데이터를 넣어 재-추가 시 재요청이 없게 한다.
@@ -323,12 +326,12 @@ async function applyRegionData(m: MlMap, p: MapProps) {
     });
   }
 
-  // 카메라: 첫 갱신은 즉시 맞추고(팬 없음), 이후 전환은 새 나라로 부드럽게 팬한다.
+  // 카메라: 첫 갱신은 즉시 맞추고(팬 없음), 이후 전환은 새 나라로 느긋하게 팬한다.
   // 베이스 타일은 계속 보이므로 팬 중에도 빈 박스가 없다.
   const bounds = computeBounds(p);
   if (bounds) {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    m.fitBounds(bounds, { padding: 24, duration: firstApplyDone && !reduce ? 700 : 0 });
+    m.fitBounds(bounds, { padding: 24, duration: firstApplyDone && !reduce ? PAN_MS : 0 });
   }
   firstApplyDone = true;
 }
