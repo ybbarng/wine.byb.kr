@@ -29,16 +29,17 @@ const CANVAS_BG = "#9a8168";
 const CANVAS_RENDERED = "#bda588";
 
 const REPURCHASE_OPTS = ["응", "아마", "아니"] as const;
-const VALUE_OPTS = ["만족", "보통", "아쉬움"] as const;
+// 가격 대비 5단계(기존 3단계를 포함). 왼→오: 좋음 → 아쉬움.
+const VALUE_OPTS = ["아주 만족", "만족", "보통", "아쉬움", "매우 아쉬움"] as const;
 
 // 중요한 것부터. 각 단계는 한 가지에 집중(토스 스타일).
 const STEPS = [
   { key: "wine", title: "어떤 와인이에요?", sub: "기록할 와인을 골라요" },
   { key: "rating", title: "몇 점이었어요?", sub: "전체 인상을 별로" },
   { key: "color", title: "무슨 색이었어요?", sub: "실제 잔을 보며 맞춰요" },
-  { key: "verdict", title: "어땠어요?", sub: "다시 살지, 값은 어땠는지" },
+  { key: "verdict", title: "어땠어요?", sub: "구매가를 보며 값어치와 재구매를" },
   { key: "note", title: "한마디 남긴다면?", sub: "향·맛·안주 등 자유롭게" },
-  { key: "buy", title: "언제·얼마에 샀어요?", sub: "선택 — 없으면 건너뛰어요" },
+  { key: "buy", title: "언제·어디서 샀어요?", sub: "선택 — 없으면 건너뛰어요" },
 ] as const;
 
 const inputClass =
@@ -267,16 +268,30 @@ export function TastingNoteWizard({
     if (key === "verdict")
       return (
         <div className="flex flex-col gap-6">
+          {/* 가격을 여기서 함께 — 가격 대비를 판단할 때 구매가가 바로 보이도록. */}
           <div>
-            <p className="mb-2 text-sm text-muted">다시 살까?</p>
-            <div className="flex gap-2">
-              {REPURCHASE_OPTS.map((opt) => (
+            <p className="mb-2 text-sm text-muted">이 와인, 얼마에 샀어요?</p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                inputMode="numeric"
+                placeholder="예: 31920"
+                className={inputClass}
+                {...register("purchasePrice")}
+              />
+              <span className="shrink-0 text-sm text-muted">원</span>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-sm text-muted">가격 대비</p>
+            <div className="grid grid-cols-5 gap-1.5">
+              {VALUE_OPTS.map((opt) => (
                 <button
                   key={opt}
                   type="button"
-                  onClick={() => setValue("repurchase", opt === repurchase ? undefined : opt)}
-                  className={`flex-1 rounded-xl border py-3 text-base transition-colors ${
-                    repurchase === opt
+                  onClick={() => setValue("value", opt === value ? undefined : opt)}
+                  className={`rounded-xl border px-1 py-2.5 text-xs leading-tight transition-colors ${
+                    value === opt
                       ? "border-gold/50 bg-gold/10 text-foreground"
                       : "border-foreground/15 text-muted"
                   }`}
@@ -287,15 +302,15 @@ export function TastingNoteWizard({
             </div>
           </div>
           <div>
-            <p className="mb-2 text-sm text-muted">가격 대비</p>
+            <p className="mb-2 text-sm text-muted">다시 살까?</p>
             <div className="flex gap-2">
-              {VALUE_OPTS.map((opt) => (
+              {REPURCHASE_OPTS.map((opt) => (
                 <button
                   key={opt}
                   type="button"
-                  onClick={() => setValue("value", opt === value ? undefined : opt)}
+                  onClick={() => setValue("repurchase", opt === repurchase ? undefined : opt)}
                   className={`flex-1 rounded-xl border py-3 text-base transition-colors ${
-                    value === opt
+                    repurchase === opt
                       ? "border-gold/50 bg-gold/10 text-foreground"
                       : "border-foreground/15 text-muted"
                   }`}
@@ -337,16 +352,7 @@ export function TastingNoteWizard({
             구매일
             <input type="date" className={inputClass} {...register("purchasedOn")} />
           </label>
-          <label className="flex flex-col gap-1 text-sm text-muted">
-            구매가격(원)
-            <input
-              type="number"
-              inputMode="numeric"
-              className={inputClass}
-              {...register("purchasePrice")}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm text-muted">
+          <label className="col-span-2 flex flex-col gap-1 text-sm text-muted">
             구매처
             <input type="text" className={inputClass} {...register("purchasePlace")} />
           </label>

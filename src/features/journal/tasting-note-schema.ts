@@ -26,7 +26,12 @@ export const tastingNoteSchema = z.object({
   purchasePlace: z.preprocess(emptyToUndefined, z.string().max(200).optional()),
   rating: z.preprocess(emptyToUndefined, z.coerce.number().int().min(1).max(5).optional()),
   repurchase: z.preprocess(emptyToUndefined, z.enum(["응", "아마", "아니"]).optional()),
-  value: z.preprocess(emptyToUndefined, z.enum(["만족", "보통", "아쉬움"]).optional()),
+  // 가격 대비 5단계. 기존 3단계(만족/보통/아쉬움)를 포함하는 상위집합이라 옛 기록도
+  // 그대로 유효하다(마이그레이션 불필요).
+  value: z.preprocess(
+    emptyToUndefined,
+    z.enum(["아주 만족", "만족", "보통", "아쉬움", "매우 아쉬움"]).optional()
+  ),
   colorHex: z.preprocess(
     emptyToUndefined,
     z
