@@ -39,7 +39,7 @@ const STEPS = [
   { key: "color", title: "무슨 색이었어요?", sub: "실제 잔을 보며 맞춰요" },
   { key: "verdict", title: "어땠어요?", sub: "구매가를 보며 값어치와 재구매를" },
   { key: "note", title: "한마디 남긴다면?", sub: "향·맛·안주 등 자유롭게" },
-  { key: "buy", title: "언제·어디서 샀어요?", sub: "선택 — 없으면 건너뛰어요" },
+  { key: "buy", title: "빈티지·구매 정보", sub: "선택 — 없으면 건너뛰어요" },
 ] as const;
 
 const inputClass =
@@ -344,6 +344,16 @@ export function TastingNoteWizard({
     if (key === "buy")
       return (
         <div className="grid grid-cols-2 gap-3">
+          <label className="col-span-2 flex flex-col gap-1 text-sm text-muted">
+            빈티지 (병에 적힌 연도)
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="예: 2021"
+              className={inputClass}
+              {...register("vintageYear")}
+            />
+          </label>
           <label className="flex flex-col gap-1 text-sm text-muted">
             음용일
             <input type="date" className={inputClass} {...register("drankOn")} />
