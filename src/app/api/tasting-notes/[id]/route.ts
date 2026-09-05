@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { tastingNoteSchema, toUtcDate } from "@/features/journal/tasting-note-schema";
+import { buildTastingNoteUpdate, tastingNoteSchema } from "@/features/journal/tasting-note-schema";
 import { verifyAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -26,28 +26,18 @@ export async function PATCH(request: NextRequest, ctx: RouteContext<"/api/tastin
   }
   const d = parsed.data;
 
-  const wine = await db.wine.findUnique({ where: { id: d.wineId }, select: { id: true } });
-  if (!wine) {
-    return NextResponse.json({ error: "존재하지 않는 와인입니다." }, { status: 400 });
+  // 와인 변경이 요청에 포함된 경우에만 존재 확인.
+  if (Object.hasOwn(body as Record<string, unknown>, "wineId")) {
+    const wine = await db.wine.findUnique({ where: { id: d.wineId }, select: { id: true } });
+    if (!wine) {
+      return NextResponse.json({ error: "존재하지 않는 와인입니다." }, { status: 400 });
+    }
   }
 
-  await db.tastingNote.update({
-    where: { id },
-    data: {
-      wineId: d.wineId,
-      drankOn: toUtcDate(d.drankOn) ?? null,
-      purchasedOn: toUtcDate(d.purchasedOn) ?? null,
-      vintageYear: d.vintageYear ?? null,
-      purchasePrice: d.purchasePrice ?? null,
-      purchasePlace: d.purchasePlace ?? null,
-      rating: d.rating ?? null,
-      repurchase: d.repurchase ?? null,
-      value: d.value ?? null,
-      colorHex: d.colorHex ?? null,
-      bodyText: d.bodyText ?? null,
-      foodPaired: d.foodPaired ?? null,
-    },
-  });
+  // 요청에 실제로 온 칸만 갱신한다. 폼이 안 보낸 칸은 그대로 두어, 편집 저장이 손대지
+  // 않은 칸을 null 로 지우던 데이터 유실을 막는다.
+  const data = buildTastingNoteUpdate(body as Record<string, unknown>, d);
+  await db.tastingNote.update({ where: { id }, data });
 
   return NextResponse.json({ id });
 }
