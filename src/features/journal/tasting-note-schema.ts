@@ -57,3 +57,28 @@ export function toUtcDate(dateStr: string | undefined): Date | undefined {
 export function toDateInput(date: Date | null): string | null {
   return date ? date.toISOString().slice(0, 10) : null;
 }
+
+// 편집(PATCH)용 부분 갱신 payload. **요청 본문에 실제로 들어온 칸만** 바꾼다.
+// 폼이 어떤 칸을 아예 안 보내면(예: 그 입력이 화면에 없었음) 그 칸은 건드리지 않아,
+// 편집 저장이 손대지 않은 칸을 null 로 지워버리는 사고를 막는다(데이터 유실 방지).
+// (칸을 명시적으로 비우려면 폼이 그 키를 빈 값으로 보내야 한다 — 그때만 null 로 지운다.)
+export function buildTastingNoteUpdate(
+  raw: Record<string, unknown>,
+  d: TastingNoteInput
+): Record<string, unknown> {
+  const data: Record<string, unknown> = {};
+  const has = (k: string) => Object.hasOwn(raw, k);
+  if (has("wineId")) data.wineId = d.wineId;
+  if (has("drankOn")) data.drankOn = toUtcDate(d.drankOn) ?? null;
+  if (has("purchasedOn")) data.purchasedOn = toUtcDate(d.purchasedOn) ?? null;
+  if (has("vintageYear")) data.vintageYear = d.vintageYear ?? null;
+  if (has("purchasePrice")) data.purchasePrice = d.purchasePrice ?? null;
+  if (has("purchasePlace")) data.purchasePlace = d.purchasePlace ?? null;
+  if (has("rating")) data.rating = d.rating ?? null;
+  if (has("repurchase")) data.repurchase = d.repurchase ?? null;
+  if (has("value")) data.value = d.value ?? null;
+  if (has("colorHex")) data.colorHex = d.colorHex ?? null;
+  if (has("bodyText")) data.bodyText = d.bodyText ?? null;
+  if (has("foodPaired")) data.foodPaired = d.foodPaired ?? null;
+  return data;
+}
