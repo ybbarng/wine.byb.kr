@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, hexToAbsorb, wineGlassFor } from "@/features/wine/wine-glass";
 import { wineDisplayName } from "@/lib/wine";
 import {
@@ -19,15 +20,6 @@ const FluidLab = dynamic(() => import("@/components/FluidLab"), {
   ssr: false,
   loading: () => null,
 });
-
-// 노트 색 프리셋(눈에 보이는 색).
-const COLOR_PRESETS: { name: string; hex: string }[] = [
-  { name: "짙은 레드", hex: "#4a0f1a" },
-  { name: "루비", hex: "#7c1f2c" },
-  { name: "로제", hex: "#e59aa4" },
-  { name: "화이트", hex: "#ecd88f" },
-  { name: "옅은 골드", hex: "#f1e7b4" },
-];
 
 export interface WineOption {
   id: string;
@@ -200,41 +192,12 @@ export function TastingNoteForm({
             <FluidLab wineAbsorb={previewAbsorb} glassType={previewGlass} swirlScale={0.4} />
           </div>
           <div className="flex flex-1 flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="color"
-                value={currentColor}
-                onChange={(e) => setValue("colorHex", e.target.value, { shouldValidate: true })}
-                aria-label="와인 색"
-                className="h-9 w-12 shrink-0 cursor-pointer rounded border border-foreground/20 bg-transparent"
-              />
-              <span className="font-mono text-sm text-muted">{currentColor}</span>
-              {colorHex ? (
-                <button
-                  type="button"
-                  onClick={() => setValue("colorHex", undefined, { shouldValidate: true })}
-                  className="text-xs text-muted/60 transition-colors hover:text-foreground"
-                >
-                  지우기
-                </button>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {COLOR_PRESETS.map((p) => (
-                <button
-                  key={p.hex}
-                  type="button"
-                  onClick={() => setValue("colorHex", p.hex, { shouldValidate: true })}
-                  className="flex items-center gap-1 rounded-full border border-foreground/15 px-2 py-1 text-xs text-muted transition-colors hover:text-foreground"
-                >
-                  <span
-                    className="h-3 w-3 rounded-full border border-foreground/20"
-                    style={{ background: p.hex }}
-                  />
-                  {p.name}
-                </button>
-              ))}
-            </div>
+            <WineColorPicker
+              color={currentColor}
+              onChange={(hex) => setValue("colorHex", hex, { shouldValidate: true })}
+              onClear={() => setValue("colorHex", undefined, { shouldValidate: true })}
+              showClear={!!colorHex}
+            />
             <p className="text-[11px] leading-snug text-muted/60">
               실제 잔을 보며 색을 맞춰 저장하세요. 와인 페이지 색은 기록들의 평균이 됩니다.
             </p>

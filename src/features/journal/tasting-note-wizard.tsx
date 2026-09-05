@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
 import { wineDisplayName } from "@/lib/wine";
 import { type ExistingNote, toDefaults, type WineOption } from "./tasting-note-form";
@@ -27,7 +28,6 @@ const FluidLab = dynamic(() => import("@/components/FluidLab"), {
 const CANVAS_BG = "#9a8168";
 const CANVAS_RENDERED = "#bda588";
 
-const COLOR_PRESETS = ["#4a0f1a", "#7c1f2c", "#e59aa4", "#ecd88f", "#f1e7b4"];
 const REPURCHASE_OPTS = ["응", "아마", "아니"] as const;
 const VALUE_OPTS = ["만족", "보통", "아쉬움"] as const;
 
@@ -255,28 +255,12 @@ export function TastingNoteWizard({
               swirlScale={0.4}
             />
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="color"
-              value={currentColor}
-              onChange={(e) => setValue("colorHex", e.target.value)}
-              aria-label="와인 색"
-              className="h-10 w-14 shrink-0 cursor-pointer rounded border border-foreground/20 bg-transparent"
-            />
-            <span className="font-mono text-sm text-muted">{currentColor}</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {COLOR_PRESETS.map((hex) => (
-              <button
-                key={hex}
-                type="button"
-                onClick={() => setValue("colorHex", hex)}
-                className="h-8 w-8 rounded-full border border-foreground/20"
-                style={{ background: hex }}
-                aria-label={hex}
-              />
-            ))}
-          </div>
+          <WineColorPicker
+            color={currentColor}
+            onChange={(hex) => setValue("colorHex", hex)}
+            onClear={() => setValue("colorHex", undefined)}
+            showClear={!!colorHex}
+          />
         </div>
       );
 
