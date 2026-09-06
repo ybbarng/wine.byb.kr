@@ -32,14 +32,16 @@ const REPURCHASE_OPTS = ["응", "아마", "아니"] as const;
 // 가격 대비 5단계(기존 3단계를 포함). 왼→오: 좋음 → 아쉬움.
 const VALUE_OPTS = ["아주 만족", "만족", "보통", "아쉬움", "매우 아쉬움"] as const;
 
-// 중요한 것부터. 각 단계는 한 가지에 집중(토스 스타일).
+// 실제 시음 순서를 따른다: 고르고 → (병·영수증으로 미리 아는) 빈티지·구매 정보 →
+// 붓고 색 보고 → 향·맛 → 다 맛본 뒤 종합 별점 → 값어치·재구매.
+// (별점은 마셔봐야 매길 수 있어 뒤쪽, 빈티지·구매는 미리 아는 정보라 앞쪽에 둔다.)
 const STEPS = [
   { key: "wine", title: "어떤 와인이에요?", sub: "기록할 와인을 골라요" },
-  { key: "rating", title: "몇 점이었어요?", sub: "전체 인상을 별로" },
+  { key: "buy", title: "빈티지·구매 정보", sub: "병·영수증으로 미리 아는 것 — 없으면 건너뛰어요" },
   { key: "color", title: "무슨 색이었어요?", sub: "실제 잔을 보며 맞춰요" },
-  { key: "verdict", title: "어땠어요?", sub: "구매가를 보며 값어치와 재구매를" },
-  { key: "note", title: "한마디 남긴다면?", sub: "향·맛·안주 등 자유롭게" },
-  { key: "buy", title: "빈티지·구매 정보", sub: "선택 — 없으면 건너뛰어요" },
+  { key: "note", title: "향과 맛은 어때요?", sub: "느껴지는 향·맛·인상을 자유롭게" },
+  { key: "rating", title: "몇 점이었어요?", sub: "다 맛보고 전체 인상을 별로" },
+  { key: "verdict", title: "값어치는 어땠어요?", sub: "구매가를 보며 가격 대비·재구매를" },
 ] as const;
 
 const inputClass =
@@ -87,6 +89,14 @@ export function TastingNoteWizard({
   const repurchase = watch("repurchase") as string | undefined;
   const value = watch("value") as string | undefined;
   const colorHex = watch("colorHex") as string | undefined;
+  // 구매가는 앞선 "빈티지·구매 정보" 단계에서 입력하고, 값어치(verdict) 단계에서 읽기
+  // 전용으로 다시 보여줘 "가격 대비"를 판단할 때 참고하게 한다.
+  const purchasePriceRaw = watch("purchasePrice") as string | number | undefined;
+  const purchasePriceNum = Number(purchasePriceRaw);
+  const purchasePriceLabel =
+    purchasePriceRaw !== "" && purchasePriceRaw != null && Number.isFinite(purchasePriceNum)
+      ? `${purchasePriceNum.toLocaleString("ko-KR")}원`
+      : null;
   const selWine = wines.find((w) => w.id === wineId);
   const currentColor = colorHex ?? defaultColorHex(selWine?.type);
   // 프리뷰 absorb·glass 는 실제 렌더(와인/상세 페이지)와 같은 wineGlassFor 파이프라인으로.
@@ -268,22 +278,14 @@ export function TastingNoteWizard({
     if (key === "verdict")
       return (
         <div className="flex flex-col gap-6">
-          {/* 가격을 여기서 함께 — 가격 대비를 판단할 때 구매가가 바로 보이도록. */}
           <div>
-            <p className="mb-2 text-sm text-muted">이 와인, 얼마에 샀어요?</p>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                inputMode="numeric"
-                placeholder="예: 31920"
-                className={inputClass}
-                {...register("purchasePrice")}
-              />
-              <span className="shrink-0 text-sm text-muted">원</span>
+            {/* 구매가는 앞 단계에서 입력한 값을 상기시켜, 가격 대비 판단에 참고. */}
+            <div className="mb-2 flex items-baseline justify-between">
+              <p className="text-sm text-muted">가격 대비</p>
+              <span className="text-xs text-muted/70">
+                {purchasePriceLabel ? `구매가 ${purchasePriceLabel}` : "구매가 미입력"}
+              </span>
             </div>
-          </div>
-          <div>
-            <p className="mb-2 text-sm text-muted">가격 대비</p>
             <div className="grid grid-cols-5 gap-1.5">
               {VALUE_OPTS.map((opt) => (
                 <button
@@ -344,7 +346,7 @@ export function TastingNoteWizard({
     if (key === "buy")
       return (
         <div className="grid grid-cols-2 gap-3">
-          <label className="col-span-2 flex flex-col gap-1 text-sm text-muted">
+          <label className="flex flex-col gap-1 text-sm text-muted">
             빈티지 (병에 적힌 연도)
             <input
               type="number"
@@ -355,12 +357,22 @@ export function TastingNoteWizard({
             />
           </label>
           <label className="flex flex-col gap-1 text-sm text-muted">
-            음용일
-            <input type="date" className={inputClass} {...register("drankOn")} />
+            구매가격(원)
+            <input
+              type="number"
+              inputMode="numeric"
+              placeholder="예: 31920"
+              className={inputClass}
+              {...register("purchasePrice")}
+            />
           </label>
           <label className="flex flex-col gap-1 text-sm text-muted">
             구매일
             <input type="date" className={inputClass} {...register("purchasedOn")} />
+          </label>
+          <label className="flex flex-col gap-1 text-sm text-muted">
+            음용일
+            <input type="date" className={inputClass} {...register("drankOn")} />
           </label>
           <label className="col-span-2 flex flex-col gap-1 text-sm text-muted">
             구매처
