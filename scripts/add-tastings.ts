@@ -986,17 +986,16 @@ async function main() {
       where: { wineId: wine.id, purchasedOn, purchasePrice: e.tasting.purchasePrice },
     });
     if (dup) {
-      // 이미 있으면 구매처·음용일을 시드값으로 맞춰 갱신한다(시드가 단일 소스).
+      // 이미 있는 노트는 사용자가 앱에서 편집했을 수 있다. 시드는 **비어 있는 칸만
+      // 채우고** 사용자가 넣은 값은 절대 덮지 않는다. (과거: 시드가 구매처·음용일을
+      // 시드값으로 덮어써, 사용자가 앱에서 적은 음용일이 배포마다 null 로 지워졌다.)
+      const fill: { purchasePlace?: string | null; drankOn?: Date | null } = {};
       const place = e.tasting.purchasePlace ?? null;
-      const drankChanged = (dup.drankOn?.getTime() ?? null) !== (drankOn?.getTime() ?? null);
-      if (dup.purchasePlace !== place || drankChanged) {
-        await db.tastingNote.update({
-          where: { id: dup.id },
-          data: { purchasePlace: place, drankOn },
-        });
-        console.log(
-          `~ 갱신: ${e.wine.nameLocal} (음용일 ${e.tasting.drankOn ?? "미시음"}, ${place ?? "구매처없음"})`
-        );
+      if (dup.purchasePlace == null && place != null) fill.purchasePlace = place;
+      if (dup.drankOn == null && drankOn != null) fill.drankOn = drankOn;
+      if (Object.keys(fill).length > 0) {
+        await db.tastingNote.update({ where: { id: dup.id }, data: fill });
+        console.log(`~ 채움: ${e.wine.nameLocal} (${Object.keys(fill).join(", ")})`);
       } else {
         console.log(`= 이미 있음: ${e.wine.nameLocal} (${e.tasting.drankOn ?? "미시음"})`);
       }
