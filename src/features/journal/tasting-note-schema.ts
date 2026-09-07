@@ -5,6 +5,12 @@ import { z } from "zod";
 
 const emptyToUndefined = (v: unknown) => (v === "" || v == null ? undefined : v);
 
+/** 맛의 한 축을 느낀 정도(1~5). 평가 안 했으면 undefined. */
+const flavorLevel = z.preprocess(
+  emptyToUndefined,
+  z.coerce.number().int().min(1).max(5).optional()
+);
+
 /** "YYYY-MM-DD" 날짜 문자열(비어 있으면 undefined). */
 const dateString = z.preprocess(
   emptyToUndefined,
@@ -46,6 +52,19 @@ export const tastingNoteSchema = z.object({
     (v) => (Array.isArray(v) && v.length === 0 ? undefined : v),
     z.array(z.string().max(40)).max(40).optional()
   ),
+  // 가이드 시음(P3): 실제로 느낀 맛. 축마다 1~5, 평가 안 한 축은 키가 없다.
+  // 아무 축도 없는 빈 객체는 "평가 안 함"이라 undefined로.
+  flavorFelt: z.preprocess(
+    (v) => (v != null && typeof v === "object" && Object.keys(v).length === 0 ? undefined : v),
+    z
+      .object({
+        acidity: flavorLevel,
+        tannin: flavorLevel,
+        sweetness: flavorLevel,
+        body: flavorLevel,
+      })
+      .optional()
+  ),
 });
 
 /** aromasConfirmed(문자열 배열)을 DB 저장용 JSON 문자열로. 비었으면 null. */
@@ -61,6 +80,38 @@ export function parseAromas(raw: string | null | undefined): string[] {
     return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
   } catch {
     return [];
+  }
+}
+
+/** 실제로 느낀 맛 — 축마다 1~5. 평가 안 한 축은 키가 없다. */
+export type FlavorFelt = { acidity?: number; tannin?: number; sweetness?: number; body?: number };
+
+const FLAVOR_KEYS = ["acidity", "tannin", "sweetness", "body"] as const;
+
+/** flavorFelt를 DB 저장용 JSON 문자열로. 평가한 축이 하나도 없으면 null. */
+export function serializeFlavor(felt: FlavorFelt | undefined): string | null {
+  if (!felt) return null;
+  const kept: FlavorFelt = {};
+  for (const k of FLAVOR_KEYS) {
+    if (felt[k] != null) kept[k] = felt[k];
+  }
+  return Object.keys(kept).length > 0 ? JSON.stringify(kept) : null;
+}
+
+/** DB의 flavorFelt(JSON 문자열)을 객체로. 깨졌으면 빈 객체. 1~5 밖의 값은 버린다. */
+export function parseFlavor(raw: string | null | undefined): FlavorFelt {
+  if (!raw) return {};
+  try {
+    const v = JSON.parse(raw);
+    if (v == null || typeof v !== "object") return {};
+    const out: FlavorFelt = {};
+    for (const k of FLAVOR_KEYS) {
+      const n = (v as Record<string, unknown>)[k];
+      if (typeof n === "number" && Number.isInteger(n) && n >= 1 && n <= 5) out[k] = n;
+    }
+    return out;
+  } catch {
+    return {};
   }
 }
 
@@ -102,5 +153,6 @@ export function buildTastingNoteUpdate(
   if (has("bodyText")) data.bodyText = d.bodyText ?? null;
   if (has("foodPaired")) data.foodPaired = d.foodPaired ?? null;
   if (has("aromasConfirmed")) data.aromasConfirmed = serializeAromas(d.aromasConfirmed);
+  if (has("flavorFelt")) data.flavorFelt = serializeFlavor(d.flavorFelt);
   return data;
 }

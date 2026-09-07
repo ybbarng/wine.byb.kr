@@ -7,12 +7,18 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
-import { expectedAromasFor, expectedColorHint } from "@/features/wine/tasting-hints";
+import {
+  expectedAromasFor,
+  expectedColorHint,
+  expectedFlavorFor,
+  FLAVOR_AXES,
+} from "@/features/wine/tasting-hints";
 import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
 import { wineDisplayName } from "@/lib/wine";
 import { type ExistingNote, toDefaults, type WineOption } from "./tasting-note-form";
 import {
+  type FlavorFelt,
   type TastingNoteFormInput,
   type TastingNoteInput,
   tastingNoteSchema,
@@ -34,14 +40,16 @@ const REPURCHASE_OPTS = ["응", "아마", "아니"] as const;
 const VALUE_OPTS = ["아주 만족", "만족", "보통", "아쉬움", "매우 아쉬움"] as const;
 
 // 실제 시음 순서를 따른다: 고르고 → (병·영수증으로 미리 아는) 빈티지·구매 정보 →
-// 붓고 색 보고 → 코로 향 맡고 → 향·맛 메모 → 다 맛본 뒤 종합 별점 → 값어치·재구매.
+// 붓고 색 보고 → 코로 향 맡고 → 한 모금 머금어 맛 보고 → 한마디 메모 →
+// 다 맛본 뒤 종합 별점 → 값어치·재구매.
 // (별점은 마셔봐야 매길 수 있어 뒤쪽, 빈티지·구매는 미리 아는 정보라 앞쪽에 둔다.)
 const STEPS = [
   { key: "wine", title: "어떤 와인이에요?", sub: "기록할 와인을 골라요" },
   { key: "buy", title: "빈티지·구매 정보", sub: "병·영수증으로 미리 아는 것 — 없으면 건너뛰어요" },
   { key: "color", title: "무슨 색이었어요?", sub: "실제 잔을 보며 맞춰요" },
   { key: "aroma", title: "어떤 향이 났어요?", sub: "코를 대고 맡은 향을 골라요" },
-  { key: "note", title: "향과 맛은 어때요?", sub: "느껴지는 향·맛·인상을 자유롭게" },
+  { key: "flavor", title: "맛은 어땠어요?", sub: "한 모금 머금고 느낀 만큼 표시해요" },
+  { key: "note", title: "한마디 남길까요?", sub: "인상·함께한 음식을 자유롭게" },
   { key: "rating", title: "몇 점이었어요?", sub: "다 맛보고 전체 인상을 별로" },
   { key: "verdict", title: "값어치는 어땠어요?", sub: "구매가를 보며 가격 대비·재구매를" },
 ] as const;
@@ -110,6 +118,16 @@ export function TastingNoteWizard({
       ? aromasConfirmed.filter((a) => a !== aroma)
       : [...aromasConfirmed, aroma];
     setValue("aromasConfirmed", next, { shouldValidate: true });
+  };
+  // 가이드 맛 단계: 축별 예상 수준을 곁들여 보여주고, 실제로 느낀 정도(1~5)를 받는다.
+  const flavorFelt = (watch("flavorFelt") as FlavorFelt | undefined) ?? {};
+  const expectedFlavor = useMemo(() => expectedFlavorFor(selWine?.grapes ?? []), [selWine]);
+  const setFlavor = (axis: keyof FlavorFelt, level: number) => {
+    // 같은 값을 다시 누르면 해제(평가 안 함)한다.
+    const next = { ...flavorFelt };
+    if (next[axis] === level) delete next[axis];
+    else next[axis] = level;
+    setValue("flavorFelt", next, { shouldValidate: true });
   };
   // 프리뷰 absorb·glass 는 실제 렌더(와인/상세 페이지)와 같은 wineGlassFor 파이프라인으로.
   // 색을 안 고르면 타입 추정색(튜닝값), 고르면 그 색. hexToAbsorb 를 직접 쓰면 스케일이
@@ -337,6 +355,62 @@ export function TastingNoteWizard({
       );
     }
 
+    if (key === "flavor") {
+      const hasAnyExpected = FLAVOR_AXES.some(({ key: axis }) => expectedFlavor[axis]);
+      return (
+        <div className="flex flex-col gap-4">
+          <p
+            className={`rounded-xl px-3 py-2 text-sm leading-snug text-muted ${
+              hasAnyExpected
+                ? "border border-gold/25 bg-gold/5"
+                : "border border-foreground/12 bg-foreground/[0.03]"
+            }`}
+          >
+            {hasAnyExpected ? (
+              <>
+                <span className="mr-1 font-medium text-gold">예상</span>이 와인의 품종이면 보통 이런
+                맛이에요. 한 모금 머금고 실제로 느낀 만큼 표시해 보세요.
+              </>
+            ) : (
+              "이 와인은 예상 맛 정보가 아직 없어요. 느낀 만큼 자유롭게 표시해 주세요."
+            )}
+          </p>
+          {FLAVOR_AXES.map(({ key: axis, label, low, high }) => (
+            <div key={axis}>
+              <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                <span className="text-sm text-foreground">{label}</span>
+                {expectedFlavor[axis] ? (
+                  <span className="text-xs text-gold/90">예상 {expectedFlavor[axis]}</span>
+                ) : null}
+              </div>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setFlavor(axis, n)}
+                    aria-label={`${label} ${n}단계`}
+                    aria-pressed={flavorFelt[axis] === n}
+                    className={`flex-1 rounded-lg border py-2.5 text-sm transition-colors ${
+                      flavorFelt[axis] != null && n <= (flavorFelt[axis] ?? 0)
+                        ? "border-gold/50 bg-gold/10 text-foreground"
+                        : "border-foreground/15 text-muted hover:border-gold/40"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1 flex justify-between text-[11px] text-muted/70">
+                <span>{low}</span>
+                <span>{high}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     if (key === "verdict")
       return (
         <div className="flex flex-col gap-6">
@@ -392,7 +466,7 @@ export function TastingNoteWizard({
         <div className="flex flex-col gap-4">
           <textarea
             rows={5}
-            placeholder="향·맛·인상, 안주 등"
+            placeholder="기억에 남은 인상, 마신 자리 등"
             className={`${inputClass} resize-y`}
             {...register("bodyText")}
           />
