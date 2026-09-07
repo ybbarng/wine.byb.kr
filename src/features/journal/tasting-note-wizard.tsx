@@ -8,10 +8,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
 import {
-  expectedAromasFor,
+  agingColorNote,
+  agingFlavorNote,
+  expectedAromaGroups,
   expectedColorHint,
   expectedFlavorFor,
   FLAVOR_AXES,
+  wineAgeYears,
 } from "@/features/wine/tasting-hints";
 import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
@@ -110,9 +113,32 @@ export function TastingNoteWizard({
   const selWine = wines.find((w) => w.id === wineId);
   const currentColor = colorHex ?? defaultColorHex(selWine?.type);
   const colorHint = expectedColorHint(selWine?.type); // 가이드: 예상 색 안내
-  // 가이드 향 단계: 이 와인 품종에서 예상되는 향들. 사용자가 실제로 맡은 향을 고른다.
+  // 숙성: 앞 단계에서 적은 빈티지로 나이를 재, 색·향·맛 예상에 곁들인다.
+  // 빈티지를 안 적었으면 나이를 모르니 숙성 얘기는 아예 하지 않는다.
+  const vintageYearRaw = watch("vintageYear") as string | number | undefined;
+  const vintageYearNum = Number(vintageYearRaw);
+  const vintageYear =
+    vintageYearRaw !== "" && vintageYearRaw != null && Number.isFinite(vintageYearNum)
+      ? vintageYearNum
+      : null;
+  const drankOn = watch("drankOn") as string | undefined;
+  const age = wineAgeYears(vintageYear, drankOn);
+  const colorAgingNote = age != null ? agingColorNote(age, selWine?.type) : null;
+  const flavorAgingNote = age != null ? agingFlavorNote(age, selWine?.type) : null;
+  // 가이드 향 단계: 예상 향을 출처(품종/숙성)별로 묶어 근거와 함께 보여주고,
+  // 사용자가 실제로 맡은 향을 고른다.
   const aromasConfirmed = (watch("aromasConfirmed") as string[] | undefined) ?? [];
-  const expectedAromas = useMemo(() => expectedAromasFor(selWine?.grapes ?? []), [selWine]);
+  const aromaGroups = useMemo(
+    () =>
+      expectedAromaGroups({
+        grapes: selWine?.grapes ?? [],
+        type: selWine?.type,
+        vintageYear,
+        drankOn,
+      }),
+    [selWine, vintageYear, drankOn]
+  );
+  const expectedAromas = useMemo(() => aromaGroups.flatMap((g) => g.aromas), [aromaGroups]);
   const toggleAroma = (aroma: string) => {
     const next = aromasConfirmed.includes(aroma)
       ? aromasConfirmed.filter((a) => a !== aroma)
@@ -286,10 +312,12 @@ export function TastingNoteWizard({
       return (
         <div className="flex flex-col gap-3">
           {/* 가이드: 이 와인의 예상 색과 근거를 먼저 알려준다(강제 아님, 곁들이는 안내). */}
-          {colorHint ? (
+          {colorHint || colorAgingNote ? (
             <p className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2 text-sm leading-snug text-muted">
               <span className="mr-1 font-medium text-gold">예상</span>
               {colorHint}
+              {/* 빈티지를 적었으면 나이가 색에 남긴 흔적도 덧붙인다. */}
+              {colorAgingNote ? <span className="block mt-1">{colorAgingNote}</span> : null}
             </p>
           ) : null}
           <div
@@ -313,42 +341,47 @@ export function TastingNoteWizard({
       );
 
     if (key === "aroma") {
-      // 예상 향 + (편집 시) 예상 목록에 없지만 이미 고른 향까지 함께 보여준다.
-      // 데이터가 바뀌어도 사용자가 고른 향이 조용히 사라지지 않게 한다.
+      // 예상 목록에 없지만 이미 고른 향(편집 시 데이터가 바뀐 경우)은 따로 묶어 남긴다.
       const extras = aromasConfirmed.filter((a) => !expectedAromas.includes(a));
-      const chips = [...expectedAromas, ...extras];
+      const chip = (aroma: string) => {
+        const on = aromasConfirmed.includes(aroma);
+        return (
+          <button
+            key={aroma}
+            type="button"
+            onClick={() => toggleAroma(aroma)}
+            aria-pressed={on}
+            className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+              on
+                ? "border-gold/50 bg-gold/10 text-foreground"
+                : "border-foreground/15 text-muted hover:border-gold/40 hover:text-foreground"
+            }`}
+          >
+            {aroma}
+          </button>
+        );
+      };
       return (
-        <div className="flex flex-col gap-3">
-          {expectedAromas.length > 0 ? (
-            <p className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2 text-sm leading-snug text-muted">
-              <span className="mr-1 font-medium text-gold">예상</span>이 와인의 품종에서 흔히 나는
-              향이에요. 코를 대고 실제로 느껴지는 향을 골라 보세요.
-            </p>
-          ) : (
+        <div className="flex flex-col gap-4">
+          {aromaGroups.length === 0 ? (
             <p className="rounded-xl border border-foreground/12 bg-foreground/[0.03] px-3 py-2 text-sm leading-snug text-muted">
               이 와인은 예상 향 정보가 아직 없어요. 다음 단계에서 느낀 향을 자유롭게 적어 주세요.
             </p>
-          )}
-          {chips.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {chips.map((aroma) => {
-                const on = aromasConfirmed.includes(aroma);
-                return (
-                  <button
-                    key={aroma}
-                    type="button"
-                    onClick={() => toggleAroma(aroma)}
-                    aria-pressed={on}
-                    className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                      on
-                        ? "border-gold/50 bg-gold/10 text-foreground"
-                        : "border-foreground/15 text-muted hover:border-gold/40 hover:text-foreground"
-                    }`}
-                  >
-                    {aroma}
-                  </button>
-                );
-              })}
+          ) : null}
+          {/* 어디서 오는 향인지(품종/숙성) 묶어 보여준다 — 예상만이 아니라 근거까지. */}
+          {aromaGroups.map((group) => (
+            <div key={group.source}>
+              <div className="mb-1.5">
+                <span className="text-sm font-medium text-gold">{group.source}</span>
+                <p className="mt-0.5 text-xs leading-snug text-muted">{group.why}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">{group.aromas.map(chip)}</div>
+            </div>
+          ))}
+          {extras.length > 0 ? (
+            <div>
+              <span className="text-sm font-medium text-muted">이전에 고른 향</span>
+              <div className="mt-1.5 flex flex-wrap gap-2">{extras.map(chip)}</div>
             </div>
           ) : null}
         </div>
@@ -374,6 +407,8 @@ export function TastingNoteWizard({
             ) : (
               "이 와인은 예상 맛 정보가 아직 없어요. 느낀 만큼 자유롭게 표시해 주세요."
             )}
+            {/* 빈티지를 적었으면 나이가 맛(특히 타닌)에 남긴 흔적도 덧붙인다. */}
+            {flavorAgingNote ? <span className="block mt-1">{flavorAgingNote}</span> : null}
           </p>
           {FLAVOR_AXES.map(({ key: axis, label, low, high }) => (
             <div key={axis}>
