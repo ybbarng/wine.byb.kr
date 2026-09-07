@@ -41,7 +41,28 @@ export const tastingNoteSchema = z.object({
   ),
   bodyText: z.preprocess(emptyToUndefined, z.string().max(5000).optional()),
   foodPaired: z.preprocess(emptyToUndefined, z.string().max(500).optional()),
+  // 가이드 시음(P2): 예상 향 중 실제로 맡은 향들. 빈 배열은 "고른 게 없음"이라 undefined로.
+  aromasConfirmed: z.preprocess(
+    (v) => (Array.isArray(v) && v.length === 0 ? undefined : v),
+    z.array(z.string().max(40)).max(40).optional()
+  ),
 });
+
+/** aromasConfirmed(문자열 배열)을 DB 저장용 JSON 문자열로. 비었으면 null. */
+export function serializeAromas(aromas: string[] | undefined): string | null {
+  return aromas && aromas.length > 0 ? JSON.stringify(aromas) : null;
+}
+
+/** DB의 aromasConfirmed(JSON 문자열)을 문자열 배열로. 깨졌으면 빈 배열. */
+export function parseAromas(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 // 폼 입력(변환 전, 문자열) 타입과 결과(변환 후) 타입을 나눈다.
 // react-hook-form에 각각 넘겨 preprocess/coerce로 인한 타입 불일치를 푼다.
@@ -80,5 +101,6 @@ export function buildTastingNoteUpdate(
   if (has("colorHex")) data.colorHex = d.colorHex ?? null;
   if (has("bodyText")) data.bodyText = d.bodyText ?? null;
   if (has("foodPaired")) data.foodPaired = d.foodPaired ?? null;
+  if (has("aromasConfirmed")) data.aromasConfirmed = serializeAromas(d.aromasConfirmed);
   return data;
 }

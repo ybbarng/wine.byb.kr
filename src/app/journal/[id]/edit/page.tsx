@@ -4,7 +4,7 @@ import { SiteHeader } from "@/components/site-header";
 import { AdminGuard } from "@/features/admin/admin-guard";
 import { getTastingNote, getWineOptions } from "@/features/journal/queries";
 import type { ExistingNote } from "@/features/journal/tasting-note-form";
-import { toDateInput } from "@/features/journal/tasting-note-schema";
+import { parseAromas, toDateInput } from "@/features/journal/tasting-note-schema";
 import { TastingNoteWizard } from "@/features/journal/tasting-note-wizard";
 
 export const metadata: Metadata = {
@@ -32,6 +32,7 @@ export default async function EditTastingNotePage({ params }: PageProps<"/journa
     repurchase: n.repurchase,
     value: n.value,
     colorHex: n.colorHex,
+    aromasConfirmed: parseAromas(n.aromasConfirmed),
     bodyText: n.bodyText,
     foodPaired: n.foodPaired,
   };

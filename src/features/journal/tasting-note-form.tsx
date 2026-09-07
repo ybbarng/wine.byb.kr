@@ -27,6 +27,8 @@ export interface WineOption {
   nameLocal: string | null;
   type: string | null;
   colorHex: string | null;
+  // 가이드 시음 향 단계(P2)의 예상 향 계산용 — 비율순 품종 이름.
+  grapes: string[];
 }
 
 // 수정 모드에서 폼을 채울 기존 값. 날짜는 서버에서 "YYYY-MM-DD"로 넘긴다.
@@ -42,6 +44,7 @@ export interface ExistingNote {
   repurchase: string | null;
   value: string | null;
   colorHex: string | null;
+  aromasConfirmed: string[];
   bodyText: string | null;
   foodPaired: string | null;
 }
@@ -58,6 +61,7 @@ export function toDefaults(n: ExistingNote): TastingNoteFormInput {
     repurchase: (n.repurchase as TastingNoteFormInput["repurchase"]) ?? undefined,
     value: (n.value as TastingNoteFormInput["value"]) ?? undefined,
     colorHex: n.colorHex ?? undefined,
+    aromasConfirmed: n.aromasConfirmed,
     bodyText: n.bodyText ?? "",
     foodPaired: n.foodPaired ?? "",
   };

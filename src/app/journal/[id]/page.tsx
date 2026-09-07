@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { NoteActions } from "@/features/journal/note-actions";
 import { getTastingNote } from "@/features/journal/queries";
+import { parseAromas } from "@/features/journal/tasting-note-schema";
 import { PriceBadge } from "@/features/wine/price-badge";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import { wineGlassFor } from "@/features/wine/wine-glass";
@@ -59,6 +60,7 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
 
   // 잔 색: 이 기록에서 관찰한 색 → 와인 고정색 → 추정.
   const grapeNames = wine.grapes.map((g) => g.grape.nameKo);
+  const aromas = parseAromas(note.aromasConfirmed); // 가이드 향 단계에서 맡은 향
   const displayColor = note.colorHex ?? wine.colorHex ?? undefined;
   const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug, displayColor);
   const fair = winePrice(wine.slug);
@@ -207,6 +209,21 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
             ) : null}
             {note.repurchase ? <InfoChip label="다시 살까">{note.repurchase}</InfoChip> : null}
             {note.value ? <InfoChip label="가격 대비">{note.value}</InfoChip> : null}
+          </div>
+        ) : null}
+        {aromas.length > 0 ? (
+          <div className="mt-3">
+            <span className="text-[10px] uppercase tracking-wide text-muted">맡은 향</span>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {aromas.map((a) => (
+                <span
+                  key={a}
+                  className="rounded-full border border-gold/30 bg-gold/[0.08] px-2.5 py-1 text-xs text-foreground/85"
+                >
+                  {a}
+                </span>
+              ))}
+            </div>
           </div>
         ) : null}
         {note.bodyText ? (
