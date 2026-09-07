@@ -8,8 +8,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
 import {
+  abvNote,
   agingColorNote,
   agingFlavorNote,
+  climateAromaNote,
+  climateFlavorNote,
   expectedAromaGroups,
   expectedColorHint,
   expectedFlavorFor,
@@ -126,6 +129,10 @@ export function TastingNoteWizard({
   const age = wineAgeYears(vintageYear, drankOn);
   const colorAgingNote = age != null ? agingColorNote(age, selWine?.type) : null;
   const flavorAgingNote = age != null ? agingFlavorNote(age, selWine?.type) : null;
+  // 산지 기후·도수 — 예상 값을 바꾸지 않고 "이래서 이렇게 치우칠 수 있다"고만 알려준다.
+  const aromaClimateNote = climateAromaNote(selWine?.regionName);
+  const flavorClimateNote = climateFlavorNote(selWine?.regionName);
+  const alcoholNote = abvNote(selWine?.abv);
   // 가이드 향 단계: 예상 향을 출처(품종/숙성)별로 묶어 근거와 함께 보여주고,
   // 사용자가 실제로 맡은 향을 고른다.
   const aromasConfirmed = (watch("aromasConfirmed") as string[] | undefined) ?? [];
@@ -386,6 +393,10 @@ export function TastingNoteWizard({
               <div className="mt-1.5 flex flex-wrap gap-2">{extras.map(chip)}</div>
             </div>
           ) : null}
+          {/* 아래 두 줄은 향을 더하는 게 아니라 "어느 쪽으로 치우칠지"를 알려주는 안내다. */}
+          {aromaClimateNote ? (
+            <p className="text-xs leading-snug text-muted">{aromaClimateNote}</p>
+          ) : null}
           {/* 오크를 안 썼다는 것도 힌트다 — 배럴 향에 가리지 않은 과실을 찾아보게 한다. */}
           {oakNone(selWine?.oakAging) ? (
             <p className="text-xs leading-snug text-muted">
@@ -417,6 +428,9 @@ export function TastingNoteWizard({
             )}
             {/* 빈티지를 적었으면 나이가 맛(특히 타닌)에 남긴 흔적도 덧붙인다. */}
             {flavorAgingNote ? <span className="block mt-1">{flavorAgingNote}</span> : null}
+            {/* 산지 기후·도수는 예상 값을 바꾸지 않고 치우칠 방향만 알려준다. */}
+            {flavorClimateNote ? <span className="block mt-1">{flavorClimateNote}</span> : null}
+            {alcoholNote ? <span className="block mt-1">{alcoholNote}</span> : null}
           </p>
           {FLAVOR_AXES.map(({ key: axis, label, low, high }) => (
             <div key={axis}>
