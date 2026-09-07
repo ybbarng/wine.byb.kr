@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
-import { expectedColorHint } from "@/features/wine/tasting-hints";
+import { expectedAromasFor, expectedColorHint } from "@/features/wine/tasting-hints";
 import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
 import { wineDisplayName } from "@/lib/wine";
@@ -34,12 +34,13 @@ const REPURCHASE_OPTS = ["응", "아마", "아니"] as const;
 const VALUE_OPTS = ["아주 만족", "만족", "보통", "아쉬움", "매우 아쉬움"] as const;
 
 // 실제 시음 순서를 따른다: 고르고 → (병·영수증으로 미리 아는) 빈티지·구매 정보 →
-// 붓고 색 보고 → 향·맛 → 다 맛본 뒤 종합 별점 → 값어치·재구매.
+// 붓고 색 보고 → 코로 향 맡고 → 향·맛 메모 → 다 맛본 뒤 종합 별점 → 값어치·재구매.
 // (별점은 마셔봐야 매길 수 있어 뒤쪽, 빈티지·구매는 미리 아는 정보라 앞쪽에 둔다.)
 const STEPS = [
   { key: "wine", title: "어떤 와인이에요?", sub: "기록할 와인을 골라요" },
   { key: "buy", title: "빈티지·구매 정보", sub: "병·영수증으로 미리 아는 것 — 없으면 건너뛰어요" },
   { key: "color", title: "무슨 색이었어요?", sub: "실제 잔을 보며 맞춰요" },
+  { key: "aroma", title: "어떤 향이 났어요?", sub: "코를 대고 맡은 향을 골라요" },
   { key: "note", title: "향과 맛은 어때요?", sub: "느껴지는 향·맛·인상을 자유롭게" },
   { key: "rating", title: "몇 점이었어요?", sub: "다 맛보고 전체 인상을 별로" },
   { key: "verdict", title: "값어치는 어땠어요?", sub: "구매가를 보며 가격 대비·재구매를" },
@@ -101,6 +102,15 @@ export function TastingNoteWizard({
   const selWine = wines.find((w) => w.id === wineId);
   const currentColor = colorHex ?? defaultColorHex(selWine?.type);
   const colorHint = expectedColorHint(selWine?.type); // 가이드: 예상 색 안내
+  // 가이드 향 단계: 이 와인 품종에서 예상되는 향들. 사용자가 실제로 맡은 향을 고른다.
+  const aromasConfirmed = (watch("aromasConfirmed") as string[] | undefined) ?? [];
+  const expectedAromas = useMemo(() => expectedAromasFor(selWine?.grapes ?? []), [selWine]);
+  const toggleAroma = (aroma: string) => {
+    const next = aromasConfirmed.includes(aroma)
+      ? aromasConfirmed.filter((a) => a !== aroma)
+      : [...aromasConfirmed, aroma];
+    setValue("aromasConfirmed", next, { shouldValidate: true });
+  };
   // 프리뷰 absorb·glass 는 실제 렌더(와인/상세 페이지)와 같은 wineGlassFor 파이프라인으로.
   // 색을 안 고르면 타입 추정색(튜닝값), 고르면 그 색. hexToAbsorb 를 직접 쓰면 스케일이
   // 세서 특히 화이트가 어둡고 탁하게 튀었다.
@@ -283,6 +293,49 @@ export function TastingNoteWizard({
           />
         </div>
       );
+
+    if (key === "aroma") {
+      // 예상 향 + (편집 시) 예상 목록에 없지만 이미 고른 향까지 함께 보여준다.
+      // 데이터가 바뀌어도 사용자가 고른 향이 조용히 사라지지 않게 한다.
+      const extras = aromasConfirmed.filter((a) => !expectedAromas.includes(a));
+      const chips = [...expectedAromas, ...extras];
+      return (
+        <div className="flex flex-col gap-3">
+          {expectedAromas.length > 0 ? (
+            <p className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2 text-sm leading-snug text-muted">
+              <span className="mr-1 font-medium text-gold">예상</span>이 와인의 품종에서 흔히 나는
+              향이에요. 코를 대고 실제로 느껴지는 향을 골라 보세요.
+            </p>
+          ) : (
+            <p className="rounded-xl border border-foreground/12 bg-foreground/[0.03] px-3 py-2 text-sm leading-snug text-muted">
+              이 와인은 예상 향 정보가 아직 없어요. 다음 단계에서 느낀 향을 자유롭게 적어 주세요.
+            </p>
+          )}
+          {chips.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {chips.map((aroma) => {
+                const on = aromasConfirmed.includes(aroma);
+                return (
+                  <button
+                    key={aroma}
+                    type="button"
+                    onClick={() => toggleAroma(aroma)}
+                    aria-pressed={on}
+                    className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                      on
+                        ? "border-gold/50 bg-gold/10 text-foreground"
+                        : "border-foreground/15 text-muted hover:border-gold/40 hover:text-foreground"
+                    }`}
+                  >
+                    {aroma}
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      );
+    }
 
     if (key === "verdict")
       return (

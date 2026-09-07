@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildTastingNoteUpdate, type TastingNoteInput } from "./tasting-note-schema";
+import {
+  buildTastingNoteUpdate,
+  parseAromas,
+  serializeAromas,
+  type TastingNoteInput,
+} from "./tasting-note-schema";
 
 // 편집 저장(PATCH) 부분 갱신 — 회귀 방지.
 // 과거: 폼이 안 보낸 칸까지 null 로 덮어써 리뷰 내용(별점·색·안주 등)이 유실됐다.
@@ -43,5 +48,39 @@ describe("buildTastingNoteUpdate — 편집은 온 칸만 바꾼다(유실 방�
 
   it("빈 본문이면 아무 칸도 갱신하지 않는다", () => {
     expect(buildTastingNoteUpdate({}, asInput({}))).toEqual({});
+  });
+
+  it("맡은 향(aromasConfirmed)은 온 칸만 JSON 문자열로 저장한다", () => {
+    // 안 보내면 그대로 보존(결과에 없음).
+    expect(
+      Object.hasOwn(
+        buildTastingNoteUpdate({ rating: 3 }, asInput({ rating: 3 })),
+        "aromasConfirmed"
+      )
+    ).toBe(false);
+    // 보내면 JSON 문자열로.
+    const out = buildTastingNoteUpdate(
+      { aromasConfirmed: ["자두", "후추"] },
+      asInput({ aromasConfirmed: ["자두", "후추"] })
+    );
+    expect(out).toEqual({ aromasConfirmed: JSON.stringify(["자두", "후추"]) });
+    // 빈 배열은 스키마가 undefined 로 정규화 → null 로 지운다.
+    expect(
+      buildTastingNoteUpdate({ aromasConfirmed: [] }, asInput({ aromasConfirmed: undefined }))
+    ).toEqual({ aromasConfirmed: null });
+  });
+});
+
+describe("serializeAromas / parseAromas — 왕복", () => {
+  it("배열 ↔ JSON 문자열", () => {
+    expect(serializeAromas(["자두", "후추"])).toBe(JSON.stringify(["자두", "후추"]));
+    expect(parseAromas(serializeAromas(["자두", "후추"]))).toEqual(["자두", "후추"]);
+  });
+
+  it("비었거나 깨진 값은 안전하게 처리", () => {
+    expect(serializeAromas(undefined)).toBeNull();
+    expect(serializeAromas([])).toBeNull();
+    expect(parseAromas(null)).toEqual([]);
+    expect(parseAromas("깨진json")).toEqual([]);
   });
 });

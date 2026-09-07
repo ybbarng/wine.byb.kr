@@ -2,12 +2,33 @@ import { db } from "@/lib/db";
 
 // 마신 기록(내가 마신 기록) 조회. 작성은 관리자만, 조회는 누구나(§4.5).
 
-/** 작성 폼의 와인 선택용 목록 — 원어 이름 순. 색 설정을 위해 종류·현재 색도 싣는다. */
-export function getWineOptions() {
-  return db.wine.findMany({
-    select: { id: true, nameKo: true, nameLocal: true, type: true, colorHex: true },
+/**
+ * 작성 폼의 와인 선택용 목록 — 원어 이름 순. 색 설정을 위해 종류·현재 색도 싣고,
+ * 가이드 시음 향 단계(P2)의 예상 향을 만들려고 품종 이름도 비율순으로 싣는다.
+ */
+export async function getWineOptions() {
+  const wines = await db.wine.findMany({
+    select: {
+      id: true,
+      nameKo: true,
+      nameLocal: true,
+      type: true,
+      colorHex: true,
+      grapes: {
+        select: { grape: { select: { nameKo: true } } },
+        orderBy: { percent: "desc" },
+      },
+    },
     orderBy: { nameLocal: "asc" },
   });
+  return wines.map((w) => ({
+    id: w.id,
+    nameKo: w.nameKo,
+    nameLocal: w.nameLocal,
+    type: w.type,
+    colorHex: w.colorHex,
+    grapes: w.grapes.map((g) => g.grape.nameKo),
+  }));
 }
 
 /**

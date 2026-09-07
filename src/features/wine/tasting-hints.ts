@@ -2,6 +2,9 @@
 // docs/guided-tasting.md 참고. 안내는 강제가 아니라 곁들이는 힌트다(읽기 전용).
 //
 // P1: 색. 와인 종류(type)로 "이런 색이 예상되고, 왜 그런지"를 한 줄로.
+// P2: 향. 이 와인의 품종에서 예상되는 향 태그를 모은다(근거: 품종 아로마).
+
+import { grapeInfo } from "./grape-info";
 
 const COLOR_HINT: Record<string, string> = {
   red: "진한 루비~자주빛이 예상돼요 — 레드는 포도 껍질째 담가 색소가 진하게 우러나거든요.",
@@ -17,4 +20,22 @@ const COLOR_HINT: Record<string, string> = {
 export function expectedColorHint(type: string | null | undefined): string | null {
   if (!type) return null;
   return COLOR_HINT[type] ?? null;
+}
+
+/**
+ * 와인의 품종들에서 예상되는 향 태그를 모은다(근거: 품종 아로마, [[grape-info]]).
+ * 대표 품종부터 순서를 지키며 중복은 제거한다. 아는 향이 없으면 빈 배열.
+ * 블렌드는 여러 품종의 향을 합쳐 넉넉히 보여준다(비율 가중은 P5에서).
+ */
+export function expectedAromasFor(grapeNames: (string | null | undefined)[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const name of grapeNames) {
+    for (const aroma of grapeInfo(name)?.aroma ?? []) {
+      if (seen.has(aroma)) continue;
+      seen.add(aroma);
+      out.push(aroma);
+    }
+  }
+  return out;
 }
