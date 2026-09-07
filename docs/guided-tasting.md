@@ -52,7 +52,8 @@
 |---|---|---|
 | 색 | 예상 색 스와치 | `Wine.colorHex` → 없으면 `type`·품종 추정(`wineGlassFor`) |
 | 스월·외관 | 바디→점도/legs 문구 | `Grape.body` |
-| 향 | 예상 향 태그들 | `Grape.aromaProfile`(JSON 배열), `Wine.notesKo` |
+| 향 | 예상 향 태그들 (출처별 묶음) | 품종 아로마(`grape-info`) + 숙성(빈티지 나이) |
+| 숙성 | 나이가 색·향·맛에 남긴 흔적 | `TastingNote.vintageYear`와 마신 해의 차이 |
 | 맛 | 산도·타닌·단맛·바디 게이지 | `Grape.acidity`·`tannin`·`sweetness`·`body` |
 | 음식 | 어울리는 음식 | `Wine.foodPairing`(JSON 배열) |
 | 한마디 | "마시는 순간 뭘 느껴볼지" | `Wine.notesKo`(이미 이 용도로 큐레이션됨, [[wine-notes-content-direction]]) |
@@ -91,6 +92,12 @@ SQLite라 JSON 문자열로 둔다(기존 `foodPairing`·`aromaProfile`과 동�
   정도를 1~5로 받는다. `TastingNote.flavorFelt`(JSON `{acidity,tannin,sweetness,body}`) 추가.
   위저드에 "맛은 어땠어요?" 단계(향↔한마디 사이), 시음 상세에 "느낀 맛" 막대.
   예상 값이 없는 축(화이트의 타닌 등)은 예상을 비워 둬 지어내지 않는다.
+- **숙성 반영**(완료, P3 뒤 별도 PR): 빈티지가 있으면 나이를 재(`wineAgeYears`), 어림(≤3년)·
+  익어가는 중(4~8년)·무르익음(9년~)으로 나눠 색·향·맛에 안내를 곁들인다. 향은 **출처별로 묶어**
+  (`expectedAromaGroups` — "품종에서" / "숙성에서 (N년)") 어디서 오는 향인지 근거까지 보여준다.
+  레드 계열과 화이트 계열의 숙성 향이 다르다. 빈티지가 없으면 숙성 얘기를 아예 하지 않는다.
+- **오크 반영**(다음): `Wine`에 오크 숙성 여부 칸을 만들고 큐레이션해, "오크에서" 묶음을 더한다
+  (바닐라·토스트·훈연). 지금은 오크 유래 향이 품종 아로마에 섞여 있어 오크를 안 쓴 와인에도 뜬다.
 - **P4 — 스월·외관 단계**: 바디→legs 안내 + 스월 프리뷰 강조.
 - **P5 — 다듬기**: 근거 문구 카피 정리, 블렌드 가중 합성, 품종 콘텐츠 보강 캠페인.
 
