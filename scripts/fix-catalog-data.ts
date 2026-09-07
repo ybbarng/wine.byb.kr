@@ -46,23 +46,99 @@ async function main() {
     .update({ where: { slug: "puglia" }, data: { nameKo: "뿔리아" } })
     .catch(() => console.warn("puglia 산지 없음(스킵)"));
 
-  // 3-1) 산지 연결 정정 — 초기 CSV 임포트가 "프랑스"·"헝가리"처럼 국가 수준으로만
+  // 3-1) 빠져 있던 산지를 만든다(멱등). 아래 연결 정정에서 쓰는데 표에 없던 곳들이다.
+  //      좌표는 지도 fly-to 목표점. region 수준은 국가를 부모로 둔다.
+  for (const r of [
+    {
+      slug: "emilia-romagna",
+      nameKo: "에밀리아로마냐",
+      nameLocal: "Emilia-Romagna",
+      country: "이탈리아",
+      parentSlug: "italy",
+      latitude: 44.5,
+      longitude: 11.35,
+    },
+    {
+      slug: "robertson",
+      nameKo: "로버트슨",
+      nameLocal: "Robertson",
+      country: "남아프리카공화국",
+      parentSlug: "south-africa",
+      latitude: -33.8,
+      longitude: 19.88,
+    },
+    {
+      slug: "king-valley",
+      nameKo: "킹 밸리",
+      nameLocal: "King Valley",
+      country: "호주",
+      parentSlug: "australia",
+      latitude: -36.6,
+      longitude: 146.4,
+    },
+    {
+      slug: "lodi",
+      nameKo: "로디",
+      nameLocal: "Lodi",
+      country: "미국",
+      parentSlug: "캘리포니아",
+      latitude: 38.13,
+      longitude: -121.27,
+    },
+  ]) {
+    const parent = await db.region.findUnique({ where: { slug: r.parentSlug } });
+    const data = {
+      nameKo: r.nameKo,
+      nameLocal: r.nameLocal,
+      country: r.country,
+      level: "region",
+      latitude: r.latitude,
+      longitude: r.longitude,
+      parentId: parent?.id ?? null,
+    };
+    await db.region.upsert({
+      where: { slug: r.slug },
+      update: data,
+      create: { slug: r.slug, ...data },
+    });
+  }
+
+  // 3-2) 산지 연결 정정 — 초기 CSV 임포트가 "프랑스"·"헝가리"처럼 국가 수준으로만
   //      묶어 둔 와인들을 실제 세부 산지에 붙인다. 산지 계층·지도뿐 아니라 가이드 시음의
   //      기후 안내도 세부 산지가 있어야 읽힌다(국가는 안에서 기후가 갈려 판단 보류).
-  //      이름·등급으로 산지가 분명한 것만 고친다.
+  //      생산자 산지는 시드가 와인 산지를 그대로 복사해 만든 파생값이라, 와인을 옮기면
+  //      같이 옮겨 준다(안 그러면 생산자 페이지만 옛 국가에 남는다).
   for (const [wineSlug, regionSlug] of [
     ["primitivo-di-manduria", "puglia"], // 만두리아는 뿔리아의 마을. 산지가 아예 비어 있었다.
     ["ch-teau-saint-pierre", "bordeaux-saint-julien"], // 생줄리앙 4등급(notesKo에도 명시)
     ["patricius-tokaji-furmint", "헝가리-토카이"], // 이름부터 토카이. 자매 와인은 이미 연결됨
+    ["bigios-moscato-passion-fruit", "piemonte"], // Bigio's — 피에몬테(Vivino 산지 표기)
+    ["aprimondo-appassimento-sangiovese-rubicone", "emilia-romagna"], // 루비코네 IGT = 로마냐
+    ["mmm-pinotage", "robertson"], // 생산자 반 로베런은 로버트슨 밸리(브레데 강 유역)
+    // 아래 셋은 전수 검토에서 나온 정정(2026-09-07).
+    ["lovely", "france"], // 등급이 Vin de France — 산지 표기가 없는 와인인데 보르도로 묶여 있었다
+    ["brown-brothers-premium-cuvee", "king-valley"], // 브라운 브라더스는 빅토리아 킹 밸리
+    ["precision-navigator-zinfandel", "lodi"], // 네비게이터 진판델은 로디(센트럴 밸리) 산
   ] as const) {
     const region = await db.region.findUnique({ where: { slug: regionSlug } });
     if (!region) {
       console.warn(`산지 없음(스킵): ${regionSlug}`);
       continue;
     }
-    await db.wine
-      .update({ where: { slug: wineSlug }, data: { regionId: region.id } })
-      .catch(() => console.warn(`와인 없음(스킵): ${wineSlug}`));
+    const wine = await db.wine
+      .update({
+        where: { slug: wineSlug },
+        data: { regionId: region.id },
+        select: { producerId: true },
+      })
+      .catch(() => null);
+    if (!wine) {
+      console.warn(`와인 없음(스킵): ${wineSlug}`);
+      continue;
+    }
+    if (wine.producerId) {
+      await db.producer.update({ where: { id: wine.producerId }, data: { regionId: region.id } });
+    }
   }
 
   // 4) 에스터하지 클림트 레드 = 블라우프랭키슈 + 츠바이겔트 + 메를로 블렌드.
