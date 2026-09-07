@@ -74,7 +74,7 @@ export function ShowcaseHeader({ hairline = true }: { hairline?: boolean } = {})
   };
 
   return (
-    <header className="absolute inset-x-0 top-0 z-30 flex items-center justify-between gap-4 px-6 py-3">
+    <header className="fixed inset-x-0 top-0 z-30 flex items-center justify-between gap-4 px-6 py-3">
       <BrandLogo />
 
       <div ref={boxRef} className="relative w-full max-w-md">
