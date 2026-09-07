@@ -14,6 +14,7 @@ export async function getWineOptions() {
       nameLocal: true,
       type: true,
       colorHex: true,
+      oakAging: true,
       grapes: {
         select: { grape: { select: { nameKo: true } } },
         orderBy: { percent: "desc" },
@@ -27,6 +28,7 @@ export async function getWineOptions() {
     nameLocal: w.nameLocal,
     type: w.type,
     colorHex: w.colorHex,
+    oakAging: w.oakAging,
     grapes: w.grapes.map((g) => g.grape.nameKo),
   }));
 }

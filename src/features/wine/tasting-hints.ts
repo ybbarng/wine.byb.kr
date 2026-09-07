@@ -127,6 +127,32 @@ export function agingFlavorNote(age: number, type: string | null | undefined): s
   return `${age}년 지나 산미가 조금 누그러지고 질감이 둥글어졌을 수 있어요.`;
 }
 
+// ── 오크(배럴 숙성) ────────────────────────────────────────────────
+// 바닐라·토스트 같은 향은 포도가 아니라 배럴에서 온다. 그래서 품종이 아니라
+// 와인마다 정해진 `Wine.oakAging`(none|light|heavy)을 근거로 삼는다.
+// 모르면(null) 오크 얘기를 아예 하지 않는다.
+
+const OAK_AROMAS: Record<"light" | "heavy", string[]> = {
+  light: ["바닐라", "토스트"],
+  heavy: ["바닐라", "토스트", "훈연", "코코넛", "정향"],
+};
+
+const OAK_WHY: Record<"light" | "heavy", string> = {
+  light: "오크통에서 숙성했어요 — 과실을 덮지 않을 만큼 은은하게 배어 있을 거예요.",
+  heavy: "오크를 뚜렷하게 쓴 와인이에요 — 배럴에서 온 달콤한 나무 향이 앞에 설 수 있어요.",
+};
+
+/** 오크에서 오는 예상 향. 안 썼거나(none) 모르면(null) 빈 배열. */
+export function oakAromas(oakAging: string | null | undefined): string[] {
+  if (oakAging !== "light" && oakAging !== "heavy") return [];
+  return OAK_AROMAS[oakAging];
+}
+
+/** 오크를 안 썼다고 아는 와인엔 그 사실 자체가 힌트가 된다(과실이 깨끗하게 드러남). */
+export function oakNone(oakAging: string | null | undefined): boolean {
+  return oakAging === "none";
+}
+
 /** 예상 향 한 묶음 — 어디서 오는 향인지(출처)와 그 근거를 함께 담는다. */
 export interface AromaGroup {
   source: string;
@@ -144,34 +170,38 @@ export function expectedAromaGroups(opts: {
   type: string | null | undefined;
   vintageYear?: number | null;
   drankOn?: string | null;
+  oakAging?: string | null;
 }): AromaGroup[] {
   const groups: AromaGroup[] = [];
+  // 앞 묶음에서 이미 나온 향은 뒤에서 빼, 같은 칩이 두 번 뜨지 않게 한다.
+  const seen = new Set<string>();
+  const add = (source: string, why: string, aromas: string[]) => {
+    const fresh = aromas.filter((a) => !seen.has(a));
+    if (fresh.length === 0) return;
+    for (const a of fresh) seen.add(a);
+    groups.push({ source, why, aromas: fresh });
+  };
 
   const fromGrapes = expectedAromasFor(opts.grapes);
-  if (fromGrapes.length > 0) {
-    const named = opts.grapes.filter((g): g is string => !!g && grapeInfo(g) != null);
-    groups.push({
-      source: "품종에서",
-      why:
-        named.length > 0 ? `${named.join("·")}에서 흔히 나는 향이에요.` : "품종에서 오는 향이에요.",
-      aromas: fromGrapes,
-    });
+  const named = opts.grapes.filter((g): g is string => !!g && grapeInfo(g) != null);
+  add(
+    "품종에서",
+    named.length > 0 ? `${named.join("·")}에서 흔히 나는 향이에요.` : "품종에서 오는 향이에요.",
+    fromGrapes
+  );
+
+  const oaked = oakAromas(opts.oakAging);
+  if (oaked.length > 0) {
+    const level = opts.oakAging === "heavy" ? "heavy" : "light";
+    add("오크에서", OAK_WHY[level], oaked);
   }
 
   const age = wineAgeYears(opts.vintageYear, opts.drankOn);
   if (age != null) {
-    const aged = agingAromas(age, opts.type);
-    if (aged.length > 0) {
-      groups.push({
-        source: `숙성에서 (${age}년)`,
-        why: agingAromaWhy(age),
-        // 품종에서 이미 나온 향은 빼서 같은 칩이 두 번 뜨지 않게 한다.
-        aromas: aged.filter((a) => !fromGrapes.includes(a)),
-      });
-    }
+    add(`숙성에서 (${age}년)`, agingAromaWhy(age), agingAromas(age, opts.type));
   }
 
-  return groups.filter((g) => g.aromas.length > 0);
+  return groups;
 }
 
 /** 맛의 네 축. 저장 키와 화면 라벨·양 끝 설명을 한곳에 둔다. */

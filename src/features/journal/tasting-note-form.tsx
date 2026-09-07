@@ -28,6 +28,8 @@ export interface WineOption {
   nameLocal: string | null;
   type: string | null;
   colorHex: string | null;
+  // 오크 숙성 정도(none|light|heavy). 오크에서 오는 향의 근거.
+  oakAging: string | null;
   // 가이드 시음 향 단계(P2)의 예상 향 계산용 — 비율순 품종 이름.
   grapes: string[];
 }
