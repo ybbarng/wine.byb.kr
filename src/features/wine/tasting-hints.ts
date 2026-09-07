@@ -5,8 +5,11 @@
 // P2: 향. 이 와인의 품종에서 예상되는 향 태그를 모은다(근거: 품종 아로마).
 // P3: 맛. 산도·타닌·단맛·바디의 예상 수준을 품종에서 가져온다.
 // 숙성: 빈티지가 있으면 나이를 재, 색·향·맛에 나이가 남긴 흔적을 곁들인다.
+// 오크: 배럴에서 오는 향(바닐라·토스트)은 품종이 아니라 Wine.oakAging 을 근거로.
+// 기후·도수: 값을 바꾸지 않고 "이래서 이렇게 치우칠 수 있다"는 안내만 곁들인다.
 
 import { grapeInfo } from "./grape-info";
+import { countryInfo, regionInfo } from "./region-info";
 
 const COLOR_HINT: Record<string, string> = {
   red: "진한 루비~자주빛이 예상돼요 — 레드는 포도 껍질째 담가 색소가 진하게 우러나거든요.",
@@ -151,6 +154,75 @@ export function oakAromas(oakAging: string | null | undefined): string[] {
 /** 오크를 안 썼다고 아는 와인엔 그 사실 자체가 힌트가 된다(과실이 깨끗하게 드러남). */
 export function oakNone(oakAging: string | null | undefined): boolean {
   return oakAging === "none";
+}
+
+// ── 산지 기후 ──────────────────────────────────────────────────────
+// 같은 품종이라도 서늘한 곳에선 산미가 또렷하고 가볍게, 따뜻한 곳에선 과실이 잘 익고
+// 묵직하게 나온다. 기후는 향을 "더한다"기보다 품종의 기본값을 흔드는 성격이라,
+// 예상 값을 바꾸지 않고 안내만 곁들인다(품종 큐레이션과 충돌하지 않게).
+// 근거는 [[region-info]]에 이미 큐레이션된 산지 기후 문장이다.
+
+export type ClimateBand = "cool" | "moderate" | "warm";
+
+/** 기후를 적어 둔 문장을 찾는다. 세부 산지가 없으면 국가 설명으로 물러선다. */
+function climateText(regionName: string | null | undefined): string | null {
+  return regionInfo(regionName)?.climate ?? countryInfo(regionName) ?? null;
+}
+
+/**
+ * 산지 기후 문장에서 서늘/온화/따뜻을 가른다.
+ * - 서늘·따뜻이 함께 적힌 곳(예: "해안 서늘~내륙 따뜻")은 편차가 크다는 뜻이라 moderate.
+ * - 온도 단어가 없어도 기후 유형으로 가른다: 지중해성은 따뜻한 쪽, 대륙성·해양성·
+ *   고지대(일교차 큰 곳)는 한쪽으로 몰기 어려워 moderate.
+ * - 이탈리아·프랑스처럼 나라 안에서 기후가 갈리는 곳은 판단하지 않는다(null).
+ */
+export function climateBand(regionName: string | null | undefined): ClimateBand | null {
+  const climate = climateText(regionName);
+  if (!climate) return null;
+  const cool = /서늘|최북단|북쪽 한계|일조가 짧|북방/.test(climate);
+  const warm = /덥|따뜻|더운|지중해성/.test(climate);
+  if (cool && warm) return "moderate";
+  if (cool) return "cool";
+  if (warm) return "warm";
+  if (/온화|대륙성|해양성|사막성|일교차/.test(climate)) return "moderate";
+  return null;
+}
+
+/** 기후가 향에 남기는 결. 온화한 곳은 특별히 덧붙일 말이 없어 null. */
+export function climateAromaNote(regionName: string | null | undefined): string | null {
+  const band = climateBand(regionName);
+  const where = regionInfo(regionName)?.name ?? regionName ?? "이 산지";
+  if (band === "cool")
+    return `${where}는 서늘한 산지라 과실이 농익기보다 새콤하고, 허브 같은 풋풋한 결이 스칠 수 있어요.`;
+  if (band === "warm")
+    return `${where}는 따뜻한 산지라 과실이 잘 익어 잼이나 말린 과일처럼 진하게 느껴질 수 있어요.`;
+  return null;
+}
+
+/** 기후가 맛에 남기는 결(주로 산도·바디). 온화한 곳은 null. */
+export function climateFlavorNote(regionName: string | null | undefined): string | null {
+  const band = climateBand(regionName);
+  const where = regionInfo(regionName)?.name ?? regionName ?? "이 산지";
+  if (band === "cool")
+    return `${where}는 서늘한 산지라 산도가 예상보다 또렷하고 바디는 가볍게 느껴질 수 있어요.`;
+  if (band === "warm")
+    return `${where}는 따뜻한 산지라 산도가 예상보다 눅고 바디는 묵직하게 느껴질 수 있어요.`;
+  return null;
+}
+
+// ── 알코올 도수 ────────────────────────────────────────────────────
+// 도수는 바디감과 목넘김의 따뜻한 기운에 직결된다. 보통 범위(11.5~13.4도)는
+// 굳이 말할 게 없어 안내를 생략하고, 눈에 띄게 낮거나 높을 때만 알려준다.
+
+/** 도수가 질감에 남기는 결. 평범한 범위면 null. */
+export function abvNote(abv: number | null | undefined): string | null {
+  if (abv == null || !Number.isFinite(abv)) return null;
+  const shown = Number.isInteger(abv) ? `${abv}` : abv.toFixed(1);
+  if (abv < 9) return `도수가 ${shown}도로 아주 낮아 가볍고 산뜻하게 넘어가요.`;
+  if (abv < 11.5) return `도수가 ${shown}도로 낮은 편이라 가볍게 느껴질 거예요.`;
+  if (abv >= 13.5)
+    return `도수가 ${shown}도로 높은 편이라 목넘김에 따뜻한 기운이 돌고 바디가 묵직하게 느껴질 수 있어요.`;
+  return null;
 }
 
 /** 예상 향 한 묶음 — 어디서 오는 향인지(출처)와 그 근거를 함께 담는다. */

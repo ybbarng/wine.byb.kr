@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  abvNote,
   agingColorNote,
   agingStage,
+  climateAromaNote,
+  climateBand,
+  climateFlavorNote,
   expectedAromaGroups,
   expectedAromasFor,
   expectedColorHint,
@@ -212,6 +216,57 @@ describe("오크에서 오는 향", () => {
     expect(oakNone("none")).toBe(true);
     expect(oakNone("light")).toBe(false);
     expect(oakNone(null)).toBe(false); // 모르는 것과 안 쓴 것은 다르다
+  });
+});
+
+describe("climateBand — 산지 기후 가르기", () => {
+  it("서늘한 산지와 따뜻한 산지를 가른다", () => {
+    expect(climateBand("샤블리")).toBe("cool"); // "프랑스 최북단, 서늘하고 일조가 짧다"
+    expect(climateBand("뿔리아")).toBe("warm"); // "덥고 건조한 남부"
+  });
+
+  it("서늘·따뜻이 함께 적힌 곳은 편차가 크다는 뜻이라 moderate", () => {
+    expect(climateBand("캘리포니아")).toBe("moderate"); // "해안 서늘~내륙 따뜻, 편차가 크다"
+  });
+
+  it("모르는 산지는 null(기후 얘기 생략)", () => {
+    expect(climateBand("듣도보도못한산지")).toBeNull();
+    expect(climateBand(null)).toBeNull();
+  });
+});
+
+describe("기후 안내 — 값을 바꾸지 않고 치우칠 방향만", () => {
+  it("서늘한 산지는 산도가 또렷·바디는 가볍다고 안내", () => {
+    const note = climateFlavorNote("샤블리");
+    expect(note).toContain("산도");
+    expect(note).toContain("또렷");
+  });
+
+  it("따뜻한 산지는 과실이 잘 익는다고 안내", () => {
+    expect(climateAromaNote("뿔리아")).toContain("잘 익어");
+  });
+
+  it("온화하거나 모르는 산지는 덧붙일 말이 없다", () => {
+    expect(climateFlavorNote("캘리포니아")).toBeNull();
+    expect(climateAromaNote("듣도보도못한산지")).toBeNull();
+  });
+});
+
+describe("abvNote — 도수가 질감에 남기는 결", () => {
+  it("높은 도수는 묵직함·따뜻한 기운을 알려준다", () => {
+    expect(abvNote(14.5)).toContain("묵직");
+    expect(abvNote(15)).toContain("15도");
+  });
+
+  it("낮은 도수는 가벼움을 알려준다", () => {
+    expect(abvNote(5.5)).toContain("가볍");
+    expect(abvNote(10)).toContain("가볍");
+  });
+
+  it("보통 범위는 굳이 말하지 않는다", () => {
+    expect(abvNote(12)).toBeNull();
+    expect(abvNote(13)).toBeNull();
+    expect(abvNote(null)).toBeNull();
   });
 });
 

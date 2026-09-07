@@ -15,6 +15,9 @@ export async function getWineOptions() {
       type: true,
       colorHex: true,
       oakAging: true,
+      abv: true,
+      // 산지 기후 안내용 — 세부 산지 이름이 없으면 상위(국가·광역) 이름으로 찾는다.
+      region: { select: { nameKo: true, parent: { select: { nameKo: true } } } },
       grapes: {
         select: { grape: { select: { nameKo: true } } },
         orderBy: { percent: "desc" },
@@ -29,6 +32,8 @@ export async function getWineOptions() {
     type: w.type,
     colorHex: w.colorHex,
     oakAging: w.oakAging,
+    abv: w.abv,
+    regionName: w.region?.nameKo ?? w.region?.parent?.nameKo ?? null,
     grapes: w.grapes.map((g) => g.grape.nameKo),
   }));
 }
