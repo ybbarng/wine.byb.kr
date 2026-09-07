@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { expectedColorHint } from "@/features/wine/tasting-hints";
 import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
 import { wineDisplayName } from "@/lib/wine";
@@ -99,6 +100,7 @@ export function TastingNoteWizard({
       : null;
   const selWine = wines.find((w) => w.id === wineId);
   const currentColor = colorHex ?? defaultColorHex(selWine?.type);
+  const colorHint = expectedColorHint(selWine?.type); // 가이드: 예상 색 안내
   // 프리뷰 absorb·glass 는 실제 렌더(와인/상세 페이지)와 같은 wineGlassFor 파이프라인으로.
   // 색을 안 고르면 타입 추정색(튜닝값), 고르면 그 색. hexToAbsorb 를 직접 쓰면 스케일이
   // 세서 특히 화이트가 어둡고 탁하게 튀었다.
@@ -255,6 +257,13 @@ export function TastingNoteWizard({
     if (key === "color")
       return (
         <div className="flex flex-col gap-3">
+          {/* 가이드: 이 와인의 예상 색과 근거를 먼저 알려준다(강제 아님, 곁들이는 안내). */}
+          {colorHint ? (
+            <p className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2 text-sm leading-snug text-muted">
+              <span className="mr-1 font-medium text-gold">예상</span>
+              {colorHint}
+            </p>
+          ) : null}
           <div
             className="relative mx-auto h-72 w-full max-w-[19rem] overflow-hidden rounded-2xl border border-foreground/12"
             style={{ backgroundColor: CANVAS_RENDERED }}
