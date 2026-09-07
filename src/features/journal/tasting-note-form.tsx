@@ -11,6 +11,7 @@ import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, hexToAbsorb, wineGlassFor } from "@/features/wine/wine-glass";
 import { wineDisplayName } from "@/lib/wine";
 import {
+  type FlavorFelt,
   type TastingNoteFormInput,
   type TastingNoteInput,
   tastingNoteSchema,
@@ -45,6 +46,7 @@ export interface ExistingNote {
   value: string | null;
   colorHex: string | null;
   aromasConfirmed: string[];
+  flavorFelt: FlavorFelt;
   bodyText: string | null;
   foodPaired: string | null;
 }
@@ -62,6 +64,7 @@ export function toDefaults(n: ExistingNote): TastingNoteFormInput {
     value: (n.value as TastingNoteFormInput["value"]) ?? undefined,
     colorHex: n.colorHex ?? undefined,
     aromasConfirmed: n.aromasConfirmed,
+    flavorFelt: n.flavorFelt,
     bodyText: n.bodyText ?? "",
     foodPaired: n.foodPaired ?? "",
   };

@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import {
   serializeAromas,
+  serializeFlavor,
   tastingNoteSchema,
   toUtcDate,
 } from "@/features/journal/tasting-note-schema";
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
       value: d.value ?? null,
       colorHex: d.colorHex ?? null,
       aromasConfirmed: serializeAromas(d.aromasConfirmed),
+      flavorFelt: serializeFlavor(d.flavorFelt),
       bodyText: d.bodyText ?? null,
       foodPaired: d.foodPaired ?? null,
       owner: "admin",

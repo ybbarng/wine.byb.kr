@@ -3,6 +3,7 @@
 //
 // P1: 색. 와인 종류(type)로 "이런 색이 예상되고, 왜 그런지"를 한 줄로.
 // P2: 향. 이 와인의 품종에서 예상되는 향 태그를 모은다(근거: 품종 아로마).
+// P3: 맛. 산도·타닌·단맛·바디의 예상 수준을 품종에서 가져온다.
 
 import { grapeInfo } from "./grape-info";
 
@@ -35,6 +36,46 @@ export function expectedAromasFor(grapeNames: (string | null | undefined)[]): st
       if (seen.has(aroma)) continue;
       seen.add(aroma);
       out.push(aroma);
+    }
+  }
+  return out;
+}
+
+/** 맛의 네 축. 저장 키와 화면 라벨·양 끝 설명을 한곳에 둔다. */
+export const FLAVOR_AXES = [
+  { key: "acidity", label: "산도", low: "부드럽다", high: "새콤하다" },
+  { key: "tannin", label: "타닌", low: "매끄럽다", high: "떫다" },
+  { key: "sweetness", label: "단맛", low: "드라이", high: "달다" },
+  { key: "body", label: "바디", low: "가볍다", high: "묵직하다" },
+] as const;
+
+export type FlavorAxis = (typeof FLAVOR_AXES)[number]["key"];
+
+/** 축별 예상 수준(품종 큐레이션의 표현 그대로 — "중간~높음" 같은 범위도 있다). */
+export type ExpectedFlavor = Partial<Record<FlavorAxis, string>>;
+
+/**
+ * 와인의 품종들에서 예상되는 맛 수준을 모은다(근거: 품종 특성, [[grape-info]]).
+ * 축마다 비율이 높은 품종부터 보며 값이 있는 첫 품종의 표현을 쓴다.
+ * (블렌드 비율 가중 합성은 P5에서. 지금은 대표 품종 우선으로 단순하게.)
+ * 화이트처럼 타닌 값이 없는 축은 키를 비워 둬 "예상"을 지어내지 않는다.
+ */
+/** 느낀 정도(1~5)를 그 축의 말로 옮긴다. 1·2는 낮은 쪽, 3은 중간, 4·5는 높은 쪽. */
+export function flavorLevelWord(axis: FlavorAxis, level: number): string {
+  const found = FLAVOR_AXES.find((a) => a.key === axis);
+  if (!found) return "";
+  if (level <= 2) return found.low;
+  if (level === 3) return "중간";
+  return found.high;
+}
+
+export function expectedFlavorFor(grapeNames: (string | null | undefined)[]): ExpectedFlavor {
+  const out: ExpectedFlavor = {};
+  for (const name of grapeNames) {
+    const info = grapeInfo(name);
+    if (!info) continue;
+    for (const { key } of FLAVOR_AXES) {
+      if (out[key] == null && info[key]) out[key] = info[key];
     }
   }
   return out;

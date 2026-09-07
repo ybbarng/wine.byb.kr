@@ -4,9 +4,10 @@ import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { NoteActions } from "@/features/journal/note-actions";
 import { getTastingNote } from "@/features/journal/queries";
-import { parseAromas } from "@/features/journal/tasting-note-schema";
+import { parseAromas, parseFlavor } from "@/features/journal/tasting-note-schema";
 import { PriceBadge } from "@/features/wine/price-badge";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
+import { FLAVOR_AXES, flavorLevelWord } from "@/features/wine/tasting-hints";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 import { WineInfoSections } from "@/features/wine/wine-info-sections";
 import { priceVerdict, winePrice } from "@/features/wine/wine-price-info";
@@ -61,6 +62,8 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
   // 잔 색: 이 기록에서 관찰한 색 → 와인 고정색 → 추정.
   const grapeNames = wine.grapes.map((g) => g.grape.nameKo);
   const aromas = parseAromas(note.aromasConfirmed); // 가이드 향 단계에서 맡은 향
+  const flavor = parseFlavor(note.flavorFelt); // 가이드 맛 단계에서 느낀 정도(1~5)
+  const feltAxes = FLAVOR_AXES.filter(({ key }) => flavor[key] != null);
   const displayColor = note.colorHex ?? wine.colorHex ?? undefined;
   const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug, displayColor);
   const fair = winePrice(wine.slug);
@@ -223,6 +226,34 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
                   {a}
                 </span>
               ))}
+            </div>
+          </div>
+        ) : null}
+        {feltAxes.length > 0 ? (
+          <div className="mt-3">
+            <span className="text-[10px] uppercase tracking-wide text-muted">느낀 맛</span>
+            <div className="mt-1.5 flex flex-col gap-1.5">
+              {feltAxes.map(({ key, label }) => {
+                const level = flavor[key] ?? 0;
+                return (
+                  <div key={key} className="flex items-center gap-2.5 text-sm">
+                    <span className="w-8 shrink-0 text-muted">{label}</span>
+                    <span className="flex gap-1" aria-hidden>
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <span
+                          key={n}
+                          className={`h-1.5 w-5 rounded-full ${
+                            n <= level ? "bg-gold" : "bg-foreground/12"
+                          }`}
+                        />
+                      ))}
+                    </span>
+                    <span className="text-xs text-muted/80">
+                      {level}/5 · {flavorLevelWord(key, level)}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : null}

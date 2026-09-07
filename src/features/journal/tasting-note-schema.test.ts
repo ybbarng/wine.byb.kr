@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildTastingNoteUpdate,
   parseAromas,
+  parseFlavor,
   serializeAromas,
+  serializeFlavor,
   type TastingNoteInput,
 } from "./tasting-note-schema";
 
@@ -69,6 +71,22 @@ describe("buildTastingNoteUpdate — 편집은 온 칸만 바꾼다(유실 방�
       buildTastingNoteUpdate({ aromasConfirmed: [] }, asInput({ aromasConfirmed: undefined }))
     ).toEqual({ aromasConfirmed: null });
   });
+
+  it("느낀 맛(flavorFelt)은 온 칸만 JSON 문자열로 저장한다", () => {
+    // 안 보내면 그대로 보존(결과에 없음).
+    expect(
+      Object.hasOwn(buildTastingNoteUpdate({ rating: 3 }, asInput({ rating: 3 })), "flavorFelt")
+    ).toBe(false);
+    // 보내면 JSON 문자열로.
+    const felt = { acidity: 4, tannin: 2, body: 5 };
+    expect(buildTastingNoteUpdate({ flavorFelt: felt }, asInput({ flavorFelt: felt }))).toEqual({
+      flavorFelt: JSON.stringify(felt),
+    });
+    // 빈 객체는 스키마가 undefined 로 정규화 → null 로 지운다.
+    expect(buildTastingNoteUpdate({ flavorFelt: {} }, asInput({ flavorFelt: undefined }))).toEqual({
+      flavorFelt: null,
+    });
+  });
 });
 
 describe("serializeAromas / parseAromas — 왕복", () => {
@@ -82,5 +100,27 @@ describe("serializeAromas / parseAromas — 왕복", () => {
     expect(serializeAromas([])).toBeNull();
     expect(parseAromas(null)).toEqual([]);
     expect(parseAromas("깨진json")).toEqual([]);
+  });
+});
+
+describe("serializeFlavor / parseFlavor — 왕복", () => {
+  it("평가한 축만 담아 왕복한다", () => {
+    const felt = { acidity: 4, tannin: 2, body: 5 };
+    expect(parseFlavor(serializeFlavor(felt))).toEqual(felt);
+    // 평가 안 한 축(undefined)은 저장에서 빠진다.
+    expect(serializeFlavor({ acidity: 3, tannin: undefined })).toBe(JSON.stringify({ acidity: 3 }));
+  });
+
+  it("비었거나 깨진 값·범위 밖 값은 안전하게 처리", () => {
+    expect(serializeFlavor(undefined)).toBeNull();
+    expect(serializeFlavor({})).toBeNull();
+    expect(parseFlavor(null)).toEqual({});
+    expect(parseFlavor("깨진json")).toEqual({});
+    // 1~5 밖이거나 정수가 아닌 값은 버린다.
+    expect(parseFlavor(JSON.stringify({ acidity: 9, tannin: 0, body: 2.5, sweetness: 3 }))).toEqual(
+      {
+        sweetness: 3,
+      }
+    );
   });
 });
