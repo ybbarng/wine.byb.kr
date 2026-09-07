@@ -14,6 +14,7 @@ import {
   expectedColorHint,
   expectedFlavorFor,
   FLAVOR_AXES,
+  oakNone,
   wineAgeYears,
 } from "@/features/wine/tasting-hints";
 import { WineColorPicker } from "@/features/wine/wine-color-picker";
@@ -135,6 +136,7 @@ export function TastingNoteWizard({
         type: selWine?.type,
         vintageYear,
         drankOn,
+        oakAging: selWine?.oakAging,
       }),
     [selWine, vintageYear, drankOn]
   );
@@ -383,6 +385,12 @@ export function TastingNoteWizard({
               <span className="text-sm font-medium text-muted">이전에 고른 향</span>
               <div className="mt-1.5 flex flex-wrap gap-2">{extras.map(chip)}</div>
             </div>
+          ) : null}
+          {/* 오크를 안 썼다는 것도 힌트다 — 배럴 향에 가리지 않은 과실을 찾아보게 한다. */}
+          {oakNone(selWine?.oakAging) ? (
+            <p className="text-xs leading-snug text-muted">
+              오크통을 쓰지 않은 와인이라 바닐라·토스트 같은 나무 향 대신 과실이 그대로 드러나요.
+            </p>
           ) : null}
         </div>
       );

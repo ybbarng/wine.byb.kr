@@ -88,6 +88,9 @@ model Wine {
   abv               Float?
   classification    String? // 등급 (AOC, IGT, Grand Cru 4등급 등)
   blendRaw          String? // 원본 품종 문자열 보존(파싱이 애매한 서술형 대비)
+  // 오크 숙성 정도: none|light|heavy. null 이면 아직 모름(가이드에서 오크 얘기를 안 한다).
+  // 바닐라·토스트는 품종이 아니라 양조(배럴)에서 오는 향이라 와인마다 따로 둔다.
+  oakAging          String?
   notesKo           String?
   foodPairing       String? // JSON 배열
   colorHex          String? // 컬러피커로 지정한 관찰 색(#rrggbb). 없으면 타입·품종 추정색.

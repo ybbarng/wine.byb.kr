@@ -57,6 +57,10 @@ pnpm exec tsx scripts/enrich-wine-notes.ts || echo "⚠️  notes enrich skipped
 echo "🗂  Fixing catalog data..."
 pnpm exec tsx scripts/fix-catalog-data.ts || echo "⚠️  catalog fix skipped (non-fatal)"
 
+# 와인별 오크 숙성 정도(가이드 시음의 "오크에서" 향 근거, 멱등). 실패해도 배포는 계속.
+echo "🛢  Setting wine oak aging..."
+pnpm exec tsx scripts/set-wine-oak.ts || echo "⚠️  oak seed skipped (non-fatal)"
+
 echo "🔨 Building..."
 pnpm run build
 

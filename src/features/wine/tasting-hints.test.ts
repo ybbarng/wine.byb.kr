@@ -7,6 +7,7 @@ import {
   expectedColorHint,
   expectedFlavorFor,
   flavorLevelWord,
+  oakNone,
   wineAgeYears,
 } from "./tasting-hints";
 
@@ -153,6 +154,64 @@ describe("expectedAromaGroups — 출처(품종·숙성)별 예상 향", () => {
     });
     expect(red[1].aromas).toContain("가죽");
     expect(white[1].aromas).toContain("견과");
+  });
+});
+
+describe("오크에서 오는 향", () => {
+  it("오크를 쓴 와인만 오크 묶음이 붙고, 정도에 따라 향이 다르다", () => {
+    const light = expectedAromaGroups({
+      grapes: ["샤르도네"],
+      type: "white",
+      oakAging: "light",
+    });
+    const heavy = expectedAromaGroups({
+      grapes: ["샤르도네"],
+      type: "white",
+      oakAging: "heavy",
+    });
+    expect(light.map((g) => g.source)).toContain("오크에서");
+    expect(light.find((g) => g.source === "오크에서")?.aromas).toEqual(["바닐라", "토스트"]);
+    expect(heavy.find((g) => g.source === "오크에서")?.aromas).toContain("훈연");
+  });
+
+  it("오크를 안 썼거나(none) 모르면(null) 오크 묶음이 없다", () => {
+    for (const oakAging of ["none", null, undefined]) {
+      const groups = expectedAromaGroups({ grapes: ["샤르도네"], type: "white", oakAging });
+      expect(groups.map((g) => g.source)).not.toContain("오크에서");
+    }
+  });
+
+  it("오크를 안 쓴 샤르도네엔 버터·오크 향이 뜨지 않는다(원래 문제)", () => {
+    // 오크 유래 향을 품종 아로마에서 뺐으므로, 샤블리 같은 무오크 와인엔 안 나온다.
+    const aromas = expectedAromaGroups({
+      grapes: ["샤르도네"],
+      type: "white",
+      oakAging: "none",
+    }).flatMap((g) => g.aromas);
+    expect(aromas).not.toContain("버터");
+    expect(aromas).not.toContain("오크");
+    expect(aromas).toContain("사과"); // 품종 향 자체는 그대로
+  });
+
+  it("오크와 숙성 향이 겹치면 앞선 묶음에만 넣는다", () => {
+    // 오크(heavy)의 토스트와 화이트 숙성 향의 토스트가 겹친다.
+    const groups = expectedAromaGroups({
+      grapes: ["샤르도네"],
+      type: "white",
+      oakAging: "heavy",
+      vintageYear: 2010,
+      drankOn: "2026-09-07",
+    });
+    const all = groups.flatMap((g) => g.aromas);
+    expect(new Set(all).size).toBe(all.length);
+    expect(groups.find((g) => g.source === "오크에서")?.aromas).toContain("토스트");
+    expect(groups.find((g) => g.source.startsWith("숙성"))?.aromas).not.toContain("토스트");
+  });
+
+  it("oakNone 은 '안 썼다고 아는' 경우만 참", () => {
+    expect(oakNone("none")).toBe(true);
+    expect(oakNone("light")).toBe(false);
+    expect(oakNone(null)).toBe(false); // 모르는 것과 안 쓴 것은 다르다
   });
 });
 
