@@ -137,7 +137,11 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
       </h1>
       {/* 어떤 와인의 기록인지 — 부제 */}
       <div className="mt-2 flex items-center gap-2 text-xs uppercase tracking-wide text-muted">
-        <span className="h-3 w-3 rounded-full border border-foreground/20 bg-wine" />
+        {/* 실제 관찰/추정 색을 점으로(고정 붉은색이 아니라). 화이트인데 붉은 점 뜨던 문제 해결. */}
+        <span
+          className={`h-3 w-3 rounded-full border border-foreground/20 ${displayColor ? "" : "bg-wine"}`}
+          style={displayColor ? { background: displayColor } : undefined}
+        />
         {wine.type && WINE_TYPE_LABELS[wine.type] ? (
           <Link
             href={`/type/${wine.type}`}
@@ -191,10 +195,14 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
           <div className="mt-3 flex flex-wrap gap-2">
             {note.colorHex ? (
               <InfoChip label="색">
-                <span
-                  className="h-4 w-4 rounded-full border border-foreground/20"
-                  style={{ background: note.colorHex }}
-                />
+                {/* 옅은 색(near-white)도 보이게 큰 스와치 + hex. 작은 점은 크림 배경에 묻혔음. */}
+                <span className="inline-flex items-center gap-1.5">
+                  <span
+                    className="h-5 w-8 rounded border border-foreground/25 shadow-inner shadow-foreground/15"
+                    style={{ background: note.colorHex }}
+                  />
+                  <span className="font-mono text-xs text-muted">{note.colorHex}</span>
+                </span>
               </InfoChip>
             ) : null}
             {note.repurchase ? <InfoChip label="다시 살까">{note.repurchase}</InfoChip> : null}
