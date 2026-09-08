@@ -1719,9 +1719,17 @@ export default function FluidLab({
       depthRT.texture.type = THREE.FloatType;
       // 잔 뺀 장면(배경+병+와인) — 잔이 이걸 굴절해서 샘플(직접 굴절)
       _sceneRT = new THREE.RenderTarget(rtW, rtH);
-      // 와인 뒷면 거리(Beer–Lambert 두께 계산)
+      // 와인 뒷면 거리(Beer–Lambert 두께 계산).
+      // **HalfFloat 이어야 한다.** 여기 담기는 건 뷰 공간 거리(2~3 단위)라 1을 넘는데,
+      // 32비트 FloatType 렌더타깃은 모바일 GPU 에서 색 버퍼로 못 쓰는 경우가 많다
+      // (안드로이드 크롬은 WebGPU 대신 WebGL2 로 폴백 + EXT_color_buffer_float 부재).
+      // 그러면 거리가 1.0 으로 잘려 t = backDist−frontDist 가 음수 → 0.02 로 바닥을
+      // 치고, exp(−absorb·0.02) ≈ 1 이 돼 **흡수가 사라진다** → 짙은 레드가 배경(따뜻한
+      // 주황)을 그대로 통과시켜 주황으로 보였다(2026-09-08 안드로이드 크롬 제보).
+      // HalfFloat 은 ±65504 범위라 거리에 충분하고, 같은 설정의 bgRT 가 모바일에서
+      // 정상 동작하는 것으로 이미 검증돼 있다.
       wineThickRT = new THREE.RenderTarget(rtW, rtH);
-      wineThickRT.texture.type = THREE.FloatType;
+      wineThickRT.texture.type = THREE.HalfFloatType;
       // 와인 뒤 장면(와인만 숨김) — 굴절+흡수 투과 샘플용
       bgRT = new THREE.RenderTarget(rtW, rtH);
       bgRT.texture.type = THREE.HalfFloatType;
