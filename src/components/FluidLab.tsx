@@ -6,15 +6,8 @@
 import { useEffect, useRef } from "react";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { UltraHDRLoader } from "three/examples/jsm/loaders/UltraHDRLoader.js";
-import * as BufferGeometryUtils from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import {
   atan,
-  atomicAdd,
-  atomicLoad,
-  atomicStore,
-  attribute,
-  clamp,
-  cos,
   cross,
   dFdx,
   dFdy,
@@ -23,23 +16,16 @@ import {
   float,
   frontFacing,
   If,
-  instancedArray,
-  instanceIndex,
   int,
-  ivec3,
-  Loop,
-  mix,
   mx_fractal_noise_float,
   normalize,
   normalView,
-  normalWorld,
   positionLocal,
   positionView,
   pow,
   screenUV,
   sin,
   smoothstep,
-  struct,
   texture,
   uniform,
   vec2,
@@ -49,39 +35,6 @@ import {
 import * as THREE from "three/webgpu";
 
 // 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
-function polyfit(xs: number[], ys: number[], deg: number): number[] {
-  const n = deg + 1;
-  const A: number[][] = [];
-  const b: number[] = [];
-  for (let j = 0; j < n; j++) {
-    const row = new Array(n).fill(0);
-    for (let k = 0; k < n; k++) {
-      let s = 0;
-      for (let i = 0; i < xs.length; i++) s += xs[i] ** (j + k);
-      row[k] = s;
-    }
-    A.push(row);
-    let sb = 0;
-    for (let i = 0; i < xs.length; i++) sb += ys[i] * xs[i] ** j;
-    b.push(sb);
-  }
-  for (let c = 0; c < n; c++) {
-    let piv = c;
-    for (let r = c + 1; r < n; r++) {
-      if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
-    }
-    [A[c], A[piv]] = [A[piv], A[c]];
-    [b[c], b[piv]] = [b[piv], b[c]];
-    for (let r = 0; r < n; r++) {
-      if (r !== c) {
-        const f = A[r][c] / A[c][c];
-        for (let k = c; k < n; k++) A[r][k] -= f * A[c][k];
-        b[r] -= f * b[c];
-      }
-    }
-  }
-  return b.map((v, i) => v / A[i][i]);
-}
 
 // ── 대표 와인잔 형태 ── 각 잔은 프로파일(외곽 반경 곡선, 아래→위)·벽두께·와인
 // 채움 높이(바닥/수면, 프로파일 y)를 갖는다. 발+기둥은 공통, 볼(bowl)만 형태별.
@@ -244,9 +197,13 @@ const GLASSES: GlassDef[] = [
   },
 ];
 
-// Position Based Fluids (Macklin & Müller 2013) 을 three/tsl 로 재구현.
-// 비압축(밀도 제약) + 해시 그리드 이웃 + 잔 SDF 경계.
-// biome-ignore lint: PBF 구조
+// 와인잔 렌더러 — 표면·부피 기반. 유리 lathe 굴절 + Beer–Lambert 와인 흡수 +
+// 회전 파동 스월(슬로싱 감쇠 진동자) + 눈물자국(legs).
+//
+// 예전엔 여기에 입자 유체(PBF, Macklin & Müller 2013)를 함께 두고 붓기를 시뮬레이션했다.
+// 표면·부피 기반으로 전환하며 껐고(FLUID_ON=false), 실행되지 않는 채로 남아 있던 그
+// 파이프라인(버퍼·컴퓨트 커널·SSFR 패스 등 500여 줄)을 걷어냈다.
+// 연구 내용은 docs/fluid-simulation-status.md 에, 코드는 git 이력에 남아 있다.
 export default function FluidLab({
   wineAbsorb,
   glassType,
@@ -329,7 +286,6 @@ export default function FluidLab({
     let pageBg: unknown;
     let controls: OrbitControls;
     let disposed = false;
-    let frameCount = 0;
     // 캔버스 백버퍼(backing) 크기 — 화면에 보이는 프레임 크기와 분리한다. 프레임이
     // width/height 로 애니메이션될 때 매 프레임 renderer.setSize 를 부르면 WebGPU 가
     // 백버퍼를 재구성하며 깜빡인다. 그래서 setSize 는 "더 커질 때만" 디바운스로 부르고,
@@ -348,10 +304,11 @@ export default function FluidLab({
 
     // 표면·부피 기반으로 전환(docs/wine-experience-goals.md). 입자 유체는 끔.
     const FLUID_ON = false;
+    // 격자 간격 d 를 정하는 기준 입자 수. 입자 유체는 껐지만 d 는 살아 있는 계산
+    // (WALL·PARTICLE_R 등 병·잔 규격)에 여전히 쓰인다.
+    const N_TARGET = 12000;
     const SIMULATE = false; // 입자 물리 미사용
     void SIMULATE;
-    const N_TARGET = 12000; // 목표 입자 수(전체 채움 검증) — 실제 N 은 채움 후 확정
-    const WINE_FILL_TOP = 0.72; // (구) 정적 와인 메쉬용 — FLUID_ON 이면 미사용
 
     // PBF 이산화(H·격자·rest density·완화)는 아래 병 규격 뒤에서 채움 간격 d
     // 로부터 유도한다(자기일관). d 와 무관한 상수만 뒤에 따로 둔다.
@@ -361,7 +318,6 @@ export default function FluidLab({
     // 병이 -x(잔) 쪽으로 기울며 쏟아진다. z 는 0 중심.
     const DOMAIN_SCALE = 1.4; // coord 1.0 = 1.4 world (기울인 병 arc 담을 폭)
     const DOMAIN_MIN = [-0.6, -0.12, -0.7]; // coord 원점의 world 좌표
-    const YMAX = 1.3; // coord y 상단 (world y ≈ 1.7 까지)
     const w2c = (wx: number, wy: number, wz: number): [number, number, number] => [
       (wx - DOMAIN_MIN[0]) / DOMAIN_SCALE,
       (wy - DOMAIN_MIN[1]) / DOMAIN_SCALE,
@@ -410,32 +366,10 @@ export default function FluidLab({
     // 렌더 입자 반경 — 벽 두께보다 작게 캡 → 벽까지 채워도 표면이 바깥벽을 안 넘음.
     const PARTICLE_R = Math.min(d, WALL * 0.9);
     const H = 1.8 * d; // 커널 반경 = 간격의 1.8배 (안정 이웃 수 ~ 잔과 동일)
-    const H2 = H * H;
-    const GRID_RES = Math.ceil(1 / H); // 해시 그리드 해상도 (x,z: [0,1])
-    const GRID_RES_Y = Math.ceil(YMAX * GRID_RES); // y축 셀 수
-    const CELL_COUNT = GRID_RES * GRID_RES_Y * GRID_RES;
-    const MAX_PER_CELL = 24; // H/d≈1.8 → 셀당 ~6, 24 면 여유
-    const POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
-    const SPIKY = 45 / (Math.PI * H ** 6); // 그래디언트 커널 계수
-    const SOLVER_ITER = 4; // 비압축 강화(점프·표면진동 완화)
+    const _H2 = H * H;
+    const _POLY6 = 315 / (64 * Math.PI * H ** 9); // 밀도 커널 계수
     // rest density = 채운 격자에서의 밀도(수치합) — 이 밀도에서 압력 0(정지).
-    const restDensityFor = (dd: number): number => {
-      let s = 0;
-      const R = Math.ceil(H / dd);
-      for (let i = -R; i <= R; i++)
-        for (let j = -R; j <= R; j++)
-          for (let k = -R; k <= R; k++) {
-            const r2 = (i * i + j * j + k * k) * dd * dd;
-            if (r2 < H2) {
-              const e = H2 - r2;
-              s += POLY6 * e * e * e;
-            }
-          }
-      return s;
-    };
-    const restDensityValue = restDensityFor(d);
     // λ 완화(CFM): 잔 세트(H=0.045, EPS=500)에서 Σ|∇C|²∝1/H² 이므로 1/H² 로 스케일.
-    const EPS_RELAX = 500.0 * (0.045 / H) ** 2;
     // ── 채움: 병 내부를 SDF 형상 따라 벽(radiusAt)까지 가득. 벽까지 채워야 퍼져
     // 내려앉지 않고 입구까지 차오른다. 입구(NECK_TOP) 살짝 위까지 채워 한두 개
     // 넘치게(정합 확인). 렌더 반경이 벽보다 작아 바깥벽은 안 넘는다. ──
@@ -457,12 +391,7 @@ export default function FluidLab({
           }
       }
     }
-    const N = wineFill.length; // 실제 입자 수(채운 결과)
-    const C_XSPH = 0.2; // XSPH 점성 (낮춰 생동감 복원 — 튐·흐름 살림)
     // 표면장력(s_corr): 표면 입자를 응집시켜 요동 억제 + 벽 코팅.
-    const SCORR_K = 0.00001; // 표면장력 (원래 3e-5 → 순환 완화·응집 유지 절충)
-    const DELTA_Q2 = (0.2 * H) ** 2; // (0.2·H)² 기준 거리²
-    const POLY6_DQ = POLY6 * (H2 - DELTA_Q2) ** 3; // poly6(ΔQ²)
     // GRAVITY 는 실제 g를 좌표 공간으로 매핑해야 하므로 잔 스케일이 정해진 뒤
     // (cubeSpanProfile 계산 후) 아래에서 유도한다.
 
@@ -516,8 +445,6 @@ export default function FluidLab({
       bowlRmax = Math.max(bowlRmax, innerRadiusAt(py));
     }
     const cubeSpanProfile = Math.max(glass.bowlTopY - glass.bowlBottomY, bowlRmax * 2);
-    const FLUID_SCALE = DOMAIN_SCALE; // 물리 coord → world 등방 배율
-    const FLUID_Y = DOMAIN_MIN[1]; // coord y=0 의 world y
     void cubeSpanProfile; // (구 잔 중심 매핑 값 — 현재 미사용)
 
     // ── 중력: 실제 물리값에서 유도 (겉은 실제, 시간 축만 연출값) ──────────
@@ -527,385 +454,26 @@ export default function FluidLab({
     // 시간 축(TIME_SCALE)만 연출값으로 잡아, 기존의 좋던 낙하감(substep 2,
     // 가벼운 계산)을 그대로 유지한다. 아무도 담기는 시간을 재지 않으므로 문제없음.
     const GLASS_HEIGHT_M = 0.24; // 실제 와인잔 총 높이 ~24cm (리델 21~27.5cm 중간)
-    const G_REAL = 9.81; // 실제 중력 m/s²
+    const _G_REAL = 9.81; // 실제 중력 m/s²
     const profileMaxY = Math.max(...glass.profile.map((p) => p[1])); // 림(2.92)
-    const metersPerProfile = GLASS_HEIGHT_M / profileMaxY;
-    // 1 coord = DOMAIN_SCALE world, 1 world = (metersPerProfile/worldScale) m.
-    const metersPerCoord = DOMAIN_SCALE * (metersPerProfile / glass.worldScale);
-    // 시간 배율 T: 1 sim-초 = 실제 T 초. 기존 좋던 g_sim≈1.5 가 나오도록 맞춤.
-    const TIME_SCALE = 0.34; // 슬로모션 9배→3배 (물성 크리스프하게, substep↑ 비용)
-    // g_sim = g_real · T² / L  (실제 g를 sim 좌표·시간 단위로 변환)
-    const GRAVITY = -(G_REAL * TIME_SCALE * TIME_SCALE) / metersPerCoord;
-
-    const POLY_DEG = 5;
-    const lutXs: number[] = [];
-    const lutYs: number[] = [];
-    for (let i = 0; i < 64; i++) {
-      const coordY = i / 63;
-      const worldY = FLUID_Y + coordY * FLUID_SCALE;
-      const py = (worldY - glass.worldY) / glass.worldScale;
-      let coordR = 0.002;
-      if (py >= glass.bowlBottomY && py <= glass.bowlTopY) {
-        coordR = (innerRadiusAt(py) * glass.worldScale) / FLUID_SCALE;
-      }
-      lutXs.push(coordY);
-      lutYs.push(Math.max(coordR, 0.002));
-    }
-    const bowlCoef = polyfit(lutXs, lutYs, POLY_DEG);
-    // biome-ignore lint/suspicious/noExplicitAny: TSL
-    const bowlCoefU: any[] = bowlCoef.map((v) => uniform(v));
-    const bowlRadiusAtCoordY = (cy: number): number => {
-      let a = bowlCoef[POLY_DEG];
-      for (let k = POLY_DEG - 1; k >= 0; k--) a = a * cy + bowlCoef[k];
-      return Math.max(a, 0.002);
-    };
 
     // ── 버퍼/유니폼/커널 핸들 ─────────────────────────────────────────
-    // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let dtUniform: any, restDensityUniform: any, viscUniform: any, gravUniform: any;
-    // biome-ignore lint/suspicious/noExplicitAny: TSL — 따르기(pour): 활성 입자 수
-    let pourCountUniform: any;
-    // biome-ignore lint/suspicious/noExplicitAny: TSL — 병 기울기 각(라디안)
-    let tiltUniform: any;
     let bottleGroup: THREE.Group; // 보이는 병 — 피벗 둘레로 기울이는 그룹
     let bottleSpout: THREE.Object3D; // 병 입구(주둥이) 마커 — 붓기 스트림 시작점
-    let bottlePivotWorld: THREE.Vector3; // 병 피벗 world(서 있는 위치)
     let streamMesh: THREE.Mesh; // 붓기 물줄기(스포우트→잔)
-    // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let particleBuffer: any,
-      lambdaBuffer: any,
-      densityBuffer: any,
-      cellCountBuffer: any,
-      cellIdsBuffer: any;
-    // biome-ignore lint/suspicious/noExplicitAny: TSL
-    let clearCellKernel: any,
-      predictKernel: any,
-      buildGridKernel: any,
-      lambdaKernel: any,
-      deltaPKernel: any,
-      velocityKernel: any;
-    let particleMesh: THREE.Mesh;
+    let _particleMesh: THREE.Mesh;
     // 잔(직접 굴절용 — render에서 숨겼다 그림)은 이제 glass1.glassMesh 에 담긴다.
-    let fluidScene: THREE.Scene;
+    let _fluidScene: THREE.Scene;
     // biome-ignore lint/suspicious/noExplicitAny: TSL RenderTarget/QuadMesh
-    let depthRT: any, sceneRT: any; // sceneRT: 잔 뺀 장면(굴절 샘플용)
+    let depthRT: any, _sceneRT: any; // sceneRT: 잔 뺀 장면(굴절 샘플용)
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let blurRT: any, blurRT2: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL — 여러 번 반복 평활화용 ping-pong
-    let blurFromDepth: any, blurPing: any, blurPong: any;
+    let _blurFromDepth: any, _blurPing: any, _blurPong: any;
     // biome-ignore lint/suspicious/noExplicitAny: TSL
     let surfaceQuad: any;
 
-    const STRIDE = 12; // vec3 position, velocity, predicted (각 16바이트 정렬 → 4 float)
-
-    function setupBuffers() {
-      const pStruct = struct({
-        position: { type: "vec3" },
-        velocity: { type: "vec3" },
-        predicted: { type: "vec3" },
-      });
-      const arr = new Float32Array(N * STRIDE);
-      // 세워진 병 안에 정적으로 배치(위에서 만든 wineFill 격자 그대로).
-      for (let i = 0; i < N; i++) {
-        arr[i * STRIDE] = wineFill[i][0];
-        arr[i * STRIDE + 1] = wineFill[i][1];
-        arr[i * STRIDE + 2] = wineFill[i][2];
-      }
-      particleBuffer = instancedArray(arr, pStruct);
-      particleBuffer.setPBO(true);
-      lambdaBuffer = instancedArray(N, "float");
-      densityBuffer = instancedArray(N, "float");
-      densityBuffer.setPBO(true);
-
-      // 해시 그리드: 셀당 입자 카운트(atomic) + 입자 인덱스 버킷
-      const cellStruct = struct({ count: { type: "int", atomic: true } });
-      cellCountBuffer = instancedArray(CELL_COUNT, cellStruct);
-      cellIdsBuffer = instancedArray(CELL_COUNT * MAX_PER_CELL, "int");
-    }
-
-    function setupUniforms() {
-      dtUniform = uniform(1 / 60);
-      restDensityUniform = uniform(restDensityValue); // 채운 격자 밀도(정지)
-      tiltUniform = uniform(0); // 병 기울기 각(라디안) — render 에서 애니메이션
-      // 점성(substep당 속도 유지율). 실제 유체의 점성 소산 — 출렁임(슬로싱)이
-      // 잦아들게 한다. 0.99는 약해서 낙하 종단속도(1.25)가 관측 낙하(0.44)보다
-      // 훨씬 높아 낙하를 안 늦춘다(과거 0.9는 종단 0.125로 낙하를 깎았음).
-      viscUniform = uniform(0.99); // 잔에서 검증된 약한 점성(정지는 EPS_RELAX가)
-      gravUniform = uniform(GRAVITY);
-      pourCountUniform = uniform(0, "int"); // 따르기: 활성 입자 수(render에서 증가)
-    }
-
-    function setupComputeShaders() {
-      // 경계: 잔(y<1, 볼 SDF) + 병(y>BOTTLE_BOT, 원통+바닥구멍) + 사이 공기(자유).
-      // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const clampToBoundary = (p: any) => {
-        const result = p.toVar();
-        // ── 세운 병(틸트) 경계 — 피벗 둘레 z축 회전으로 로컬 프레임에서 판정 ──
-        // 로컬: 병 축은 y, 반경 = √(lx²+lz²), h = 바닥으로부터 높이.
-        const th = tiltUniform.toVar();
-        const c = cos(th).toVar();
-        const s = sin(th).toVar();
-        const d = p.sub(vec3(PIVOT[0], PIVOT[1], PIVOT[2])).toVar();
-        // local = R(-θ)·d (x-y 평면 회전)
-        const lx = d.x.mul(c).add(d.y.mul(s)).toVar();
-        const ly = d.x.mul(s).negate().add(d.y.mul(c)).toVar();
-        const lz = d.z.toVar();
-        const rad = lx.mul(lx).add(lz.mul(lz)).sqrt().max(1e-5).toVar();
-        const bottomLocalY = float(BOTTLE_BOTTOM - PIVOT[1]);
-        const h = ly.sub(bottomLocalY).toVar(); // 0=바닥, NECK_TOP=입구
-        // 반경 판정용 높이(바닥 아래/입구 위는 clamp) — 모서리 누수 방지 핵심.
-        const hC = clamp(h, 0.0, NECK_TOP).toVar();
-        // 높이별 내반경: 몸통 BODY_R → 어깨(smootherstep) → 곧은 목 NECK_R.
-        const tSh = clamp(hC.sub(BODY_TOP).div(SHOULDER_TOP - BODY_TOP), 0.0, 1.0).toVar();
-        const sSh = tSh
-          .mul(tSh)
-          .mul(tSh)
-          .mul(tSh.mul(tSh.mul(6.0).sub(15.0)).add(10.0)); // smootherstep
-        const rAt = mix(float(BODY_R), float(NECK_R), sSh).toVar();
-        const clx = lx.toVar();
-        const cly = ly.toVar();
-        const clz = lz.toVar();
-        // 몸통·목 벽: 병 높이 안(h<NECK_TOP) & 반경 초과 → 축 쪽으로. h<0 이면
-        // hC=0 이라 BODY_R 적용 → 바닥 밀기와 합쳐 바닥 모서리를 완전히 막는다.
-        If(h.lessThan(NECK_TOP).and(rad.greaterThan(rAt)), () => {
-          const k = rAt.div(rad);
-          clx.assign(lx.mul(k));
-          clz.assign(lz.mul(k));
-        });
-        // 바닥: 바닥면 아래로 내려가면 바닥으로 올림(못 빠짐)
-        If(h.lessThan(0.0), () => {
-          cly.assign(bottomLocalY);
-        });
-        // local → world: R(θ)·(clx,cly) + pivot (안 걸리면 항등 = 원위치)
-        result.assign(
-          vec3(
-            clx.mul(c).sub(cly.mul(s)).add(PIVOT[0]),
-            clx.mul(s).add(cly.mul(c)).add(PIVOT[1]),
-            clz.add(PIVOT[2])
-          )
-        );
-        // 도메인 경계 (y는 YMAX까지)
-        result.assign(clamp(result, vec3(0.001), vec3(0.999, YMAX - 0.001, 0.999)));
-        return result;
-      };
-
-      // SPH 커널 (Poly6 밀도, Spiky 그래디언트)
-      // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const poly6 = (r2: any) => {
-        const d = float(H2).sub(r2);
-        return d.mul(d).mul(d).mul(POLY6);
-      };
-      // ∇W_i = -SPIKY (H-r)² (r_ij)/|r_ij|,  r_ij = p_i − p_j
-      // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const spikyGrad = (rij: any, r: any) => {
-        const c = float(H).sub(r);
-        return rij.mul(float(-SPIKY).mul(c).mul(c).div(r));
-      };
-
-      // 셀 인덱스 계산 (coord → grid cell)
-      // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const cellOf = (p: any) => {
-        return ivec3(
-          clamp(p.x.mul(GRID_RES), float(0), float(GRID_RES - 1)),
-          clamp(p.y.mul(GRID_RES), float(0), float(GRID_RES_Y - 1)),
-          clamp(p.z.mul(GRID_RES), float(0), float(GRID_RES - 1))
-        );
-      };
-      // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const cellId = (c: any) => c.x.add(c.y.mul(GRID_RES)).add(c.z.mul(GRID_RES * GRID_RES_Y));
-
-      // 1) 셀 카운트 초기화
-      clearCellKernel = Fn(() => {
-        atomicStore(cellCountBuffer.element(instanceIndex).get("count"), 0);
-      })()
-        .compute(CELL_COUNT)
-        .setName("clearCell");
-
-      // 2) 예측: v += g·dt, predicted = x + v·dt
-      predictKernel = Fn(() => {
-        // 대기(parked) 입자는 건너뜀 — 풀린(활성) 입자만 물리 적용.
-        If(int(instanceIndex).lessThan(pourCountUniform), () => {
-          const p = particleBuffer.element(instanceIndex);
-          const v = p.get("velocity").toVar();
-          v.y.addAssign(gravUniform.mul(dtUniform));
-          const pred = p.get("position").add(v.mul(dtUniform)).toVar();
-          pred.assign(clamp(pred, vec3(0.001), vec3(0.999, YMAX - 0.001, 0.999)));
-          p.get("velocity").assign(v);
-          p.get("predicted").assign(pred);
-        });
-      })()
-        .compute(N)
-        .setName("predict");
-
-      // 3) 해시 그리드 빌드 (predicted 기준)
-      buildGridKernel = Fn(() => {
-        // 대기 입자는 그리드에 안 넣음 — 활성 입자만 이웃으로 잡힘.
-        If(int(instanceIndex).lessThan(pourCountUniform), () => {
-          const pred = particleBuffer.element(instanceIndex).get("predicted");
-          const cid = cellId(cellOf(pred)).toVar();
-          const idx = atomicAdd(cellCountBuffer.element(cid).get("count"), int(1)).toVar();
-          If(idx.lessThan(int(MAX_PER_CELL)), () => {
-            cellIdsBuffer.element(cid.mul(MAX_PER_CELL).add(idx)).assign(int(instanceIndex));
-          });
-        });
-      })()
-        .compute(N)
-        .setName("buildGrid");
-
-      // 이웃 순회 매크로: 27개 이웃 셀 × 버킷을 돌며 body(j, rij, r2, r) 호출
-      // biome-ignore lint/suspicious/noExplicitAny: TSL
-      const forEachNeighbor = (pi: any, body: (ctx: any) => void) => {
-        const base = cellOf(pi).toConst();
-        Loop(
-          { start: -1, end: 2, type: "int", name: "ox", condition: "<" },
-          // biome-ignore lint/suspicious/noExplicitAny: TSL
-          ({ ox }: any) => {
-            Loop(
-              { start: -1, end: 2, type: "int", name: "oy", condition: "<" },
-              // biome-ignore lint/suspicious/noExplicitAny: TSL
-              ({ oy }: any) => {
-                Loop(
-                  { start: -1, end: 2, type: "int", name: "oz", condition: "<" },
-                  // biome-ignore lint/suspicious/noExplicitAny: TSL
-                  ({ oz }: any) => {
-                    const nc = ivec3(base.x.add(ox), base.y.add(oy), base.z.add(oz)).toVar();
-                    const inb = nc.x
-                      .greaterThanEqual(int(0))
-                      .and(nc.x.lessThan(int(GRID_RES)))
-                      .and(nc.y.greaterThanEqual(int(0)))
-                      .and(nc.y.lessThan(int(GRID_RES_Y)))
-                      .and(nc.z.greaterThanEqual(int(0)))
-                      .and(nc.z.lessThan(int(GRID_RES)));
-                    If(inb, () => {
-                      const cid = cellId(nc).toConst();
-                      const cnt = atomicLoad(cellCountBuffer.element(cid).get("count")).toConst();
-                      Loop(
-                        {
-                          start: 0,
-                          end: MAX_PER_CELL,
-                          type: "int",
-                          name: "k",
-                          condition: "<",
-                        },
-                        // biome-ignore lint/suspicious/noExplicitAny: TSL
-                        ({ k }: any) => {
-                          If(k.lessThan(cnt), () => {
-                            const j = cellIdsBuffer.element(cid.mul(MAX_PER_CELL).add(k)).toConst();
-                            const pj = particleBuffer.element(j).get("predicted");
-                            const rij = pi.sub(pj).toVar();
-                            const r2 = rij.dot(rij).toVar();
-                            If(r2.lessThan(H2).and(r2.greaterThan(1e-12)), () => {
-                              body({ j, rij, r2 });
-                            });
-                          });
-                        }
-                      );
-                    });
-                  }
-                );
-              }
-            );
-          }
-        );
-      };
-
-      // 4) λ 계산: 밀도 제약 C_i = ρ_i/ρ0 − 1, λ_i = −C_i/(Σ|∇C|²+ε)
-      lambdaKernel = Fn(() => {
-        If(int(instanceIndex).lessThan(pourCountUniform), () => {
-          const pi = particleBuffer.element(instanceIndex).get("predicted").toConst();
-          const rho = float(0).toVar();
-          const gradCi = vec3(0).toVar(); // Σ∇W (·1/ρ0 로 ∇C_ii)
-          const sumGrad2 = float(0).toVar(); // Σ_{j} |∇C_ij|²
-          rho.addAssign(poly6(float(0))); // self (r=0)
-          forEachNeighbor(pi, ({ rij, r2 }) => {
-            const r = r2.sqrt();
-            rho.addAssign(poly6(r2));
-            const grad = spikyGrad(rij, r).div(restDensityUniform);
-            gradCi.addAssign(grad);
-            sumGrad2.addAssign(grad.dot(grad));
-          });
-          densityBuffer.element(instanceIndex).assign(rho);
-          const c = rho.div(restDensityUniform).sub(1.0);
-          sumGrad2.addAssign(gradCi.dot(gradCi));
-          const lambda = c.negate().div(sumGrad2.add(EPS_RELAX));
-          lambdaBuffer.element(instanceIndex).assign(lambda);
-        });
-      })()
-        .compute(N)
-        .setName("lambda");
-
-      // 5) 위치 보정 Δp_i = (1/ρ0) Σ (λ_i+λ_j) ∇W, predicted += Δp, 경계
-      deltaPKernel = Fn(() => {
-        If(int(instanceIndex).lessThan(pourCountUniform), () => {
-          const p = particleBuffer.element(instanceIndex);
-          const pi = p.get("predicted").toVar();
-          const lambdaI = lambdaBuffer.element(instanceIndex).toConst();
-          const dp = vec3(0).toVar();
-          forEachNeighbor(pi, ({ j, rij, r2 }) => {
-            const r = r2.sqrt();
-            const lambdaJ = lambdaBuffer.element(j).toConst();
-            const grad = spikyGrad(rij, r);
-            // 표면장력 s_corr = −k (W(r)/W(ΔQ))⁴ (Macklin&Müller 식 13)
-            const ratio = poly6(r2).div(POLY6_DQ).toVar();
-            const r2c = ratio.mul(ratio);
-            const scorr = float(-SCORR_K).mul(r2c).mul(r2c);
-            dp.addAssign(grad.mul(lambdaI.add(lambdaJ).add(scorr)));
-          });
-          dp.divAssign(restDensityUniform);
-          pi.addAssign(dp);
-          pi.assign(clampToBoundary(pi));
-          p.get("predicted").assign(pi);
-        });
-      })()
-        .compute(N)
-        .setName("deltaP");
-
-      // 6) 속도 갱신: v = (predicted − x)/dt, x = predicted
-      velocityKernel = Fn(() => {
-        If(int(instanceIndex).lessThan(pourCountUniform), () => {
-          const p = particleBuffer.element(instanceIndex);
-          const pos = p.get("position").toConst();
-          const pred = p.get("predicted").toConst();
-          const vi = pred.sub(pos).div(dtUniform).toVar();
-          // XSPH 점성: 이웃과의 속도 차를 줄여 유체가 매끄럽게 잦아든다.
-          const dv = vec3(0).toVar();
-          forEachNeighbor(pred, ({ j, r2 }) => {
-            const pj = particleBuffer.element(j);
-            const vj = pj.get("predicted").sub(pj.get("position")).div(dtUniform);
-            dv.addAssign(vj.sub(vi).mul(poly6(r2)));
-          });
-          vi.addAssign(dv.div(restDensityUniform).mul(C_XSPH));
-          // 점성 소산: 출렁임(슬로싱)을 잦아들게 (약하게 — 낙하는 안 늦춤)
-          vi.mulAssign(viscUniform);
-          p.get("velocity").assign(vi);
-          p.get("position").assign(pred);
-        });
-      })()
-        .compute(N)
-        .setName("velocity");
-    }
-
-    function setupMesh() {
-      // SSFR 1단계: 입자를 sphere 로 렌더해 '뷰 공간 깊이'를 depthRT 에 쓴다.
-      const geometry = BufferGeometryUtils.mergeVertices(
-        new THREE.IcosahedronGeometry(PARTICLE_R, 2).deleteAttribute("uv")
-      );
-      const material = new A.MeshBasicNodeMaterial();
-      material.positionNode = Fn(() => {
-        const pos = particleBuffer.element(instanceIndex).get("position");
-        return attribute("position").add(pos);
-      })();
-      // 뷰 공간 선형 깊이(카메라 앞이 양수). R 채널에 저장.
-      material.colorNode = Fn(() => vec4(positionView.z.negate(), 0, 0, 1))();
-      particleMesh = new THREE.Mesh(geometry, material);
-      // biome-ignore lint/suspicious/noExplicitAny: mesh.count
-      (particleMesh as any).count = N;
-      particleMesh.scale.setScalar(DOMAIN_SCALE);
-      // coord(0,0,0) = world DOMAIN_MIN (도메인 원점)
-      particleMesh.position.set(DOMAIN_MIN[0], DOMAIN_MIN[1], DOMAIN_MIN[2]);
-      particleMesh.frustumCulled = false;
-      fluidScene.add(particleMesh);
-    }
+    const _STRIDE = 12; // vec3 position, velocity, predicted (각 16바이트 정렬 → 4 float)
 
     // 와인 legs(눈물) — 유리 벽 젖은 자리에서 투과 배경을 와인색으로 흡수(감쇠).
     // 발광 아님. 젖음=0 이면 감쇠 없음 → 마른 유리와 동일. render 가 갱신.
@@ -1212,7 +780,6 @@ export default function FluidLab({
       );
       bottleGroup = new THREE.Group();
       bottleGroup.position.copy(pivotWorld);
-      bottlePivotWorld = pivotWorld.clone();
       // 병은 world (0.42, -0.06, 0) 에 서 있음 → 그룹(피벗) 기준 상대 위치로.
       mesh.position.set(0.42 - pivotWorld.x, glass.worldY - pivotWorld.y, 0.0 - pivotWorld.z);
       bottleGroup.add(mesh);
@@ -1224,25 +791,6 @@ export default function FluidLab({
     }
 
     // 병 속 정적 와인 — 병 내부 원통 메쉬(깊이 정상, 병유리가 앞을 가림).
-    function setupWine() {
-      const m = (profileMaxY * glass.worldScale) / GLASS_HEIGHT_M;
-      const Rw = (0.0368 - 0.0025) * m * 0.97; // 병 몸통 내반경(살짝 안쪽)
-      const yBase = glass.worldY + 0.03; // 펀트 위
-      const yTop = glass.worldY + WINE_FILL_TOP; // 채움 높이(절반쯤)
-      const h = yTop - yBase;
-      const geometry = new THREE.CylinderGeometry(Rw, Rw * 0.95, h, 56, 1, false);
-      const material = new A.MeshPhysicalNodeMaterial({
-        color: 0x7a0f1e, // 진한 레드 와인 (불투명 — 병 투과 뒤로 비침)
-        metalness: 0,
-        roughness: 0.25,
-        side: THREE.DoubleSide,
-      });
-      material.envMapIntensity = 1.0;
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(0.42, yBase + h * 0.5, 0.0);
-      mesh.frustumCulled = false;
-      scene.add(mesh);
-    }
 
     // 잔 속 와인 — 표면·부피 기반. 잔 내벽 프로파일 lathe 를 "수면까지만" 생성
     // (클립은 WebGPU 노드머티리얼에서 안 먹어 지오메트리로 제한) + 수면 disc.
@@ -1571,24 +1119,8 @@ export default function FluidLab({
       scene.add(streamMesh);
     }
     // 스트림을 두 점(a=스포우트, b=잔 표면) 사이에 배치. rTop=위 반경.
-    function placeStream(a: THREE.Vector3, b: THREE.Vector3, rTop: number) {
-      const dir = new THREE.Vector3().subVectors(b, a);
-      const len = Math.max(dir.length(), 1e-4);
-      streamMesh.position.copy(a).add(b).multiplyScalar(0.5);
-      streamMesh.scale.set(rTop, len, rTop); // 지오메트리 taper 유지(위 rTop, 아래 0.62·rTop)
-      streamMesh.quaternion.setFromUnitVectors(
-        new THREE.Vector3(0, 1, 0),
-        dir.multiplyScalar(1 / len)
-      );
-    }
 
     function setupParticles() {
-      if (FLUID_ON) {
-        setupBuffers();
-        setupUniforms();
-        setupComputeShaders();
-        setupMesh();
-      }
       // 초기 잔 1개(현재 glassType·색). 이후 addGlass 로 두 번째 잔을 넣어 검증한다.
       const gg = buildGlass(glassType ?? 0, wineAbsorb);
       absorbURef.current = gg.absorbU; // wineAbsorb 프리셋 실시간 변경은 첫 잔에 반영
@@ -2017,111 +1549,9 @@ export default function FluidLab({
         // 화면에 보이는 최종 렌더: 배경은 pageBg(사이트 색과 매칭). 유리 뒤로는
         // 어두운 페이지 색이 보이지만, 와인은 warmBg 로 이미 빛나는 상태로 합성됨.
         scene.background = pageBg;
-        frameCount++;
         renderer.setRenderTarget(null);
         renderer.render(scene, camera);
         return;
-      }
-      // biome-ignore lint/suspicious/noExplicitAny: mesh.count
-      (particleMesh as any).count = N;
-      // ── 붓기 일시정지: 병은 세운 채 고정(tilt=0). 와인이 진짜 정지에 도달하는지 ──
-      // 하나의 시뮬로 확인(freeze 안 함). 여기서 평형이어야 붓기가 자연스럽게 이어짐.
-      const tilt = 0;
-      tiltUniform.value = tilt;
-      bottleGroup.rotation.z = tilt;
-      if (SIMULATE) {
-        const PBF_SUBSTEPS = 8;
-        dtUniform.value = 1 / 60 / PBF_SUBSTEPS;
-        // 검증(SDF↔시각 대조): 중력 끔 → 침강 없이 채운 SDF 형상 그대로 확인.
-        // (붓기 단계에선 실제 중력으로 복귀.)
-        gravUniform.value = 0;
-        pourCountUniform.value = N;
-        for (let s = 0; s < PBF_SUBSTEPS; s++) {
-          renderer.compute(predictKernel);
-          renderer.compute(clearCellKernel);
-          renderer.compute(buildGridKernel);
-          for (let it = 0; it < SOLVER_ITER; it++) {
-            renderer.compute(lambdaKernel);
-            renderer.compute(deltaPKernel);
-          }
-          renderer.compute(velocityKernel);
-        }
-      } // end if (SIMULATE)
-      // SSFR 1단계: 입자 깊이를 depthRT 에 렌더 → grayscale 로 화면 확인
-      renderer.setRenderTarget(depthRT);
-      renderer.setClearColor(0x000000, 1);
-      renderer.clear();
-      renderer.render(fluidScene, camera);
-      // 깊이 평활화(분리형 1D 가로+세로)를 여러 번 반복해 강하게 평평화 → 뭉게구름 제거
-      renderer.setRenderTarget(blurRT2);
-      renderer.clear();
-      blurFromDepth.render(renderer); // 가로: depthRT → blurRT2
-      renderer.setRenderTarget(blurRT);
-      renderer.clear();
-      blurPong.render(renderer); // 세로: blurRT2 → blurRT
-      const SMOOTH_ITER = 2; // 추가 2D 반복 (가로+세로)
-      for (let s = 0; s < SMOOTH_ITER; s++) {
-        renderer.setRenderTarget(blurRT2);
-        renderer.clear();
-        blurPing.render(renderer); // 가로: blurRT → blurRT2
-        renderer.setRenderTarget(blurRT);
-        renderer.clear();
-        blurPong.render(renderer); // 세로: blurRT2 → blurRT
-      }
-      // 잔 직접 굴절용 sceneRT(잔 뺀 장면=배경+병) 렌더
-      for (const g of glasses) g.glassMesh.visible = false;
-      renderer.setRenderTarget(sceneRT);
-      renderer.render(scene, camera);
-      for (const g of glasses) g.glassMesh.visible = true;
-      // 배경 HDR + 병 + 유리잔 렌더 → 그 위에 유체 표면(알파) 합성
-      renderer.setRenderTarget(null);
-      renderer.render(scene, camera);
-      renderer.autoClear = false; // 배경을 지우지 않고 그 위에 합성
-      surfaceQuad.render(renderer);
-      renderer.autoClear = true;
-
-      // 디버그 로그: 속도·밀도·대류·볼 밖 입자 (MLS-MPM 여정에서 만든 지표)
-      frameCount++;
-      if (SIMULATE && frameCount % 60 === 0) {
-        const t = (frameCount / 60).toFixed(0);
-        Promise.all([
-          renderer.getArrayBufferAsync(particleBuffer.value),
-          renderer.getArrayBufferAsync(densityBuffer.value),
-        ])
-          .then(([pbuf, dbuf]: ArrayBuffer[]) => {
-            const arr = new Float32Array(pbuf);
-            const den = new Float32Array(dbuf);
-            let sumV = 0;
-            let maxV = 0;
-            let sumD = 0;
-            let leaked = 0; // 병 밖으로 샌 입자 수
-            let comY = 0; // 무게중심 높이(coord) — 안정되면 일정
-            const eps = 0.012; // 병 SDF 판정 여유(입자 반경 정도)
-            for (let i = 0; i < N; i++) {
-              const vx = arr[i * STRIDE + 4];
-              const vy = arr[i * STRIDE + 5];
-              const vz = arr[i * STRIDE + 6];
-              const v = Math.sqrt(vx * vx + vy * vy + vz * vz);
-              sumV += v;
-              if (v > maxV) maxV = v;
-              sumD += den[i];
-              const px = arr[i * STRIDE];
-              const py = arr[i * STRIDE + 1];
-              const pz = arr[i * STRIDE + 2];
-              comY += py;
-              const rad = Math.hypot(px - BOTTLE_AXIS[0], pz - BOTTLE_AXIS[1]);
-              const hh = py - BOTTLE_BOTTOM;
-              const inside =
-                hh > -eps &&
-                hh < NECK_TOP + eps &&
-                rad < radiusAtJS(Math.max(0, Math.min(NECK_TOP, hh))) + eps;
-              if (!inside) leaked++;
-            }
-            console.log(
-              `[wine] t=${t}s vAvg=${(sumV / N).toFixed(4)} vMax=${maxV.toFixed(3)} leaked=${leaked}/${N} comY=${(comY / N).toFixed(4)} dAvg=${(sumD / N).toFixed(0)}`
-            );
-          })
-          .catch(() => {});
       }
     }
 
@@ -2259,14 +1689,14 @@ export default function FluidLab({
       scene.environmentIntensity = 0.42; // 반사 밝게 — 창문/방이 더 또렷이 비침
 
       // SSFR: 유체 입자만 담는 씬 + 깊이 RenderTarget + 화면 표면 quad
-      fluidScene = new THREE.Scene();
+      _fluidScene = new THREE.Scene();
       const dpr = renderer.getPixelRatio();
       const rtW = Math.floor(container.clientWidth * dpr);
       const rtH = Math.floor(container.clientHeight * dpr);
       depthRT = new THREE.RenderTarget(rtW, rtH);
       depthRT.texture.type = THREE.FloatType;
       // 잔 뺀 장면(배경+병+와인) — 잔이 이걸 굴절해서 샘플(직접 굴절)
-      sceneRT = new THREE.RenderTarget(rtW, rtH);
+      _sceneRT = new THREE.RenderTarget(rtW, rtH);
       // 와인 뒷면 거리(Beer–Lambert 두께 계산)
       wineThickRT = new THREE.RenderTarget(rtW, rtH);
       wineThickRT.texture.type = THREE.FloatType;
@@ -2313,9 +1743,9 @@ export default function FluidLab({
       };
       // 가로: depthRT→blurRT2, 세로: blurRT2→blurRT (1 full 2D 패스)
       // 반복: 가로 blurRT→blurRT2, 세로 blurRT2→blurRT
-      blurFromDepth = makeBlur1D(depthRT.texture, 1, 0); // 가로(첫 입력=depth)
-      blurPing = makeBlur1D(blurRT.texture, 1, 0); // 가로(입력=blurRT)
-      blurPong = makeBlur1D(blurRT2.texture, 0, 1); // 세로(입력=blurRT2)
+      _blurFromDepth = makeBlur1D(depthRT.texture, 1, 0); // 가로(첫 입력=depth)
+      _blurPing = makeBlur1D(blurRT.texture, 1, 0); // 가로(입력=blurRT)
+      _blurPong = makeBlur1D(blurRT2.texture, 0, 1); // 세로(입력=blurRT2)
 
       // SSFR 2단계: 깊이에서 view 위치→법선 재구성 + 와인 셰이딩(색+프레넬)
       const tanF = Math.tan((40 * Math.PI) / 180 / 2); // fov 40°
