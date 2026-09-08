@@ -36,7 +36,13 @@ export interface LegsProfile {
   strength: number;
   /** 흘러내림 진행 속도(1/s). 1 이 되면 방울이 수위선까지 내려온 것. */
   dripRate: number;
-  /** 막이 마르는 속도(1/s). */
+  /**
+   * 막이 마르는 속도(1/s). 역수가 대략 자국이 남아 있는 시간이다.
+   *
+   * 실제 잔에 남은 눈물 자국은 30초~1분쯤 간다 — 한 모금 마시고 이야기하다 다시 봐도
+   * 아직 있다. 처음엔 5~10초 만에 말라, 스월을 돌린 직후를 놓치면 눈물이 있는지 없는지
+   * 알 수 없었다(2026-09-08 실사용 확인).
+   */
   dryRate: number;
 }
 
@@ -53,6 +59,6 @@ export function deriveLegs(abv?: number | null): LegsProfile {
   return {
     strength: LEG_FLOOR + (1 - LEG_FLOOR) * s,
     dripRate: 0.55 - 0.3 * s,
-    dryRate: 0.18 - 0.09 * s,
+    dryRate: 0.045 - 0.03 * s,
   };
 }
