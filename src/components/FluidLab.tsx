@@ -33,6 +33,14 @@ import {
   vec4,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
+import {
+  buildGlassShape,
+  GLASS_HEIGHT_M,
+  GLASSES,
+  realDimensions,
+  wineLevels,
+} from "@/features/glass/glass-geometry";
+import { deriveSloshConstants, stepSlosh } from "@/features/glass/slosh";
 
 // 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
 
@@ -40,162 +48,6 @@ import * as THREE from "three/webgpu";
 // 채움 높이(바닥/수면, 프로파일 y)를 갖는다. 발+기둥은 공통, 볼(bowl)만 형태별.
 // worldScale 은 setup 에서 프로파일 높이로 자동 계산해 모두 같은 화면 높이로 맞춘다.
 // 나중에 와인 선택 → 어울리는 잔 자동 표시에 이 인덱스를 매핑한다.
-// 발(foot)+기둥(stem) 을 잔별 값으로 생성. footR=발 반경(큰 볼일수록 넓게),
-// stemLen=기둥 위 끝 높이(=볼 바닥 y, 기둥 길이). 볼은 이 위에 상대높이로 얹는다.
-function footStem(footR: number, stemLen: number): [number, number][] {
-  return [
-    [0.0, 0.0],
-    [footR, 0.0],
-    [footR, 0.018],
-    [footR * 0.76, 0.04],
-    [0.12, 0.09],
-    [0.05, 0.16],
-    [0.042, 0.7],
-    [0.042, stemLen],
-  ];
-}
-type GlassDef = {
-  key: string;
-  label: string;
-  desc: string;
-  footR: number; // 발 반경
-  stemLen: number; // 기둥 길이(=볼 바닥 높이)
-  bowl: [number, number][]; // 볼 곡선(바닥=0 상대높이 → 림)
-  wallThickness: number;
-  fillLevel: number; // 수면(볼 바닥 기준 상대높이)
-  sizeScale?: number; // 화면 크기 배율(1=표준 높이, <1=작은 잔). 기본 1.
-};
-const GLASSES: GlassDef[] = [
-  {
-    key: "universal",
-    label: "표준",
-    desc: "만능형",
-    footR: 0.55,
-    stemLen: 1.3,
-    bowl: [
-      [0.05, 0.0],
-      [0.1, 0.08],
-      [0.17, 0.17],
-      [0.26, 0.29],
-      [0.34, 0.43],
-      [0.4, 0.58],
-      [0.44, 0.74],
-      [0.46, 0.9],
-      [0.455, 1.06],
-      [0.43, 1.21],
-      [0.4, 1.34],
-      [0.36, 1.46],
-      [0.325, 1.56],
-    ],
-    wallThickness: 0.025,
-    fillLevel: 0.62,
-  },
-  {
-    key: "bordeaux",
-    label: "보르도",
-    desc: "풀바디 레드 (카베르네·메를로)",
-    footR: 0.6, // 큰 볼 → 넓은 발
-    stemLen: 1.45, // 긴 기둥(우아)
-    bowl: [
-      [0.05, 0.0],
-      [0.1, 0.09],
-      [0.18, 0.22],
-      [0.28, 0.4],
-      [0.37, 0.61],
-      [0.43, 0.84],
-      [0.46, 1.08],
-      [0.455, 1.32],
-      [0.43, 1.52],
-      [0.39, 1.68],
-      [0.34, 1.79],
-    ],
-    wallThickness: 0.025,
-    fillLevel: 0.68,
-  },
-  {
-    key: "burgundy",
-    label: "부르고뉴",
-    desc: "피노 누아 (넓은 볼)",
-    footR: 0.64, // 가장 큰 볼 → 가장 넓은 발
-    stemLen: 1.25,
-    bowl: [
-      [0.06, 0.0],
-      [0.15, 0.1],
-      [0.29, 0.24],
-      [0.43, 0.42],
-      [0.53, 0.61],
-      [0.57, 0.8],
-      [0.55, 0.98],
-      [0.49, 1.16],
-      [0.41, 1.3],
-      [0.36, 1.39],
-    ],
-    wallThickness: 0.025,
-    fillLevel: 0.56,
-  },
-  {
-    key: "white",
-    label: "화이트",
-    desc: "샤르도네·소비뇽 블랑",
-    footR: 0.5, // 작은 볼 → 좁은 발
-    stemLen: 1.35,
-    bowl: [
-      [0.045, 0.0],
-      [0.085, 0.1],
-      [0.15, 0.23],
-      [0.23, 0.39],
-      [0.3, 0.56],
-      [0.345, 0.73],
-      [0.355, 0.9],
-      [0.34, 1.06],
-      [0.31, 1.17],
-      [0.295, 1.23],
-    ],
-    wallThickness: 0.023,
-    fillLevel: 0.58,
-  },
-  {
-    key: "flute",
-    label: "플루트",
-    desc: "샴페인·스파클링 (튤립형)",
-    footR: 0.46, // 좁은 발
-    stemLen: 1.55, // 길고 슬림한 기둥
-    bowl: [
-      [0.045, 0.0],
-      [0.085, 0.15],
-      [0.14, 0.37],
-      [0.19, 0.63],
-      [0.225, 0.91],
-      [0.235, 1.17],
-      [0.225, 1.39],
-      [0.205, 1.55],
-      [0.2, 1.63],
-    ],
-    wallThickness: 0.02,
-    fillLevel: 1.15,
-  },
-  {
-    key: "dessert",
-    label: "디저트",
-    desc: "아이스와인·포트 (작은 잔, 소량)",
-    footR: 0.44, // 작은 발
-    stemLen: 0.92, // 짧은 기둥 — 오밀조밀한 작은 잔(미니 플루트 아님)
-    bowl: [
-      [0.04, 0.0],
-      [0.08, 0.1],
-      [0.14, 0.25],
-      [0.19, 0.42],
-      [0.215, 0.6],
-      [0.22, 0.77],
-      [0.205, 0.93],
-      [0.185, 1.05],
-      [0.18, 1.12],
-    ],
-    wallThickness: 0.018,
-    fillLevel: 0.34, // 소량(디저트 와인)
-    sizeScale: 0.74, // 실제로 작은 잔 → 화면에서도 작게
-  },
-];
 
 // 와인잔 렌더러 — 표면·부피 기반. 유리 lathe 굴절 + Beer–Lambert 와인 흡수 +
 // 회전 파동 스월(슬로싱 감쇠 진동자) + 눈물자국(legs).
@@ -393,59 +245,20 @@ export default function FluidLab({
     }
     // 표면장력(s_corr): 표면 입자를 응집시켜 요동 억제 + 벽 코팅.
     // GRAVITY 는 실제 g를 좌표 공간으로 매핑해야 하므로 잔 스케일이 정해진 뒤
-    // (cubeSpanProfile 계산 후) 아래에서 유도한다.
 
-    // ── 잔 데이터 + 경계 SDF (MLS-MPM 에서 재활용) ────────────────────
-    // 선택된 잔(glassType)으로 프로파일·채움을 구성. 발+기둥 공통 + 볼 형태별.
+    // ── 대표 잔 ── 병 크기를 잔 높이에 맞추는 데만 쓴다(잔 자체는 buildGlass 가 만든다).
+    // 형상 계산은 features/glass/glass-geometry 로 옮겼다 — 예전엔 이 블록과
+    // buildGlass 안에 같은 코드가 두 벌 있었고, 이미 어긋나 있었다(바깥 사본이
+    // 존재하지 않는 gdef.wineBottom 을 읽어 bowlBottomY 가 NaN 이었다).
     const gdef = GLASSES[Math.min(Math.max(glassType ?? 0, 0), GLASSES.length - 1)];
-    // 발+기둥(잔별 footR·stemLen) 위에 볼(상대높이)을 stemLen 만큼 올려 붙인다.
-    const gProfile = [
-      ...footStem(gdef.footR, gdef.stemLen),
-      ...gdef.bowl.map(([r, y]) => [r, y + gdef.stemLen] as [number, number]),
-    ];
-    const gMaxY = Math.max(...gProfile.map((p) => p[1])); // 림 높이(프로파일)
-    const glass = {
-      profile: gProfile,
-      wallThickness: gdef.wallThickness,
-      bowlBottomY: gdef.wineBottom - 0.05,
-      bowlTopY: gMaxY,
-      // 모든 잔을 같은 화면 높이로: 기준(표준 2.92 × 0.42)을 프로파일 높이로 나눔.
-      // sizeScale 로 작은 잔(디저트)은 실제로 작게 보이게.
-      worldScale: ((0.42 * 2.92) / gMaxY) * (gdef.sizeScale ?? 1),
-      worldY: -0.06,
-    };
-    const outerRadiusAt = (py: number): number => {
-      const p = glass.profile;
-      if (py <= p[0][1]) return p[0][0];
-      for (let i = 1; i < p.length; i++) {
-        if (py <= p[i][1]) {
-          const [r0, y0] = p[i - 1];
-          const [r1, y1] = p[i];
-          const t = (py - y0) / (y1 - y0 || 1);
-          return r0 + (r1 - r0) * t;
-        }
-      }
-      return p[p.length - 1][0];
-    };
-    const innerRadiusAt = (py: number): number =>
-      Math.max(outerRadiusAt(py) - glass.wallThickness, 0);
+    const glass = buildGlassShape(gdef);
 
     // ── 한 "잔"의 가변 상태·상수·메쉬를 하나로 묶은 런타임 객체 ──────────────
     // 배열화(두 잔 컨베이어)를 위해, 잔마다 달라지는 상태·상수·메쉬·유니폼을 한
     // 객체(GlassRuntime)로 모은다. buildGlass 팩토리가 호출할 때마다 독립된 객체를
-    // 새로 만들어 반환한다. 아래 초기 gdef/glass/innerRadiusAt/GLASS_WINE_* 는
-    // 이제 (FLUID_ON 시의) 물리 도메인 상수 유도에만 쓰는 "대표 잔" 값이다.
+    // 새로 만들어 반환한다.
     // biome-ignore lint/suspicious/noExplicitAny: TSL/three 노드·메쉬·유니폼 타입 불완전
     type GlassRuntime = { [k: string]: any };
-    // 잔 파생 와인 채움 상수(GLASS_WINE_BOTTOM/FILL)는 이제 buildGlass 안에서
-    // 잔별로 계산한다. 아래 대표 gdef/glass 는 (FLUID_ON) 물리 도메인 유도 전용.
-
-    let bowlRmax = 0;
-    for (let py = glass.bowlBottomY; py <= glass.bowlTopY; py += 0.01) {
-      bowlRmax = Math.max(bowlRmax, innerRadiusAt(py));
-    }
-    const cubeSpanProfile = Math.max(glass.bowlTopY - glass.bowlBottomY, bowlRmax * 2);
-    void cubeSpanProfile; // (구 잔 중심 매핑 값 — 현재 미사용)
 
     // ── 중력: 실제 물리값에서 유도 (겉은 실제, 시간 축만 연출값) ──────────
     // g·잔 크기는 실제값으로 두고, g_sim = g_real·T²/L 로 sim 단위로 변환한다.
@@ -453,7 +266,6 @@ export default function FluidLab({
     // 돼 substep이 √g 규칙으로 16까지 필요해 무겁다. 그래서 눈에 안 보이는
     // 시간 축(TIME_SCALE)만 연출값으로 잡아, 기존의 좋던 낙하감(substep 2,
     // 가벼운 계산)을 그대로 유지한다. 아무도 담기는 시간을 재지 않으므로 문제없음.
-    const GLASS_HEIGHT_M = 0.24; // 실제 와인잔 총 높이 ~24cm (리델 21~27.5cm 중간)
     const _G_REAL = 9.81; // 실제 중력 m/s²
     const profileMaxY = Math.max(...glass.profile.map((p) => p[1])); // 림(2.92)
 
@@ -489,59 +301,15 @@ export default function FluidLab({
     // scene.add(gg.glassGroup) 는 호출부(초기화·addGlass)에서 한다.
     function buildGlass(glassTypeArg: number, absorbArg?: [number, number, number]): GlassRuntime {
       const gdef = GLASSES[Math.min(Math.max(glassTypeArg ?? 0, 0), GLASSES.length - 1)];
-      const gProfile = [
-        ...footStem(gdef.footR, gdef.stemLen),
-        ...gdef.bowl.map(([r, y]) => [r, y + gdef.stemLen] as [number, number]),
-      ];
-      const gMaxY = Math.max(...gProfile.map((p) => p[1])); // 림 높이(프로파일)
-      const glass = {
-        profile: gProfile,
-        wallThickness: gdef.wallThickness,
-        bowlBottomY: gdef.stemLen - 0.05,
-        bowlTopY: gMaxY,
-        worldScale: ((0.42 * 2.92) / gMaxY) * (gdef.sizeScale ?? 1),
-        worldY: -0.06,
-      };
-      const outerRadiusAt = (py: number): number => {
-        const p = glass.profile;
-        if (py <= p[0][1]) return p[0][0];
-        for (let i = 1; i < p.length; i++) {
-          if (py <= p[i][1]) {
-            const [r0, y0] = p[i - 1];
-            const [r1, y1] = p[i];
-            const t = (py - y0) / (y1 - y0 || 1);
-            return r0 + (r1 - r0) * t;
-          }
-        }
-        return p[p.length - 1][0];
-      };
-      const innerRadiusAt = (py: number): number =>
-        Math.max(outerRadiusAt(py) - glass.wallThickness, 0);
-      const GLASS_WINE_BOTTOM = gdef.stemLen; // 컵 내부 바닥(=볼 바닥, 프로파일 y)
-      const GLASS_WINE_FILL = gdef.stemLen + gdef.fillLevel; // 수면(잔별 적정 채움)
-
-      // ── 이 잔의 슬로싱 상수: 형상에서 유도한다 ─────────────────────────
-      // 출렁임은 잔마다 다르다. 원형 용기 1차 반대칭 모드는
-      //   ω₁ = √(g·k·tanh(k·h)),  k = ε₁₁/R  (ε₁₁ = 1.8412, J₁' 의 첫 근)
-      // 이라 **수면 반경 R** 이 작을수록 빠르게 출렁인다. 실제로 이 잔들만 봐도
-      // 부르고뉴(넓은 볼) 3.1Hz ↔ 디저트(작은 잔) 5.6Hz 로 1.8 배 차이가 난다.
-      // 예전엔 보르도 값(25 rad/s)을 모든 잔에 쓰고 있었다.
-      const mPerProfile = (0.24 * (gdef.sizeScale ?? 1)) / gMaxY; // 잔 높이 24cm 기준
-      const surfR = Math.max(innerRadiusAt(GLASS_WINE_FILL) * mPerProfile, 1e-3); // 수면 반경(m)
-      const liqH = Math.max(gdef.fillLevel * mPerProfile, 1e-3); // 액체 깊이(m)
-      const kSlosh = 1.8412 / surfR;
-      const sloshOmega = Math.sqrt(9.81 * kSlosh * Math.tanh(kSlosh * liqH));
-      // 감쇠비. Miles 식(매끈한 벽 점성 경계층)은 **하한**이라, 작은 용기에서 큰
-      // 접촉선(메니스커스) 소산을 CONTACT 배로 얹는다. 실사용에서 하한 그대로는
-      // 한 번 기울이면 30회쯤 출렁여 촐랑거렸다(2026-09-08 사용자 피드백).
-      const CONTACT = 3.4;
-      const kh = 1.8412 * (liqH / surfR);
-      const zBase = 0.83 * Math.sqrt(1.6e-6 / (Math.sqrt(9.81) * surfR ** 1.5)); // 와인 ν
-      const sloshZeta =
-        CONTACT * zBase * (1 + (0.318 / Math.sinh(kh)) * (1 + (1 - liqH / surfR) / Math.cosh(kh)));
-      // 잔 움직임 → 슬로싱 결합. 충격성 입력(드래그)의 진폭은 COUPLE/ω 에 비례하므로,
-      // ω 에 비례시켜야 어떤 잔이든 손맛이 같다. 계수는 보르도(ω=25)에서 손으로 맞춘 값.
-      const sloshCouple = 0.664 * sloshOmega;
+      const glass = buildGlassShape(gdef);
+      const gMaxY = glass.gMaxY;
+      const innerRadiusAt = glass.innerRadiusAt;
+      const { bottom: GLASS_WINE_BOTTOM, fill: GLASS_WINE_FILL } = wineLevels(gdef);
+      // 이 잔의 슬로싱 상수는 형상에서 유도한다 — 수면 반경이 작을수록 빠르게 출렁여
+      // 부르고뉴(넓은 볼)와 디저트(작은 잔)가 1.8 배 차이 난다. 유도·근거는
+      // features/glass/slosh 에 있고 테스트로 고정돼 있다.
+      const { surfR, liqH } = realDimensions(glass);
+      const sloshConsts = deriveSloshConstants(surfR, liqH);
 
       // 이 잔의 독립 런타임 객체. 스월/슬로싱 상태는 모두 0 으로 초기화한다.
       const gg: GlassRuntime = {
@@ -552,9 +320,7 @@ export default function FluidLab({
         GLASS_WINE_BOTTOM,
         GLASS_WINE_FILL,
         // 형상에서 유도한 슬로싱 상수(잔마다 다름)
-        sloshOmega,
-        sloshZeta,
-        sloshCouple,
+        sloshConsts,
         // 파동 위상 캐시(surfWaveH 가 읽음) — 초기 수직 상태값
         crC: 1,
         crS: 0,
@@ -1379,47 +1145,26 @@ export default function FluidLab({
           const gvz = (g.gTiltZ - g.gPrevZ) / dt;
           g.gPrevX = g.gTiltX;
           g.gPrevZ = g.gTiltZ;
-          // ── 슬로싱 상수 ── 잔 형상에서 유도한 값을 쓴다(buildGlass 참고).
-          // 출렁임은 잔마다 다르다 — 수면 반경이 작을수록 빠르게 출렁인다.
-          // 이 잔들만 봐도 부르고뉴 3.1Hz ↔ 디저트 5.6Hz 로 1.8배 차이가 난다.
-          // 예전엔 하나의 상수(11 → 25)를 모든 잔에 공유했다.
-          //
-          // 참고: 슬로싱은 GRAVITY 를 참조하지 않고 실시간 dt(1/60)로만 돈다. 예전
-          // 입자 시뮬(PBF) 시절 중력·시간축을 슬로모션으로 낮추던 것과 무관하다.
-          // 오일러 안정: semi-implicit 이라 ω·dt<2 면 안정(가장 빠른 잔도 35/60=0.59).
-          const OMEGA = g.sloshOmega;
-          const ZETA = g.sloshZeta;
-          // 2차(난류) 감쇠: 크게 출렁일수록 손실↑. 실제 슬로싱에도 있지만 아주 작다.
-          // 1.5 는 선형 ζ 를 완전히 덮어써 감쇠를 혼자 지배했다(에너지 포락선으로 확인).
-          const QUAD = 0.05;
-          const COUPLE = g.sloshCouple;
-          // 수면 기울기 상한. 0.78rad(45°)은 사실상 안 걸려 넓은 볼(부르고뉴)에서
-          // 자동 스월 때 와인이 잔 위로 넘쳐 보였다. 0.30rad(17°)이면 좁은 잔
-          // (보르도 13°)엔 영향이 없고 넓은 볼의 과한 피크만 깎는다.
-          const SLOSH_MAX = 0.3;
-          // 슬라이드 가속도 → 슬로싱 결합. 잔이 옆으로 가속하면 안의 액체가 관성으로
-          // 반대쪽으로 쏠린다(출발 때 뒤로, 도착 때 앞으로 쏠렸다 잦아듦).
-          // sloshX/Z 는 SLOSH_MAX 로 clamp 돼 폭주 없음. COUPLE 과 같은 비율로 둔다.
-          const COUPLE_SLIDE = COUPLE * 0.8;
-          // 두 축 결합 부호는 표면 크레스트가 잔 스월과 "같은 방향"으로 돌게 맞춘다
-          // (와인은 잔을 쫓아감). 좌우(roll) 항은 그대로, 앞뒤(pitch) 항 부호만 뒤집어
-          // 회전 방향을 바로잡되 선형 정렬은 유지.
-          const sloshSpeed = Math.hypot(g.sloshVX, g.sloshVZ);
-          const damp = 2 * ZETA * OMEGA + QUAD * sloshSpeed; // 속도(진폭) 의존 감쇠
-          g.sloshVX += (-(OMEGA * OMEGA) * g.sloshX - damp * g.sloshVX) * dt - COUPLE * gvz * dt;
-          g.sloshVZ += (-(OMEGA * OMEGA) * g.sloshZ - damp * g.sloshVZ) * dt + COUPLE * gvx * dt;
-          // 슬라이드 관성 항 추가(스월 수식·상수는 위 그대로 유지). slideX 는 화면 수평
-          // = 카메라 화면-오른쪽 벡터를 world y=0 에 투영한 방향(applySlide 와 동일).
-          // 슬라이드 가속의 world 성분으로 나눠, 잔이 +방향 가속하면 액체는 −방향으로 쏠림.
-          // sloshX/Z 는 각각 world x·z 수면 기울기라 aWx→sloshVX, aWz→sloshVZ 로 직접 매핑.
+          // ── 슬로싱 한 스텝 ── 식·상수는 features/glass/slosh 에 있다(테스트로 고정).
+          // 상수는 잔 형상에서 유도한 값이라 잔마다 다르다. 슬라이드 가속은 잔이 옆으로
+          // 가속할 때 액체가 반대쪽으로 쏠리는 관성 항이다(화면 수평 방향의 world 성분).
           const rElS = camera.matrixWorld.elements;
           const rlenS = Math.hypot(rElS[0], rElS[2]) || 1;
-          const aWx = (rElS[0] / rlenS) * slideAccel;
-          const aWz = (rElS[2] / rlenS) * slideAccel;
-          g.sloshVX += -COUPLE_SLIDE * aWx * dt;
-          g.sloshVZ += -COUPLE_SLIDE * aWz * dt;
-          g.sloshX = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, g.sloshX + g.sloshVX * dt));
-          g.sloshZ = Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, g.sloshZ + g.sloshVZ * dt));
+          const next = stepSlosh(
+            { x: g.sloshX, z: g.sloshZ, vx: g.sloshVX, vz: g.sloshVZ },
+            {
+              glassTiltVX: gvx,
+              glassTiltVZ: gvz,
+              slideAX: (rElS[0] / rlenS) * slideAccel,
+              slideAZ: (rElS[2] / rlenS) * slideAccel,
+            },
+            g.sloshConsts,
+            dt
+          );
+          g.sloshX = next.x;
+          g.sloshZ = next.z;
+          g.sloshVX = next.vx;
+          g.sloshVZ = next.vz;
           // 잔 기울기 적용(마우스 추종).
           g.glassGroup.rotation.set(g.gTiltX, 0, g.gTiltZ);
           // 슬라이드: 화면 "수평"으로 옮긴다(각 잔 자기 slideX). 카메라가 대각이라
@@ -1464,7 +1209,7 @@ export default function FluidLab({
           let dPhi = phi - g.crestPh;
           while (dPhi > Math.PI) dPhi -= Math.PI * 2;
           while (dPhi < -Math.PI) dPhi += Math.PI * 2;
-          const maxStep = OMEGA * g.spinE * dt;
+          const maxStep = g.sloshConsts.omega * g.spinE * dt;
           g.crestPh += Math.max(-maxStep, Math.min(maxStep, dPhi));
           g.crC = Math.cos(g.crestPh);
           g.crS = Math.sin(g.crestPh);
@@ -1473,7 +1218,9 @@ export default function FluidLab({
           // 살려 로브가 스월 방향으로 돌게 하고, 선형이면 거의 안 돈다.
           const angMom = g.sloshX * g.sloshVZ - g.sloshZ * g.sloshVX;
           const rotInstant =
-            swirlMag > 0.06 ? Math.max(-1, Math.min(1, angMom / (swirlMag * swirlMag * OMEGA))) : 0;
+            swirlMag > 0.06
+              ? Math.max(-1, Math.min(1, angMom / (swirlMag * swirlMag * g.sloshConsts.omega)))
+              : 0;
           g.rotSmooth += (rotInstant - g.rotSmooth) * 0.08;
           // 로브 회전도 회전 관성으로 함께 잦아들게. 크레스트(crestPh) 위를 더 돈다.
           g.w2ph += W2SPD * g.rotSmooth * g.spinE * dt;
