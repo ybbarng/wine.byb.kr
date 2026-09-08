@@ -1,0 +1,74 @@
+name: Backup tasting notes
+
+# 시음 기록을 서버에서 받아 저장소에 커밋한다. 시음 기록은 앱으로만 들어가 서버 DB 에만
+# 있는, 다시 만들 수 없는 데이터다(docs/backup.md).
+#
+# 백업 전용 SSH 키(BACKUP_SSH_KEY)를 쓴다. 이 키는 서버 authorized_keys 에서
+# ops/dump-tastings-remote.sh 하나만 실행하도록 묶여 있어, 새어도 기록을 읽는 것
+# 외에는 할 수 있는 게 없다. 배포 키(SERVER_SSH_KEY)와 권한이 갈린다.
+
+on:
+  schedule:
+    - cron: "0 19 * * *" # 매일 04:00 KST (UTC 19:00)
+  workflow_dispatch:
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # 바뀐 백업 파일을 커밋한다
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 서버에서 시음 기록 받기
+        env:
+          KEY: ${{ secrets.BACKUP_SSH_KEY }}
+          HOST: ${{ secrets.SERVER_HOST }}
+          USER: ${{ secrets.SERVER_USER }}
+          PORT: ${{ secrets.SERVER_PORT || '22' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/backup_key
+          chmod 600 ~/.ssh/backup_key
+          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # forced-command 라 보내는 명령과 무관하게 덤프가 돌고, 그 결과가 stdout 으로 온다.
+          ssh -i ~/.ssh/backup_key -p "$PORT" \
+            -o BatchMode=yes -o ConnectTimeout=20 \
+            "$USER@$HOST" true > /tmp/tasting-notes.json
+          rm -f ~/.ssh/backup_key
+
+      - name: 받은 내용 검사 (깨진 파일로 덮어쓰지 않게)
+        run: |
+          set -euo pipefail
+          # 빈 파일·에러 메시지·잘린 JSON 을 그대로 커밋하면 백업이 아니라 손실이다.
+          test -s /tmp/tasting-notes.json || { echo "받은 내용이 비어 있다"; exit 1; }
+          jq -e 'type == "array" and length > 0' /tmp/tasting-notes.json > /dev/null \
+            || { echo "JSON 배열이 아니거나 비어 있다"; head -c 300 /tmp/tasting-notes.json; exit 1; }
+          NEW=$(jq 'length' /tmp/tasting-notes.json)
+          OLD=$(jq 'length' backup/tasting-notes.json 2>/dev/null || echo 0)
+          echo "기록 수: $OLD → $NEW"
+          # 기록이 줄었다면 사고일 수 있으니 사람이 보게 실패시킨다(삭제는 앱에서만 일어난다).
+          if [ "$NEW" -lt "$OLD" ]; then
+            echo "::error::기록이 $OLD → $NEW 로 줄었다. 자동 커밋을 멈춘다 — 서버 상태를 확인할 것."
+            exit 1
+          fi
+          mv /tmp/tasting-notes.json backup/tasting-notes.json
+
+      - name: 바뀐 게 있으면 커밋
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- backup/tasting-notes.json; then
+            echo "변화 없음 — 커밋하지 않는다"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add backup/tasting-notes.json
+          git commit -m "시음 기록 백업 ($(date -u '+%Y-%m-%d'))"
+          git push
