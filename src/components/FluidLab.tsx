@@ -62,6 +62,7 @@ export default function FluidLab({
   glassType,
   bgColor,
   swirlScale,
+  idleSwirlAfter,
   bgIntensity,
   slideX,
   onReady,
@@ -74,6 +75,9 @@ export default function FluidLab({
   abv?: number | null;
   bgColor?: string; // 지정 시 배경을 이 단색으로(사이트 배경과 매끄럽게). 미지정=따뜻한 HDR.
   swirlScale?: number; // 최대 스월 기울기 배율(기본 1). 좁은 컨테이너(홈)에선 <1 로 줄여 영역 이탈 방지.
+  // 이 초만큼 아무도 잔을 안 만지면 자동 스월을 한 번 돌린다. 만지면 다시 열린다.
+  // 미지정이면 안 돈다 — 상세 화면처럼 글을 읽는 자리에서 잔이 혼자 움직이면 산만하다.
+  idleSwirlAfter?: number;
   bgIntensity?: number; // 배경(HDR) 밝기 배율(기본 1). 좁은 프레임이 어두운 영역을 비출 때 ↑.
   // 백버퍼를 프레임이 아닌 화면(viewport) 크기로 잡는다. 셸(홈↔상세)처럼 프레임이 작게
   // 시작해 크게 자라는 경우, 처음부터 화면 크기로 잡아 두면 전환 중 항상 다운스케일만
@@ -127,6 +131,12 @@ export default function FluidLab({
   useEffect(() => {
     swirlRef.current = swirlScale ?? 1;
   }, [swirlScale]);
+
+  // 유휴 자동 스월 대기 시간 — 홈↔상세를 오가면 바뀌므로 ref 로 읽는다(재빌드 없이).
+  const idleSwirlAfterRef = useRef(idleSwirlAfter);
+  useEffect(() => {
+    idleSwirlAfterRef.current = idleSwirlAfter;
+  }, [idleSwirlAfter]);
 
   // 슬라이드 x 위치 — 매 프레임 render 가 glassGroup.position.x 에 반영(리렌더/재초기화 없음).
   const slideXRef = useRef(slideX ?? 0);
@@ -719,6 +729,11 @@ export default function FluidLab({
     let autoSwirlT = 0;
     let downX = 0;
     let downY = 0;
+    // 언제부터 가만히 두었는지(performance.now 기준). 만지면 null 로 돌아간다.
+    let idleSince: number | null = null;
+    // 이번 유휴 구간에서 이미 자동 스월을 돌렸는지. 만지면 다시 열린다 —
+    // 계속 보고 있는 사람에게 잔이 혼자 반복해서 도는 건 부산하다.
+    let idleSwirlDone = false;
 
     // 고정 토폴로지 그리드 생성(정점 위치는 rebuildLiquid 가 매 프레임 채움).
     // 방위별 수위선(pwCol)·파동(surfWaveH)·rebuild 클로저를 이 잔(gg)에 바인딩한다.
@@ -1112,6 +1127,24 @@ export default function FluidLab({
             active = gg;
           }
         }
+        // 가만히 두면 한 번 알아서 스월한다(홈에서만 켠다). 눈물자국은 벽이 젖어야
+        // 생기는데, 잔을 만져 본 적이 없으면 벽이 마른 채라 볼 것이 없다. 잔이 스스로
+        // 한 바퀴 돌아 와인이 벽을 타고 오르는 걸 보여 주는 역할.
+        // 잔이 들어오는 중(sliding)에는 세지 않는다 — 진입 애니메이션이 끝나야 유휴다.
+        // 물리는 고정 스텝(dt)으로 돌지만 이 대기 시간은 **실제 시계**로 센다. dt 로
+        // 세면 프레임 수를 세는 셈이라, 느린 기기에서는 몇 배로 늘어진다.
+        const idleAfter = idleSwirlAfterRef.current;
+        const now = performance.now();
+        if (idleAfter != null && !swDragging && !autoSwirl && !glasses.some((g) => g.sliding)) {
+          if (idleSince == null) idleSince = now;
+          if (!idleSwirlDone && now - idleSince >= idleAfter * 1000) {
+            autoSwirl = true;
+            autoSwirlT = 0;
+            idleSwirlDone = true;
+          }
+        } else {
+          idleSince = null;
+        }
         // ── 잔별 스월·슬로싱·파동·legs·슬라이드 (각자 독립 상태로 실행) ──
         // 스월 물리 수식·상수는 잔이 1개일 때와 한 글자도 다르지 않다. 오직 g 가
         // 잔별 GlassRuntime 을 가리키고, 입력(gtx/gtz)이 활성 잔에만 들어갈 뿐.
@@ -1402,6 +1435,8 @@ export default function FluidLab({
       const onSwDown = (e: PointerEvent) => {
         autoSwirl = false; // 새 조작이 자동 스월 중단
         swDragging = true;
+        idleSince = null; // 만졌으니 유휴가 아니다
+        idleSwirlDone = false; // 다시 가만히 두면 또 한 번 돈다
         mStartX = e.clientX;
         mStartY = e.clientY;
         mCurX = e.clientX;
