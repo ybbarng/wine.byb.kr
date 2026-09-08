@@ -62,3 +62,6 @@ next-env.d.ts
 
 # 사용자 워크트리(다른 작업용)
 .claude/worktrees/
+
+# 잔 렌더 시각 회귀 스냅샷(로컬 전/후 비교용)
+/.glass-snapshots/
