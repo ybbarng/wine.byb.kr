@@ -20,7 +20,7 @@
 //     밖에서 진입.
 //
 // 재빌드 주의: FluidLab 은 glassType prop 이 바뀌면 씬 전체를 재빌드한다(= 재초기화).
-// 그래서 glassType·wineAbsorb props 는 최초 마운트 값으로 "고정"하고, 이후 잔 교체는
+// 그래서 glassType·wineAbsorb·abv props 는 최초 마운트 값으로 "고정"하고, 이후 잔 교체는
 // 전부 API 로만 한다. swirlScale 은 재빌드 없이 실시간 반영되므로 live prop 으로 준다.
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
@@ -54,12 +54,17 @@ type Dir = "left" | "right";
 
 // FluidLab 이 onReady 로 넘겨주는 imperative 핸들(한 캔버스 안의 잔 교체).
 type LabApi = {
-  addGlass: (glassType: number, absorb?: [number, number, number], fromDir?: Dir) => void;
+  addGlass: (
+    glassType: number,
+    absorb?: [number, number, number],
+    fromDir?: Dir,
+    abv?: number | null
+  ) => void;
   slideOut: (dir: Dir) => void;
   getCount: () => number;
 };
 
-type GlassSnapshot = { glass: number; absorb: [number, number, number] };
+type GlassSnapshot = { glass: number; absorb: [number, number, number]; abv: number | null };
 
 export function GlassStage() {
   const ctx = useGlassOptional();
@@ -73,6 +78,7 @@ export function GlassStage() {
   const initialRef = useRef<GlassSnapshot>({
     glass: ctx?.state.glass ?? HOME_GLASS.glass,
     absorb: ctx?.state.absorb ?? HOME_GLASS.absorb,
+    abv: ctx?.state.abv ?? HOME_GLASS.abv,
   });
 
   // 창(프레임)의 홈 여부를 pathname 과 분리해 상태로 든다. 상세→홈에서 창이 바로
@@ -97,6 +103,7 @@ export function GlassStage() {
   const glass = ctx?.state.glass;
   const absorb = ctx?.state.absorb;
   const swirlScale = ctx?.state.swirlScale;
+  const abv = ctx?.state.abv ?? null;
   const setReveal = ctx?.setRevealContent;
 
   // 잔 상태를 항상 최신으로 참조한다. 잔 교체(doSwap)는 지연 실행되므로, 그 시점의
@@ -104,9 +111,10 @@ export function GlassStage() {
   const stateRef = useRef<GlassSnapshot>({
     glass: glass ?? initialRef.current.glass,
     absorb: absorb ?? initialRef.current.absorb,
+    abv: abv ?? initialRef.current.abv,
   });
   if (glass != null && absorb != null) {
-    stateRef.current = { glass, absorb };
+    stateRef.current = { glass, absorb, abv };
   }
 
   // 교차 슬라이드: 이전 잔은 dir 쪽으로 내보내고, 새(최신) 잔은 반대편에서 들어온다.
@@ -120,7 +128,7 @@ export function GlassStage() {
       return;
     }
     api.slideOut(dir);
-    api.addGlass(snap.glass, snap.absorb, dir === "left" ? "right" : "left");
+    api.addGlass(snap.glass, snap.absorb, dir === "left" ? "right" : "left", snap.abv);
   };
 
   // useLayoutEffect: 페인트 전에 실행해, 홈→상세 진입 순간 콘텐츠를 먼저 숨긴다(깜빡 방지).
@@ -138,6 +146,7 @@ export function GlassStage() {
       const shown = shownRef.current;
       const changed =
         shown.glass !== glass ||
+        shown.abv !== abv ||
         shown.absorb[0] !== absorb[0] ||
         shown.absorb[1] !== absorb[1] ||
         shown.absorb[2] !== absorb[2];
@@ -195,7 +204,7 @@ export function GlassStage() {
       doSwap(dir);
       navPendingRef.current = false;
     }, 48);
-  }, [glass, absorb, swirlScale, isHome, pathname, setReveal]);
+  }, [glass, absorb, abv, swirlScale, isHome, pathname, setReveal]);
 
   useEffect(() => {
     return () => {
@@ -214,6 +223,7 @@ export function GlassStage() {
     >
       <FluidLab
         wineAbsorb={initialRef.current.absorb}
+        abv={initialRef.current.abv}
         glassType={initialRef.current.glass}
         bgColor={CANVAS_BG}
         swirlScale={swirlScale ?? HOME_GLASS.swirlScale}
@@ -224,7 +234,12 @@ export function GlassStage() {
           if (p) {
             pendingRef.current = null;
             api.slideOut(p.dir);
-            api.addGlass(p.snap.glass, p.snap.absorb, p.dir === "left" ? "right" : "left");
+            api.addGlass(
+              p.snap.glass,
+              p.snap.absorb,
+              p.dir === "left" ? "right" : "left",
+              p.snap.abv
+            );
           }
         }}
       />

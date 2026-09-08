@@ -335,6 +335,7 @@ export function TastingNoteWizard({
           >
             <FluidLab
               wineAbsorb={previewAbsorb}
+              abv={selWine?.abv}
               glassType={previewGlass}
               bgColor={CANVAS_BG}
               swirlScale={0.4}

@@ -121,6 +121,7 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
     <WineDetailView
       absorb={absorb}
       glass={glass}
+      abv={wine.abv}
       country={country}
       regionName={region?.nameKo ?? null}
       fallback={target}

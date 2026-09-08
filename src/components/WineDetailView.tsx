@@ -19,6 +19,9 @@ const FluidLab = dynamic(() => import("./FluidLab"), {
 type Props = {
   absorb: [number, number, number];
   glass: number;
+  // 도수(%). 눈물자국(legs)의 세기·속도를 정한다. 산지·품종처럼 와인 한 병이
+  // 정해지지 않는 화면에서는 생략한다(흔한 식탁 와인으로 그린다).
+  abv?: number | null;
   country: string | null;
   regionName: string | null;
   fallback: { lat: number; lng: number } | null;
@@ -39,6 +42,7 @@ type Props = {
 export function WineDetailView({
   absorb,
   glass,
+  abv = null,
   country,
   regionName,
   fallback,
@@ -87,9 +91,15 @@ export function WineDetailView({
   // 왼쪽 칸의 잔: shell 이면 공통 셸 잔이 이 자리를 채우므로 상태만 주입하고 칸은 비운다.
   const glassCell =
     variant === "shell" ? (
-      <GlassSetter absorb={absorb} glass={glass} swirlScale={swirlScale} />
+      <GlassSetter absorb={absorb} glass={glass} swirlScale={swirlScale} abv={abv} />
     ) : (
-      <FluidLab wineAbsorb={absorb} glassType={glass} bgColor={CANVAS_BG} swirlScale={swirlScale} />
+      <FluidLab
+        wineAbsorb={absorb}
+        abv={abv}
+        glassType={glass}
+        bgColor={CANVAS_BG}
+        swirlScale={swirlScale}
+      />
     );
 
   const body = (

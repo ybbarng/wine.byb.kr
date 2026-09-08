@@ -40,6 +40,7 @@ import {
   realDimensions,
   wineLevels,
 } from "@/features/glass/glass-geometry";
+import { deriveLegs, type LegsProfile } from "@/features/glass/legs";
 import { deriveSloshConstants, stepSlosh } from "@/features/glass/slosh";
 
 // 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
@@ -58,6 +59,7 @@ import { deriveSloshConstants, stepSlosh } from "@/features/glass/slosh";
 // 연구 내용은 docs/fluid-simulation-status.md 에, 코드는 git 이력에 남아 있다.
 export default function FluidLab({
   wineAbsorb,
+  abv,
   glassType,
   bgColor,
   swirlScale,
@@ -68,6 +70,9 @@ export default function FluidLab({
 }: {
   glassType?: number;
   wineAbsorb?: [number, number, number];
+  // 도수(%). 눈물자국(legs)의 세기·흘러내림 속도를 정한다 — 눈물은 에탄올이 만든다.
+  // 미지정이면 흔한 식탁 와인(13%)으로 본다.
+  abv?: number | null;
   bgColor?: string; // 지정 시 배경을 이 단색으로(사이트 배경과 매끄럽게). 미지정=따뜻한 HDR.
   swirlScale?: number; // 최대 스월 기울기 배율(기본 1). 좁은 컨테이너(홈)에선 <1 로 줄여 영역 이탈 방지.
   bgIntensity?: number; // 배경(HDR) 밝기 배율(기본 1). 좁은 프레임이 어두운 영역을 비출 때 ↑.
@@ -83,7 +88,8 @@ export default function FluidLab({
     addGlass: (
       glassType: number,
       absorb?: [number, number, number],
-      fromDir?: "left" | "right"
+      fromDir?: "left" | "right",
+      abv?: number | null
     ) => void;
     slideOut: (dir: "left" | "right") => void;
     getCount: () => number;
@@ -94,12 +100,27 @@ export default function FluidLab({
   // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
   const absorbURef = useRef<any>(null);
 
+  // 눈물자국(legs) — 첫 잔의 세기 uniform 과 속도 상수를 도수에 맞춰 실시간 갱신한다.
+  // biome-ignore lint/suspicious/noExplicitAny: TSL uniform
+  const legStrengthURef = useRef<any>(null);
+  const legsRef = useRef<LegsProfile | null>(null);
+
   // 와인 프리셋 버튼 → 흡수계수 갱신(실시간).
   useEffect(() => {
     if (absorbURef.current && wineAbsorb) {
       absorbURef.current.value.set(wineAbsorb[0], wineAbsorb[1], wineAbsorb[2]);
     }
   }, [wineAbsorb]);
+
+  // 도수가 바뀌면(다른 와인으로) 눈물 성질도 따라간다. 씬 재빌드 없이 값만 갈아끼운다.
+  useEffect(() => {
+    const legs = deriveLegs(abv);
+    if (legStrengthURef.current) legStrengthURef.current.value = legs.strength;
+    if (legsRef.current) {
+      legsRef.current.dripRate = legs.dripRate;
+      legsRef.current.dryRate = legs.dryRate;
+    }
+  }, [abv]);
 
   // 스월 기울기 배율 — 컨테이너 폭에 따라 실시간으로 바뀔 수 있어 ref 로 읽는다
   // (반응형: 좁은 데스크톱 3분할 칸은 작게, 풀폭 모바일/홈은 크게).
@@ -299,7 +320,11 @@ export default function FluidLab({
     // 호출할 때마다 완전히 독립된 GlassRuntime(자기 glassGroup·mesh·material·
     // uniform·스월 상태 0·파생상수·rebuild/surfWaveH 클로저)을 반환한다.
     // scene.add(gg.glassGroup) 는 호출부(초기화·addGlass)에서 한다.
-    function buildGlass(glassTypeArg: number, absorbArg?: [number, number, number]): GlassRuntime {
+    function buildGlass(
+      glassTypeArg: number,
+      absorbArg?: [number, number, number],
+      abvArg?: number | null
+    ): GlassRuntime {
       const gdef = GLASSES[Math.min(Math.max(glassTypeArg ?? 0, 0), GLASSES.length - 1)];
       const glass = buildGlassShape(gdef);
       const gMaxY = glass.gMaxY;
@@ -310,6 +335,8 @@ export default function FluidLab({
       // features/glass/slosh 에 있고 테스트로 고정돼 있다.
       const { surfR, liqH } = realDimensions(glass);
       const sloshConsts = deriveSloshConstants(surfR, liqH);
+      // 눈물자국은 에탄올이 만든다 — 도수에서 세기·속도를 유도한다(features/glass/legs).
+      const legs = deriveLegs(abvArg);
 
       // 이 잔의 독립 런타임 객체. 스월/슬로싱 상태는 모두 0 으로 초기화한다.
       const gg: GlassRuntime = {
@@ -321,6 +348,8 @@ export default function FluidLab({
         GLASS_WINE_FILL,
         // 형상에서 유도한 슬로싱 상수(잔마다 다름)
         sloshConsts,
+        // 도수에서 유도한 눈물 성질(와인마다 다름)
+        legs,
         // 파동 위상 캐시(surfWaveH 가 읽음) — 초기 수직 상태값
         crC: 1,
         crS: 0,
@@ -386,6 +415,7 @@ export default function FluidLab({
         glassWetU: null,
         glassWlU: null,
         glassDripU: null,
+        legStrengthU: null,
         rippleActU: null,
         rippleTimeU: null,
         roughnessU: null,
@@ -445,6 +475,8 @@ export default function FluidLab({
       gg.glassWetU = uniform(0);
       gg.glassWlU = uniform(GLASS_WINE_FILL);
       gg.glassDripU = uniform(0);
+      // 이 와인의 눈물 세기(도수에서 유도). 자국·줄기 진하기에 곱한다.
+      gg.legStrengthU = uniform(gg.legs.strength);
       // 둘레별 도달 최고점 텍스처(1D, R=수위선 위 높이). 방향별로 자국 범위가 다름.
       const legTex = new THREE.DataTexture(
         gg.wetTopArr,
@@ -490,10 +522,12 @@ export default function FluidLab({
         const dH = frac.sub(head).div(0.05).toVar();
         const bead = dH.mul(dH).negate().exp().toVar();
         const leg = stripe.mul(trail.mul(0.35).add(bead.mul(0.85))).toVar();
+        // 아치 자국은 도수와 무관하게 남는다(수면이 닿았던 자리). 흘러내리는 줄기만
+        // 도수에 비례해 진해진다 — 에탄올이 없으면 방울이 안 맺힌다.
         return gg.glassWetU
           .mul(topGate)
           .mul(bandGate)
-          .mul(archLine.mul(0.4).add(leg.mul(0.9)))
+          .mul(archLine.mul(0.4).add(leg.mul(0.9).mul(gg.legStrengthU)))
           .clamp(0, 1);
       });
       // 실제 와인 눈물은 색이 거의 없는 투명한 물줄기 — 색 흡수 대신 "그 자리만
@@ -915,8 +949,10 @@ export default function FluidLab({
 
     function setupParticles() {
       // 초기 잔 1개(현재 glassType·색). 이후 addGlass 로 두 번째 잔을 넣어 검증한다.
-      const gg = buildGlass(glassType ?? 0, wineAbsorb);
+      const gg = buildGlass(glassType ?? 0, wineAbsorb, abv);
       absorbURef.current = gg.absorbU; // wineAbsorb 프리셋 실시간 변경은 첫 잔에 반영
+      legStrengthURef.current = gg.legStrengthU; // abv 실시간 변경도 첫 잔에 반영
+      legsRef.current = gg.legs;
       scene.add(gg.glassGroup);
       glasses.push(gg);
       setupBottle();
@@ -972,9 +1008,10 @@ export default function FluidLab({
     function addGlass(
       glassTypeArg: number,
       absorbArg?: [number, number, number],
-      fromDir: "left" | "right" = "right"
+      fromDir: "left" | "right" = "right",
+      abvArg?: number | null
     ) {
-      const gg = buildGlass(glassTypeArg, absorbArg);
+      const gg = buildGlass(glassTypeArg, absorbArg, abvArg);
       const off = offscreenSlide();
       gg.slideX = fromDir === "right" ? off : -off; // 화면 밖에서 시작
       gg.slideTarget = 0; // 중앙으로 진입
@@ -1250,14 +1287,16 @@ export default function FluidLab({
           if (curMax > 0.02) {
             g.wetness = Math.min(1, g.wetness + dt * 2.5);
           } else {
-            g.wetness = Math.max(0, g.wetness - dt * 0.12);
+            // 도수가 높으면 막이 오래 간다 — 에탄올이 계속 액체를 끌어올린다.
+            g.wetness = Math.max(0, g.wetness - dt * g.legs.dryRate);
             if (g.wetness <= 0.001) wetTopArr.fill(0); // 완전히 마르면 초기화
           }
           // 흘러내림: 벽이 젖는 즉시(아주 짧은 지연 후) 바로 시작. 새 젖음 에피소드가
           // 시작될 때만(마른 상태→젖음) 리셋 → 스월이 끝날 때까지 기다리지 않음.
           if (g.wetness > 0.05) {
             if (!g.wasWet) g.dripT = -0.12; // 짧은 지연(음수 구간=대기, 셰이더서 clamp 0)
-            g.dripT = Math.min(1, g.dripT + dt * 0.4);
+            // 도수가 높으면 띠가 두껍고 점성이 커져 천천히 내려온다.
+            g.dripT = Math.min(1, g.dripT + dt * g.legs.dripRate);
             g.wasWet = true;
           } else {
             g.dripT = 0;

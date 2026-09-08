@@ -99,6 +99,7 @@ export default async function WineDetailPage({ params }: PageProps<"/wine/[slug]
       variant="shell"
       absorb={absorb}
       glass={glass}
+      abv={wine.abv}
       country={country}
       regionName={wine.region?.nameKo ?? null}
       fallback={target}

@@ -12,6 +12,7 @@ export default function WineShowcase() {
         absorb={HOME_GLASS.absorb}
         glass={HOME_GLASS.glass}
         swirlScale={HOME_GLASS.swirlScale}
+        abv={HOME_GLASS.abv}
       />
       <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-between gap-4 px-6 py-3 text-[11px] text-muted">
         <span>© {year} ybbarng</span>
