@@ -542,10 +542,9 @@ export default function FluidLab({
       // 마른 곳은 mask=0 → 섭동 0 → 유리 그대로(저위험).
       material.normalNode = Fn(() => {
         const m = filmMask().toVar();
-        // dFdx/dFdy 는 "픽셀당" 변화량이라 렌더 해상도가 바뀌면 섭동 세기도 같이 바뀐다.
-        // 같은 픽셀에서의 위치 변화량으로 나눠 **표면 위 기울기**로 되돌리면 해상도와
-        // 무관해진다. 예전엔 나누지 않아 모바일과 데스크톱에서 세기가 제각각이었다
-        // (백버퍼를 화면 크기로 잡는 탓에 두 축의 픽셀 밀도까지 달랐다).
+        // 같은 픽셀에서의 위치 변화량으로 나눠 **표면 위 기울기**로 되돌린다. 안 나누면
+        // dFdx/dFdy 가 픽셀당 변화량이라 화면마다 세기가 달라진다 — 백버퍼를 화면 크기로
+        // 잡아(backingToViewport) 두 축의 픽셀 밀도까지 다르기 때문이다.
         const sx = dFdx(positionLocal).length().max(1e-4).toVar();
         const sy = dFdy(positionLocal).length().max(1e-4).toVar();
         const bump = vec3(dFdx(m).div(sx), dFdy(m).div(sy), float(0)).mul(-LEG_BUMP).toVar();
@@ -554,7 +553,7 @@ export default function FluidLab({
       // 굴절만으로는 눈물이 거의 안 보인다 — 잔 뒤가 단색 배경이라 법선을 틀어도 같은
       // 색을 다시 샘플하기 때문이다(실제 방에서는 뒤가 알록달록해 굴절만으로도 보인다).
       // 젖은 줄기는 매끈한 유리보다 빛을 살짝 흩뜨리므로, 그 자리만 거칠기를 올려
-      // 반사 하이라이트를 무디게 만든다. 이건 배경이 단색이어도 남는 단서다.
+      // 반사 하이라이트를 무디게 만든다. 배경이 단색이어도 남는 단서라 이쪽이 주력이다.
       material.roughnessNode = Fn(() => float(0.04).add(filmMask().mul(LEG_ROUGH)))();
       const glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
