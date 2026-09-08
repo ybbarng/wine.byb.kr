@@ -34,6 +34,15 @@ describe("deriveLegs — 도수가 높을수록 뚜렷하고 느리다", () => {
     expect(deriveLegs(20).strength).toBe(1);
   });
 
+  it("자국이 스월 직후를 놓쳐도 볼 만큼 남는다", () => {
+    // 마르는 속도의 역수가 대략 자국이 남아 있는 시간.
+    for (const abv of [MOSCATO, CHABLIS, CABERNET, ZINFANDEL]) {
+      expect(1 / deriveLegs(abv).dryRate, `${abv}%`).toBeGreaterThan(20);
+    }
+    // 도수가 높으면 한참 간다 — 한 모금 마시고 이야기하다 다시 봐도 아직 있다.
+    expect(1 / deriveLegs(ZINFANDEL).dryRate).toBeGreaterThan(45);
+  });
+
   it("샤블리는 그 사이 어딘가", () => {
     const s = deriveLegs(CHABLIS).strength;
     expect(s).toBeGreaterThan(LEG_FLOOR);

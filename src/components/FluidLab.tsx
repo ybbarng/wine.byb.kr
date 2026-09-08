@@ -315,6 +315,12 @@ export default function FluidLab({
     // 둘레별 도달 최고점(수위선 위, 프로파일). 자국은 와인이 실제 오른 방향에만
     // 생긴다(왼쪽 기울이면 왼쪽만). 스칼라 대신 둘레 배열→텍스처로 셰이더에 전달.
     const LEG_NA = 96;
+    // 눈물 줄기가 유리 법선을 트는 세기. 잔 프로파일 좌표(높이 0~2.92) 기준의 기울기에
+    // 곱하므로 렌더 해상도·화면 크기와 무관하다.
+    const LEG_BUMP = 0.06;
+    // 젖은 줄기가 유리 거칠기를 얼마나 올리는지(기본 0.04 위로). 단색 배경에서 눈물을
+    // 보이게 하는 주된 단서다.
+    const LEG_ROUGH = 0.3;
 
     // ── buildGlass 팩토리 ────────────────────────────────────────────────
     // 호출할 때마다 완전히 독립된 GlassRuntime(자기 glassGroup·mesh·material·
@@ -521,7 +527,7 @@ export default function FluidLab({
         const trail = smoothstep(head.sub(0.03), head.add(0.03), frac).toVar();
         const dH = frac.sub(head).div(0.05).toVar();
         const bead = dH.mul(dH).negate().exp().toVar();
-        const leg = stripe.mul(trail.mul(0.35).add(bead.mul(0.85))).toVar();
+        const leg = stripe.mul(trail.mul(0.7).add(bead.mul(1.0))).toVar();
         // 아치 자국은 도수와 무관하게 남는다(수면이 닿았던 자리). 흘러내리는 줄기만
         // 도수에 비례해 진해진다 — 에탄올이 없으면 방울이 안 맺힌다.
         return gg.glassWetU
@@ -531,14 +537,24 @@ export default function FluidLab({
           .clamp(0, 1);
       });
       // 실제 와인 눈물은 색이 거의 없는 투명한 물줄기 — 색 흡수 대신 "그 자리만
-      // 굴절이 살짝 다르게". 젖은 막/줄기(filmMask)의 화면 기울기(dFdx/dFdy)로
-      // 유리 법선을 미세하게 틀어 → 투과·반사가 그 줄기에서만 굴절돼 보인다.
+      // 굴절이 살짝 다르게". 젖은 막/줄기(filmMask)의 기울기로 유리 법선을 미세하게
+      // 틀어 → 투과·반사가 그 줄기에서만 굴절돼 보인다.
       // 마른 곳은 mask=0 → 섭동 0 → 유리 그대로(저위험).
       material.normalNode = Fn(() => {
         const m = filmMask().toVar();
-        const bump = vec3(dFdx(m), dFdy(m), float(0)).mul(-7.0).toVar();
+        // 같은 픽셀에서의 위치 변화량으로 나눠 **표면 위 기울기**로 되돌린다. 안 나누면
+        // dFdx/dFdy 가 픽셀당 변화량이라 화면마다 세기가 달라진다 — 백버퍼를 화면 크기로
+        // 잡아(backingToViewport) 두 축의 픽셀 밀도까지 다르기 때문이다.
+        const sx = dFdx(positionLocal).length().max(1e-4).toVar();
+        const sy = dFdy(positionLocal).length().max(1e-4).toVar();
+        const bump = vec3(dFdx(m).div(sx), dFdy(m).div(sy), float(0)).mul(-LEG_BUMP).toVar();
         return normalize(normalView.add(bump));
       })();
+      // 굴절만으로는 눈물이 거의 안 보인다 — 잔 뒤가 단색 배경이라 법선을 틀어도 같은
+      // 색을 다시 샘플하기 때문이다(실제 방에서는 뒤가 알록달록해 굴절만으로도 보인다).
+      // 젖은 줄기는 매끈한 유리보다 빛을 살짝 흩뜨리므로, 그 자리만 거칠기를 올려
+      // 반사 하이라이트를 무디게 만든다. 배경이 단색이어도 남는 단서라 이쪽이 주력이다.
+      material.roughnessNode = Fn(() => float(0.04).add(filmMask().mul(LEG_ROUGH)))();
       const glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
