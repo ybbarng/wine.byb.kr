@@ -1378,5 +1378,28 @@
     "isPublic": true,
     "createdAt": "2026-08-31T09:13:44.583Z",
     "updatedAt": "2026-09-06T15:06:28.573Z"
+  },
+  {
+    "id": "cmtsmhs67001woghebj35g94g",
+    "wineSlug": "grans-fassian-mineralschiefer-riesling",
+    "vintageYear": 2022,
+    "drankOn": "2026-09-08",
+    "purchasedOn": "2026-09-08",
+    "purchasePrice": 41700,
+    "purchaseCurrency": "KRW",
+    "purchasePlace": "GS25",
+    "rating": 3,
+    "repurchase": "아니",
+    "value": "아쉬움",
+    "colorHex": "#f3efd9",
+    "aromasConfirmed": "[\"페트롤\"]",
+    "flavorFelt": "{\"acidity\":4,\"tannin\":3,\"sweetness\":2,\"body\":1}",
+    "bodyText": "페트롤이라는 단어를 보고 나서 석유 냄새 밖에 안느껴짐\n맛은 그렇지는 않음\n화이트 와인 치고 묽은 느낌\n맛이 달게 느껴지지 않는데 꿀 생각이 남",
+    "foodPaired": "후라이드 치킨",
+    "photos": null,
+    "owner": "admin",
+    "isPublic": true,
+    "createdAt": "2026-09-08T12:05:31.999Z",
+    "updatedAt": "2026-09-08T12:53:26.652Z"
   }
 ]
