@@ -97,11 +97,24 @@ health와 똑같이 byb.kr에 rclone·GPG 암호·크론을 두는 방식. rclon
 
 ## 결정
 
-- **C를 먼저 한다.** 서버 작업 없이 저장소 안에서 끝나고, 이것만으로도 "한 곳에만 있다"는
-  단일 장애점이 사라진다.
-- **A를 이어서 한다.** 진짜 오프사이트 암호화 백업. 홈 서버 SSH 키 배치가 필요해 사람의
-  손이 한 번 들어간다.
+- **C를 먼저 한다** → **완료(2026-09-08)**. 매일 04:00 KST 자동 백업이 돈다.
+- **A는 보류한다.** 처음엔 "이어서 한다"였는데, C가 돌기 시작하니 급하지 않다고 판단을
+  바꿨다. 아래 '지금 남은 위험' 참고.
 - **B는 하지 않는다.** 인터넷 노출 서버에 백업 열쇠를 두는 건 백업을 같이 잃는 길이다.
+
+### 지금 남은 위험 (C가 돌기 시작한 뒤 다시 따져봄, 2026-09-08)
+
+| 위험 | 상태 |
+|---|---|
+| 서버 소멸·삭제·시드 버그 | C가 덮는다 |
+| 하루치(최대 24시간) 구멍 | 해당 없음 — 주 1~2회 마시는 페이스라 충분하다 |
+| 예약 워크플로 60일 자동 비활성화 | **해당 없음 — 공개 저장소만 적용**되고 이 저장소는 비공개다 |
+| GitHub 한 곳 의존 | 남음 → A가 푸는 문제. 다만 확률이 낮고 로컬 클론도 있다 |
+| 백업 실패를 모르고 지나감 | 남음 → A 없이도 알림 한 줄로 값싸게 막을 수 있다 |
+
+> 60일 규칙은 한때 "비공개도 해당된다"고 잘못 알고 A를 서둘러야 한다고 봤다. GitHub 공식
+> 문서가 *"In a **public repository**, scheduled workflows are automatically disabled when no
+> repository activity has occurred in 60 days"* 라고 못박고 있어 이 저장소엔 해당되지 않는다.
 
 ## 구현 스케치
 
@@ -126,20 +139,29 @@ health와 똑같이 byb.kr에 rclone·GPG 암호·크론을 두는 방식. rclon
   그대로 복구됨(나머지 59건 무변화) ③ 두 번 복구해도 중복 없음 ④ **복구가 수정된 기록을
   덮어쓰지 않음**.
 
-**2단계(남음)** — 자동 실행:
+**2단계(완료)** — 자동 실행. 매일 04:00 KST + 수동 실행.
 
-- `SERVER_SSH_KEY`는 **forced-command 키**(`command="cd .../wine.byb.kr && ./server"`)라
-  Actions에서 임의 명령을 돌릴 수 없다. 그래서 선택지는 둘이다.
-  - (가) 백업 전용 forced-command 키를 하나 더 두고(`command="... dump-tastings.ts --stdout"`)
-    Actions가 그걸로 긁어와 커밋한다. → 서버 `authorized_keys` 한 줄 + GitHub 시크릿 하나.
-  - (나) 관리자 인증이 걸린 내보내기 엔드포인트를 만들고 Actions가 HTTPS로 받아 커밋한다.
-    → GitHub 시크릿(관리자 비밀번호) 하나. 새 SSH 키는 없음.
-- ⚠️ 서버에서 직접 커밋·푸시하는 방식은 피한다. `./server`가 안에서 `git pull`을 해
+`SERVER_SSH_KEY`는 **forced-command 키**(`command="cd .../wine.byb.kr && ./server"`)라
+Actions에서 임의 명령을 돌릴 수 없다. 그래서 **백업 전용 키를 따로** 뒀다 — 권한을 가르는
+게 핵심이다. 이 키는 덤프 하나만 실행할 수 있어, 새어도 기록을 읽는 것 외엔 못 한다.
+
+- `ops/dump-tastings-remote.sh` — forced-command로 실행되는 래퍼.
+  **forced-command는 로그인 셸이 아니라 `node`·`pnpm`이 PATH에 없다**(`server`가 nvm을
+  따로 부르는 이유). nvm과 서버 `.env`를 먼저 불러온다. 받는 쪽이 stdout을 그대로 파일로
+  쓰므로 **JSON만 내보내고** 잡음은 표준에러로 흘린다.
+- `.github/workflows/backup.yml` — 커밋 전에 검사한다: 비었는지 · 유효한 JSON 배열인지 ·
+  **기록 수가 줄지 않았는지**. 줄었으면 커밋하지 않고 실패시켜 사람이 보게 한다. 깨진
+  파일로 백업을 덮으면 백업이 아니라 손실이기 때문이다. 바뀐 게 없으면 커밋하지 않는다.
+- 서버 `authorized_keys`에 백업 전용 공개키 한 줄, GitHub 시크릿 `BACKUP_SSH_KEY`.
+- ⚠️ **로컬에서 이 키를 시험할 땐 `-o IdentitiesOnly=yes`가 필요하다.** 없으면 ssh가
+  에이전트 키·기본 `id_ed25519`도 함께 제시해 제약 없는 키로 붙고, forced-command가 안
+  걸려 평범한 셸이 열린다(`whoami`가 그대로 실행돼 설정이 틀린 줄 오해하기 쉽다).
+- ⚠️ 서버에서 직접 커밋·푸시하는 방식은 피했다. `./server`가 안에서 `git pull`을 해
   충돌할 수 있다.
 - ⚠️ `server` 스크립트 자체를 고치면 **그 변경은 다음 배포부터** 적용된다
   ([[wine-prod-deploy-data-safety]]).
 
-### A — 홈 서버 pull 백업
+### A — 홈 서버 pull 백업 (보류, 나중에 할 때 이 스케치대로)
 
 - `ops/wine-backup.sh` (이 저장소에 두고 홈 서버 `~/bin/`에 배치) —
   `health-backup.sh`를 본떠 만들되 대상만 wine으로 바꾼다.
