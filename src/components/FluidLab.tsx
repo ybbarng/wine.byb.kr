@@ -520,6 +520,29 @@ export default function FluidLab({
       const GLASS_WINE_BOTTOM = gdef.stemLen; // 컵 내부 바닥(=볼 바닥, 프로파일 y)
       const GLASS_WINE_FILL = gdef.stemLen + gdef.fillLevel; // 수면(잔별 적정 채움)
 
+      // ── 이 잔의 슬로싱 상수: 형상에서 유도한다 ─────────────────────────
+      // 출렁임은 잔마다 다르다. 원형 용기 1차 반대칭 모드는
+      //   ω₁ = √(g·k·tanh(k·h)),  k = ε₁₁/R  (ε₁₁ = 1.8412, J₁' 의 첫 근)
+      // 이라 **수면 반경 R** 이 작을수록 빠르게 출렁인다. 실제로 이 잔들만 봐도
+      // 부르고뉴(넓은 볼) 3.1Hz ↔ 디저트(작은 잔) 5.6Hz 로 1.8 배 차이가 난다.
+      // 예전엔 보르도 값(25 rad/s)을 모든 잔에 쓰고 있었다.
+      const mPerProfile = (0.24 * (gdef.sizeScale ?? 1)) / gMaxY; // 잔 높이 24cm 기준
+      const surfR = Math.max(innerRadiusAt(GLASS_WINE_FILL) * mPerProfile, 1e-3); // 수면 반경(m)
+      const liqH = Math.max(gdef.fillLevel * mPerProfile, 1e-3); // 액체 깊이(m)
+      const kSlosh = 1.8412 / surfR;
+      const sloshOmega = Math.sqrt(9.81 * kSlosh * Math.tanh(kSlosh * liqH));
+      // 감쇠비. Miles 식(매끈한 벽 점성 경계층)은 **하한**이라, 작은 용기에서 큰
+      // 접촉선(메니스커스) 소산을 CONTACT 배로 얹는다. 실사용에서 하한 그대로는
+      // 한 번 기울이면 30회쯤 출렁여 촐랑거렸다(2026-09-08 사용자 피드백).
+      const CONTACT = 3.4;
+      const kh = 1.8412 * (liqH / surfR);
+      const zBase = 0.83 * Math.sqrt(1.6e-6 / (Math.sqrt(9.81) * surfR ** 1.5)); // 와인 ν
+      const sloshZeta =
+        CONTACT * zBase * (1 + (0.318 / Math.sinh(kh)) * (1 + (1 - liqH / surfR) / Math.cosh(kh)));
+      // 잔 움직임 → 슬로싱 결합. 충격성 입력(드래그)의 진폭은 COUPLE/ω 에 비례하므로,
+      // ω 에 비례시켜야 어떤 잔이든 손맛이 같다. 계수는 보르도(ω=25)에서 손으로 맞춘 값.
+      const sloshCouple = 0.664 * sloshOmega;
+
       // 이 잔의 독립 런타임 객체. 스월/슬로싱 상태는 모두 0 으로 초기화한다.
       const gg: GlassRuntime = {
         // 잔 파생 상수
@@ -528,6 +551,10 @@ export default function FluidLab({
         innerRadiusAt,
         GLASS_WINE_BOTTOM,
         GLASS_WINE_FILL,
+        // 형상에서 유도한 슬로싱 상수(잔마다 다름)
+        sloshOmega,
+        sloshZeta,
+        sloshCouple,
         // 파동 위상 캐시(surfWaveH 가 읽음) — 초기 수직 상태값
         crC: 1,
         crS: 0,
@@ -1302,16 +1329,19 @@ export default function FluidLab({
           let gtz = 0;
           // 입력은 활성 잔에만. 나머지 잔은 gtx=gtz=0 → 자기 관성으로만 출렁.
           if (isActive && autoSwirl) {
-            // 자동 스월: 잔 기울기를 원으로 3바퀴(진폭 ramp in/out).
-            // 3바퀴/2.7초 ≈ 1회전 0.9초(초당 1.1바퀴) — 사람이 손으로 스월하는 속도.
-            const TOTAL = 2.7;
-            const ROT = 3;
+            // 자동 스월: 잔 기울기를 원으로 5바퀴(진폭 ramp in/out).
+            // 5바퀴/2.4초 ≈ 초당 2.1바퀴 — 사람이 **세게** 스월하는 속도(1~2.5Hz 범위).
+            // 예전 1.1Hz 는 슬로싱 공진(4Hz)에서 멀어 액체가 잘 안 따라 올라왔다.
+            // 2.1Hz 는 공진에 가까워져 같은 힘으로도 훨씬 크게 넘실댄다(물리 그대로).
+            // 기울기 배율은 1.0 — GMAX 를 넘기면 잔이 프레임을 벗어난다.
+            const TOTAL = 2.4;
+            const ROT = 5;
             const ph = (2 * Math.PI * ROT * autoSwirlT) / TOTAL;
             const env = Math.max(
               0,
               Math.min(autoSwirlT / 0.3, 1) * Math.min((TOTAL - autoSwirlT) / 0.4, 1)
             );
-            const amp = GMAX * 0.85 * env;
+            const amp = GMAX * 1.0 * env;
             gtx = amp * Math.cos(ph);
             gtz = amp * Math.sin(ph);
             autoSwirlT += dt;
@@ -1349,36 +1379,28 @@ export default function FluidLab({
           const gvz = (g.gTiltZ - g.gPrevZ) / dt;
           g.gPrevX = g.gTiltX;
           g.gPrevZ = g.gTiltZ;
-          // ── 슬로싱 상수: 실제 와인잔 물리에서 유도 ──────────────────────
-          // 원형 용기 1차 반대칭 모드: ω₁ = √(g·k·tanh(k·h)), k = ε₁₁/R (ε₁₁=1.8412).
-          // 이 잔(총높이 24cm·보르도 프로파일·fillLevel 0.68) → 수면 반경 2.9cm·
-          // 깊이 5.0cm → ω₁ ≈ 25 rad/s (3.98 Hz).
+          // ── 슬로싱 상수 ── 잔 형상에서 유도한 값을 쓴다(buildGlass 참고).
+          // 출렁임은 잔마다 다르다 — 수면 반경이 작을수록 빠르게 출렁인다.
+          // 이 잔들만 봐도 부르고뉴 3.1Hz ↔ 디저트 5.6Hz 로 1.8배 차이가 난다.
+          // 예전엔 하나의 상수(11 → 25)를 모든 잔에 공유했다.
           //
-          // 예전엔 8 → 11(1.75Hz)까지만 올렸다. 주석에도 "실제 ~3Hz"라 적어 두고
-          // 절반에서 멈춘 셈인데, 그때는 입자 시뮬(PBF)이 켜져 있어 중력·시간축을
-          // 슬로모션으로 낮춰 두던 시절의 감각이 남아 있었다. 지금은 FLUID_ON=false
-          // 라 슬로싱은 GRAVITY 를 참조하지 않고 실시간 dt(1/60)로만 돈다 →
-          // 실제값을 써도 계산량이 그대로다(스칼라 4개 적분).
-          // 오일러 안정: semi-implicit 이라 ω·dt<2 면 안정. 25/60 = 0.42 로 여유.
-          const OMEGA = 25.0;
-          // 점성 감쇠비(Miles, 원통): ζ ≈ 0.83·√(ν/(√g·R^1.5))·[깊이 보정].
-          // 와인 ν≈1.6e-6 m²/s(20°C) → ζ ≈ 0.009. 물은 0.007.
-          // 0.055 는 6배 과했다 — 느린 진동(1.75Hz)과 겹쳐 "꿀 같은" 인상을 만들었다.
-          const ZETA = 0.009;
+          // 참고: 슬로싱은 GRAVITY 를 참조하지 않고 실시간 dt(1/60)로만 돈다. 예전
+          // 입자 시뮬(PBF) 시절 중력·시간축을 슬로모션으로 낮추던 것과 무관하다.
+          // 오일러 안정: semi-implicit 이라 ω·dt<2 면 안정(가장 빠른 잔도 35/60=0.59).
+          const OMEGA = g.sloshOmega;
+          const ZETA = g.sloshZeta;
           // 2차(난류) 감쇠: 크게 출렁일수록 손실↑. 실제 슬로싱에도 있지만 아주 작다.
           // 1.5 는 선형 ζ 를 완전히 덮어써 감쇠를 혼자 지배했다(에너지 포락선으로 확인).
           const QUAD = 0.05;
-          // ω 를 올리면 복원력이 세져 같은 구동에 진폭이 줄어든다. 구동(1.11Hz)이 ω 에서
-          // 더 멀어져 공진 증폭도 함께 줄기 때문에, ω² 비(5.17배)만으로는 모자란다
-          // (실제로 30% 작아졌다). 진폭이 곧 오목 포물면 깊이라 덜 보정하면 표면이
-          // 과하게 평평해진다 → **교정 전 최대 수면기울기 9.7° 를 그대로 재현**하도록
-          // 수치로 맞췄다. 스월 세기는 물성과 별개 축이라 예전 감각을 보전한다.
-          const COUPLE = 36.1; // 예전 진폭 9.7° 재현값
-          const SLOSH_MAX = 0.78; // 최대 수면 기울기↑ — 세게 흔들수록 더 세워짐
+          const COUPLE = g.sloshCouple;
+          // 수면 기울기 상한. 0.78rad(45°)은 사실상 안 걸려 넓은 볼(부르고뉴)에서
+          // 자동 스월 때 와인이 잔 위로 넘쳐 보였다. 0.30rad(17°)이면 좁은 잔
+          // (보르도 13°)엔 영향이 없고 넓은 볼의 과한 피크만 깎는다.
+          const SLOSH_MAX = 0.3;
           // 슬라이드 가속도 → 슬로싱 결합. 잔이 옆으로 가속하면 안의 액체가 관성으로
           // 반대쪽으로 쏠린다(출발 때 뒤로, 도착 때 앞으로 쏠렸다 잦아듦).
-          // sloshX/Z 는 SLOSH_MAX 로 clamp 돼 폭주 없음. COUPLE 과 같은 비율로 올린다.
-          const COUPLE_SLIDE = 28.9; // 4.0 × (36.1/5.0)
+          // sloshX/Z 는 SLOSH_MAX 로 clamp 돼 폭주 없음. COUPLE 과 같은 비율로 둔다.
+          const COUPLE_SLIDE = COUPLE * 0.8;
           // 두 축 결합 부호는 표면 크레스트가 잔 스월과 "같은 방향"으로 돌게 맞춘다
           // (와인은 잔을 쫓아감). 좌우(roll) 항은 그대로, 앞뒤(pitch) 항 부호만 뒤집어
           // 회전 방향을 바로잡되 선형 정렬은 유지.
