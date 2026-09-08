@@ -39,7 +39,7 @@ jobs:
           ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
           # forced-command 라 보내는 명령과 무관하게 덤프가 돌고, 그 결과가 stdout 으로 온다.
           ssh -i ~/.ssh/backup_key -p "$PORT" \
-            -o BatchMode=yes -o ConnectTimeout=20 \
+            -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes \
             "$USER@$HOST" true > /tmp/tasting-notes.json
           rm -f ~/.ssh/backup_key
 
