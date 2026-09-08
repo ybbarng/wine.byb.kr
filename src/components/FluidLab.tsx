@@ -177,6 +177,7 @@ export default function FluidLab({
     let backingH = 0;
     let resizeTid: ReturnType<typeof setTimeout> | undefined;
     let onWindowResize: (() => void) | undefined; // 창 리사이즈 핸들러(cleanup 에서 제거)
+    let detachPointer: (() => void) | undefined; // window 포인터 핸들러 해제(cleanup)
     // 한 캔버스 안의 잔들. 초기 1개, addGlass 로 두 번째 잔을 넣어 각자 독립 스월·슬라이드.
     // biome-ignore lint/suspicious/noExplicitAny: GlassRuntime 은 아래에서 선언
     const glasses: any[] = [];
@@ -1432,11 +1433,35 @@ export default function FluidLab({
       renderer.domElement.style.pointerEvents = "auto";
 
       // 스월링 입력: 드래그로 잔을 기울인다(WineGlass.tsx 방식).
+      //
+      // 손가락 하나만 따라간다. 화면을 확대하려고 두 손가락을 올리면 각 손가락이 따로
+      // pointermove 를 보내는데, 그걸 다 받으면 좌표가 두 손가락 사이를 오가며 튄다 →
+      // 잔이 심하게 흔들리고 액체가 튄다. 그래서 두 번째 손가락이 닿는 순간 잔에서
+      // 손을 뗀다(확대는 브라우저에 맡긴다).
+      const downIds = new Set<number>();
+      let swPointerId: number | null = null;
+      /** 잔 조작을 끝낸다. 탭이었으면 자동 스월. */
+      const releaseSwirl = (asTap: boolean) => {
+        swDragging = false;
+        swPointerId = null;
+        if (asTap && Math.hypot(mCurX - downX, mCurY - downY) < 6) {
+          autoSwirl = true;
+          autoSwirlT = 0;
+        }
+      };
       const onSwDown = (e: PointerEvent) => {
-        autoSwirl = false; // 새 조작이 자동 스월 중단
-        swDragging = true;
+        downIds.add(e.pointerId);
         idleSince = null; // 만졌으니 유휴가 아니다
         idleSwirlDone = false; // 다시 가만히 두면 또 한 번 돈다
+        if (downIds.size > 1) {
+          // 확대 제스처가 시작됐다 — 잔은 즉시 놓아 준다(탭으로도 치지 않는다).
+          autoSwirl = false;
+          releaseSwirl(false);
+          return;
+        }
+        autoSwirl = false; // 새 조작이 자동 스월 중단
+        swDragging = true;
+        swPointerId = e.pointerId;
         mStartX = e.clientX;
         mStartY = e.clientY;
         mCurX = e.clientX;
@@ -1444,23 +1469,33 @@ export default function FluidLab({
         downX = e.clientX;
         downY = e.clientY;
       };
-      const onSwUp = () => {
-        if (!swDragging) return; // down 이 캔버스에서 시작 안 했으면 무시(버튼 등)
-        swDragging = false;
-        // 거의 안 움직였으면 클릭 → 자동 스월 3바퀴.
-        if (Math.hypot(mCurX - downX, mCurY - downY) < 6) {
-          autoSwirl = true;
-          autoSwirlT = 0;
-        }
+      const onSwUp = (e: PointerEvent) => {
+        downIds.delete(e.pointerId);
+        if (!swDragging || e.pointerId !== swPointerId) return;
+        releaseSwirl(true);
+      };
+      // 브라우저가 제스처(스크롤·확대)를 가져가면 pointercancel 이 온다. 이걸 안 받으면
+      // 손을 뗀 줄 모르고 마지막 좌표에 잔이 계속 기운 채로 남는다.
+      const onSwCancel = (e: PointerEvent) => {
+        downIds.delete(e.pointerId);
+        if (e.pointerId !== swPointerId) return;
+        releaseSwirl(false);
       };
       const onSwMove = (e: PointerEvent) => {
-        if (!swDragging) return;
+        if (!swDragging || e.pointerId !== swPointerId) return;
         mCurX = e.clientX;
         mCurY = e.clientY;
       };
       renderer.domElement.addEventListener("pointerdown", onSwDown); // 캔버스에서만 시작
       window.addEventListener("pointerup", onSwUp);
+      window.addEventListener("pointercancel", onSwCancel);
       window.addEventListener("pointermove", onSwMove);
+      // window 에 붙인 건 언마운트 때 직접 떼야 한다(캔버스처럼 DOM 에서 사라지지 않는다).
+      detachPointer = () => {
+        window.removeEventListener("pointerup", onSwUp);
+        window.removeEventListener("pointercancel", onSwCancel);
+        window.removeEventListener("pointermove", onSwMove);
+      };
 
       scene = new THREE.Scene();
       {
@@ -1684,6 +1719,7 @@ export default function FluidLab({
     return () => {
       disposed = true;
       if (onWindowResize) window.removeEventListener("resize", onWindowResize);
+      detachPointer?.();
       if (resizeTid) clearTimeout(resizeTid);
       if (ro) ro.disconnect();
       for (const gg of glasses.slice()) disposeGlass(gg); // 잔 GPU 자원 반환
