@@ -101,12 +101,12 @@ describe("surfaceWaveHeight", () => {
 
 describe("회전 로브 속도", () => {
   it("mode-3 무늬가 mode-2 보다 느리게 돈다", () => {
-    // 무늬 각속도는 w/m 이라 차수가 높을수록 느리다. 옛 값(3.0·4.2)은 역전돼 있었다.
+    // 무늬 각속도는 w/m 이라 차수가 높을수록 느리다. 역전되면 안 된다.
     expect(W3SPD / 3).toBeLessThan(W2SPD / 2);
   });
 
   it("각진동수라서 무늬 속도보다 크다", () => {
-    expect(W2SPD).toBeGreaterThan(10); // 베셀 근(3.05)을 그대로 쓰던 옛 값과 구분
+    expect(W2SPD).toBeGreaterThan(10); // 베셀 근(3.05)을 그대로 넣는 실수를 막는다
     expect(W3SPD).toBeGreaterThan(10);
   });
 });

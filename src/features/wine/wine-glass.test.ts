@@ -3,13 +3,13 @@ import { grapeInfo } from "./grape-info";
 import { GLASS } from "./showcase-wines";
 import { wineGlassFor } from "./wine-glass";
 
-// DB 에 실제로 들어 있는 품종 표기. 코드 쪽 표와 표기가 흔들리는 것들을 골랐다 —
-// 정확히 일치로 찾던 시절엔 이것들이 조용히 빗나가 타입 기본값으로 떨어졌다.
+// DB 에 실제로 들어 있는 품종 표기. 코드 쪽 표와 표기가 흔들리는 것들을 골랐다.
+// 정확히 일치로 찾으면 이것들이 조용히 빗나가 타입 기본값으로 떨어진다.
 const DB_NAMES = {
-  cabernet: "까베르네 소비뇽", // 코드엔 "카베르네"로 적혀 있었다(까/카)
-  pinotNoir: "피노누아", // 코드엔 "피노 누아"(띄어쓰기)
-  riesling: "리즐링", // 코드엔 "리슬링"(즐/슬)
-  muscat: "무스캇", // 코드엔 "모스카토"
+  cabernet: "까베르네 소비뇽", // 표에는 "카베르네"(까/카)
+  pinotNoir: "피노누아", // 표에는 "피노 누아"(띄어쓰기)
+  riesling: "리즐링", // 표에는 "리슬링"(즐/슬)
+  muscat: "무스캇", // 표에는 "모스카토"
   merlot: "메를로",
   sangiovese: "산지오베제",
 } as const;
@@ -18,7 +18,7 @@ const RED_DEFAULT: [number, number, number] = [13, 60, 78];
 
 describe("wineGlassFor — 품종 표기가 흔들려도 찾는다", () => {
   it("피노누아가 제 색과 부르고뉴 잔을 받는다", () => {
-    // 이게 이 수정의 핵심. 예전엔 색도 잔도 못 받고 레드 기본값으로 떨어졌다.
+    // 표기가 어긋나면 색도 잔도 못 받고 레드 기본값으로 떨어진다. 여기가 그 관문.
     const spec = wineGlassFor("red", [DB_NAMES.pinotNoir]);
     expect(spec.glass).toBe(GLASS.burgundy);
     expect(spec.absorb).toEqual([9, 40, 52]);

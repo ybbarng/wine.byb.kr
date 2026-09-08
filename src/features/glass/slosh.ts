@@ -55,7 +55,7 @@ export interface SloshConstants {
  *   ω₁ = √(g·k·tanh(k·h)),  k = ε₁₁/R
  *
  * 수면 반경 R 이 작을수록 빠르게 출렁인다 — 부르고뉴(넓은 볼) 3.1Hz ↔
- * 디저트(작은 잔) 5.6Hz 로 1.8배 차이가 난다. 예전엔 상수 하나를 모든 잔에 썼다.
+ * 디저트(작은 잔) 5.6Hz 로 1.8배 차이가 난다. 그래서 상수 하나를 모든 잔에 쓸 수 없다.
  */
 export function deriveSloshConstants(surfR: number, liqH: number): SloshConstants {
   const k = EPSILON_11 / surfR;

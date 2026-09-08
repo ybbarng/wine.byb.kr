@@ -53,10 +53,9 @@ import { deriveSloshConstants, stepSlosh } from "@/features/glass/slosh";
 // 와인잔 렌더러 — 표면·부피 기반. 유리 lathe 굴절 + Beer–Lambert 와인 흡수 +
 // 회전 파동 스월(슬로싱 감쇠 진동자) + 눈물자국(legs).
 //
-// 예전엔 여기에 입자 유체(PBF, Macklin & Müller 2013)를 함께 두고 붓기를 시뮬레이션했다.
-// 표면·부피 기반으로 전환하며 껐고(FLUID_ON=false), 실행되지 않는 채로 남아 있던 그
-// 파이프라인(버퍼·컴퓨트 커널·SSFR 패스 등 500여 줄)을 걷어냈다.
-// 연구 내용은 docs/fluid-simulation-status.md 에, 코드는 git 이력에 남아 있다.
+// 입자 유체(PBF)는 쓰지 않는다(`FLUID_ON=false`). `setupStream`·`bottleGroup` 처럼
+// 붓기 골격만 남아 있는 건 그 흔적이다 — 지우지 말 것, 붓기 연출을 이어갈 자리다.
+// 연구 기록은 docs/fluid-simulation-status.md, 지워진 코드는 git 이력에 있다.
 export default function FluidLab({
   wineAbsorb,
   abv,
@@ -268,9 +267,8 @@ export default function FluidLab({
     // GRAVITY 는 실제 g를 좌표 공간으로 매핑해야 하므로 잔 스케일이 정해진 뒤
 
     // ── 대표 잔 ── 병 크기를 잔 높이에 맞추는 데만 쓴다(잔 자체는 buildGlass 가 만든다).
-    // 형상 계산은 features/glass/glass-geometry 로 옮겼다 — 예전엔 이 블록과
-    // buildGlass 안에 같은 코드가 두 벌 있었고, 이미 어긋나 있었다(바깥 사본이
-    // 존재하지 않는 gdef.wineBottom 을 읽어 bowlBottomY 가 NaN 이었다).
+    // 형상 계산은 features/glass/glass-geometry 하나뿐이다. 여기서 다시 계산하지 말 것 —
+    // 두 벌이 되면 곧 어긋나고, 이 파일은 `@ts-nocheck` 라 어긋나도 조용하다.
     const gdef = GLASSES[Math.min(Math.max(glassType ?? 0, 0), GLASSES.length - 1)];
     const glass = buildGlassShape(gdef);
 
@@ -665,8 +663,8 @@ export default function FluidLab({
     // mode-m 각진동수 ω_m = √(g·k_m·tanh(k_m·h)), k_m = ε_m1/R (ε₂₁=3.054, ε₃₁=4.201).
     // 위상이 cos(mθ−φ−w·t) 라 w 는 그 모드의 각진동수이고, 화면에서 도는 무늬의
     // 각속도는 w/m 이다(차수가 높을수록 무늬가 느리게 돈다).
-    // 옛 값 3.0·4.2 는 각진동수가 아니라 **베셀 근 ε₂₁·ε₃₁ 을 그대로 쓴 것**으로 보인다.
-    // 그래서 10배 가까이 느렸고, mode-3 이 mode-2 보다 빠르게 도는 역전까지 있었다.
+    // ⚠️ 베셀 근 ε₂₁·ε₃₁ 을 그대로 여기 넣으면 안 된다(값이 비슷해 보이지만 파수를
+    // 정하는 상수지 각진동수가 아니다). 넣으면 10배 가까이 느려지고 차수 역전이 생긴다.
     const W2SPD = 32.3; // mode-2 각진동수 → 무늬는 16.1 rad/s 로 회전
     const W3SPD = 37.9; // mode-3 각진동수 → 무늬는 12.6 rad/s (mode-2 보다 느림 ✓)
     // 표면 파동 높이. c,s=cosθ,sinθ(컬럼각), c2..s3=2θ·3θ 트리그, rp=r/rw(0중심~1벽).

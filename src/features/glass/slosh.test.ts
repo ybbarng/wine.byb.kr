@@ -8,8 +8,8 @@ import {
   zeroSlosh,
 } from "./slosh";
 
-// 슬로싱이 실제 와인잔 물리에 맞는지 여기서 직접 잰다. 예전엔 이 식이 302줄짜리
-// 렌더 루프 안에 있어, 값을 확인하려면 임시 스크립트에 다시 구현해야 했다.
+// 슬로싱이 실제 와인잔 물리에 맞는지 여기서 직접 잰다 — 상수를 눈으로 보는 대신
+// 적분해서 주파수·감쇠를 재고, 물리식이 주는 값과 대조한다.
 
 const DT = 1 / 60;
 const constsFor = (key: string) => {
@@ -49,7 +49,7 @@ describe("deriveSloshConstants — 형상에서 물리 유도", () => {
   });
 
   it("수면이 넓을수록 느리게 출렁인다", () => {
-    // 잔마다 달라야 한다 — 예전엔 상수 하나를 모든 잔에 썼다.
+    // 잔마다 달라야 한다 — 상수 하나를 모든 잔에 쓰면 안 된다.
     const burgundy = constsFor("burgundy"); // 가장 넓은 볼
     const dessert = constsFor("dessert"); // 가장 작은 잔
     expect(burgundy.omega).toBeLessThan(dessert.omega);
