@@ -81,6 +81,16 @@ const REGIONS: RegionSeed[] = [
     longitude: -3.7,
   },
   {
+    slug: "mosel",
+    nameKo: "모젤",
+    nameLocal: "Mosel",
+    country: "독일",
+    level: "region",
+    parentSlug: "germany",
+    latitude: 49.85,
+    longitude: 6.97, // 트리어~베른카스텔 구간(리슬링 산지의 중심)
+  },
+  {
     slug: "ribera-del-duero",
     nameKo: "리베라 델 두에로",
     nameLocal: "Ribera del Duero",
@@ -306,6 +316,11 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
   "carpineto-chianti-classico-riserva-2019": { abv: 14 },
   "te-henga-sauvignon-blanc-2025": { abv: 12.5 },
   "carmel-road-pinot-noir": { abv: 13.5 },
+  "grans-fassian-mineralschiefer-riesling": {
+    abv: 11.5,
+    notesKo:
+      "이름의 '미네랄시퍼'가 모젤의 점판암을 가리킨다. 첫 향은 라임과 아삭한 풋사과, 잔에 두고 공기를 먹이면 살구·복숭아가 올라온다. 입에 넣으면 산미가 곧게 서고 그 뒤로 젖은 돌 같은 짭짤한 기운이 남는데, 이게 모젤 리슬링에서 흔히 말하는 미네랄이다. 도수가 11.5도로 낮아 가볍다고 느끼기 쉽지만 그만큼 산미와 과실이 또렷하게 드러난다. 너무 차게 하면 향이 닫히니 8~10도쯤에서 마시고, 잔에서 온도가 올라갈수록 달라지는 걸 지켜보면 재미있다.",
+  },
 };
 
 type Entry = {
@@ -865,6 +880,28 @@ const ENTRIES: Entry[] = [
     },
     grapeSlugs: [],
     tasting: { drankOn: "2026-07-17" },
+  },
+  {
+    regionSlug: "mosel",
+    producer: {
+      slug: "grans-fassian",
+      nameKo: "그란 파시안",
+      nameLocal: "Weingut Grans-Fassian",
+    },
+    wine: {
+      slug: "grans-fassian-mineralschiefer-riesling",
+      nameKo: "그란 파시안 미네랄시퍼 리슬링",
+      nameLocal: "Grans-Fassian Mineralschiefer Riesling trocken",
+      type: "white",
+      classification: "Mosel QbA · VDP.Gutswein",
+    },
+    grapeSlugs: [{ slug: "리즐링", percent: 100 }],
+    tasting: {
+      drankOn: "2026-09-08",
+      purchasedOn: "2026-09-08",
+      purchasePrice: 41700,
+      purchasePlace: "GS25",
+    },
   },
 ];
 
