@@ -10,6 +10,14 @@ export interface ProducerDetail {
 
 // 키는 한국어/원어 이름의 일부(정규화 후 includes 매칭). 앞쪽이 먼저 매칭된다.
 const PRODUCER_INFO: Record<string, ProducerDetail> = {
+  그란파시안: {
+    desc: "모젤 강 굽이의 라이벤에 자리한 13대 가족 와이너리. 13헥타르 남짓을 부치며 90% 넘게 리즐링을 심고, 2001년부터 독일 우수 생산자 협회(VDP) 회원이다. 트리텐하이머 아포테케 같은 급경사 밭으로 알려져 있다.",
+    homepage: "https://grans-fassian.de",
+  },
+  "grans-fassian": {
+    desc: "모젤 강 굽이의 라이벤에 자리한 13대 가족 와이너리. 13헥타르 남짓을 부치며 90% 넘게 리즐링을 심고, 2001년부터 독일 우수 생산자 협회(VDP) 회원이다. 트리텐하이머 아포테케 같은 급경사 밭으로 알려져 있다.",
+    homepage: "https://grans-fassian.de",
+  },
   산마르짜노: {
     desc: "1962년 만두리아의 재배농 19명이 세운 뿔리아 협동조합. 프리미티보·네그로아마로에 집중해 진하고 부드러운 남부 레드를 만든다.",
     homepage: "https://sanmarzano.wine",

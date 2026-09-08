@@ -14,6 +14,11 @@ export type WinePrice = {
 
 const PRICES: Record<string, WinePrice> = {
   "henri-bourgeois-sancerre-les-baronnes": { low: 45000, high: 60000 },
+  "grans-fassian-mineralschiefer-riesling": {
+    low: 38000,
+    high: 52000,
+    note: "VDP 회원 생산자의 입문급(구츠바인) 리즐링. 현지가는 낮지만 국내 수입가가 붙는다.",
+  },
   "esterhazy-klimt-red": { low: 15000, high: 24000 },
   "chateau-pey-la-tour-reserve": { low: 18000, high: 28000 },
   "tosti-moscato-d-asti": { low: 14000, high: 22000 },
