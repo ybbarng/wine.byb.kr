@@ -17,6 +17,7 @@ import {
   frontFacing,
   If,
   int,
+  mix,
   mx_fractal_noise_float,
   normalize,
   normalView,
@@ -331,6 +332,10 @@ export default function FluidLab({
     // 젖은 줄기가 유리 거칠기를 얼마나 올리는지(기본 0.04 위로). 단색 배경에서 눈물을
     // 보이게 하는 주된 단서다.
     const LEG_ROUGH = 0.3;
+    // 눈물 막의 두께(흡수 계산용). 얇을수록 옅다 — 레드가 자국이 보일 만큼만.
+    const LEG_FILM_T = 0.02;
+    // 그 막 색을 유리 색에 얼마나 섞을지(0~1).
+    const LEG_TINT = 0.85;
 
     // ── buildGlass 팩토리 ────────────────────────────────────────────────
     // 호출할 때마다 완전히 독립된 GlassRuntime(자기 glassGroup·mesh·material·
@@ -565,6 +570,21 @@ export default function FluidLab({
       // 젖은 줄기는 매끈한 유리보다 빛을 살짝 흩뜨리므로, 그 자리만 거칠기를 올려
       // 반사 하이라이트를 무디게 만든다. 배경이 단색이어도 남는 단서라 이쪽이 주력이다.
       material.roughnessNode = Fn(() => float(0.04).add(filmMask().mul(LEG_ROUGH)))();
+      // 그래도 모자란다 — 하이라이트가 없는 벽에서는 거칠기 차이도 드러나지 않는다.
+      // 남은 단서는 **흡수**다. 벽에 남은 막은 얇은 와인이라 통과하는 빛을 조금 먹는다.
+      // 그 자리 유리 색을 와인 쪽으로 당겨(투과광이 물듦) 자국을 보이게 한다.
+      // 발광(emissive)이 아니라 흡수라 "밤 조명"처럼 빛나지 않는다.
+      //
+      // 막 색은 이 와인의 흡수계수에서 얻는다 — exp(−absorb·두께). 두께를 아주 얇게
+      // 잡아서 레드는 옅은 자줏빛, 화이트는 거의 무색이 된다(실제로도 그렇다).
+      material.colorNode = Fn(() => {
+        const film = vec3(
+          gg.absorbU.x.mul(-LEG_FILM_T).exp(),
+          gg.absorbU.y.mul(-LEG_FILM_T).exp(),
+          gg.absorbU.z.mul(-LEG_FILM_T).exp()
+        ).toVar();
+        return mix(vec3(1, 1, 1), film, filmMask().mul(LEG_TINT));
+      })();
       const glassMesh = new THREE.Mesh(geometry, material);
       glassMesh.scale.setScalar(glass.worldScale);
       glassMesh.position.set(0, glass.worldY, 0);
