@@ -334,8 +334,9 @@ export default function FluidLab({
     const LEG_ROUGH = 0.3;
     // 눈물 막의 두께(흡수 계산용). 얇을수록 옅다 — 레드가 자국이 보일 만큼만.
     const LEG_FILM_T = 0.02;
-    // 그 막 색을 유리 색에 얼마나 섞을지(0~1).
-    const LEG_TINT = 0.85;
+    // 그 막 색을 유리 색에 얼마나 섞을지(0~1). 실제 눈물은 "있는 줄 알아볼 만큼"이지
+    // 그려 놓은 줄무늬처럼 보이면 안 된다.
+    const LEG_TINT = 0.6;
 
     // ── buildGlass 팩토리 ────────────────────────────────────────────────
     // 호출할 때마다 완전히 독립된 GlassRuntime(자기 glassGroup·mesh·material·
@@ -423,6 +424,8 @@ export default function FluidLab({
         // legs 배열/텍스처 — setupGlass 에서 채움
         pwCol: null,
         wetTopArr: new Float32Array(LEG_NA),
+        // 위 배열을 텍스처에 올릴 반정밀도 사본. 높이는 0~3 남짓이라 정밀도가 넉넉하다.
+        wetTopHalf: new Uint16Array(LEG_NA),
         legTex: null,
         // mesh/geometry/material — setup 에서 채움
         glassMesh: null,
@@ -499,12 +502,18 @@ export default function FluidLab({
       // 이 와인의 눈물 세기(도수에서 유도). 자국·줄기 진하기에 곱한다.
       gg.legStrengthU = uniform(gg.legs.strength);
       // 둘레별 도달 최고점 텍스처(1D, R=수위선 위 높이). 방향별로 자국 범위가 다름.
+      //
+      // ⚠️ 32비트 `FloatType` 을 쓰면 안 된다. WebGL2 에서 R32F 는 **선형 필터가 코어가
+      // 아니라** `OES_texture_float_linear` 확장이 있어야 한다. 없는 기기에서는 텍스처가
+      // 불완전해져 샘플이 0 으로 돌아오고, `top`=0 → 자국이 통째로 사라진다. 안드로이드
+      // 크롬은 WebGPU 대신 WebGL2 로 떨어지므로 그대로 걸린다(PC 는 멀쩡한데 폰만
+      // 아무것도 안 보이는 증상). R16F 는 WebGL2 코어에서 필터링된다.
       const legTex = new THREE.DataTexture(
-        gg.wetTopArr,
+        gg.wetTopHalf,
         LEG_NA,
         1,
         THREE.RedFormat,
-        THREE.FloatType
+        THREE.HalfFloatType
       );
       legTex.magFilter = THREE.LinearFilter;
       legTex.minFilter = THREE.LinearFilter;
@@ -1347,9 +1356,12 @@ export default function FluidLab({
           let curMax = 0;
           const pwCol = g.pwCol;
           const wetTopArr = g.wetTopArr;
+          const wetTopHalf = g.wetTopHalf;
           for (let bi = 0; bi < LEG_NA; bi++) {
             const pw = pwCol[bi];
             if (pw > wetTopArr[bi]) wetTopArr[bi] = pw;
+            // 텍스처는 반정밀도라 올릴 때 변환한다(96개뿐이라 비용은 없다시피).
+            wetTopHalf[bi] = THREE.DataUtils.toHalfFloat(wetTopArr[bi]);
             const rr = pw - g.GLASS_WINE_FILL; // 정착 수위 위로 얼마나 올랐나
             if (rr > curMax) curMax = rr;
           }
@@ -1360,7 +1372,10 @@ export default function FluidLab({
           } else {
             // 도수가 높으면 막이 오래 간다 — 에탄올이 계속 액체를 끌어올린다.
             g.wetness = Math.max(0, g.wetness - dt * g.legs.dryRate);
-            if (g.wetness <= 0.001) wetTopArr.fill(0); // 완전히 마르면 초기화
+            if (g.wetness <= 0.001) {
+              wetTopArr.fill(0); // 완전히 마르면 초기화
+              wetTopHalf.fill(0);
+            }
           }
           // 흘러내림: 벽이 젖는 즉시(아주 짧은 지연 후) 바로 시작. 새 젖음 에피소드가
           // 시작될 때만(마른 상태→젖음) 리셋 → 스월이 끝날 때까지 기다리지 않음.
