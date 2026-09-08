@@ -107,18 +107,37 @@ health와 똑같이 byb.kr에 rclone·GPG 암호·크론을 두는 방식. rclon
 
 ### C — git JSON 백업
 
-- `scripts/dump-tastings.ts` — 시음 기록을 안정적인 순서(예: `drankOn`, `id`)로 정렬해
-  `data/backup/tasting-notes.json`에 쓴다. **정렬이 안정적이어야** 내용이 안 바뀐 날
-  diff가 비어 있다(쓸데없는 커밋 방지).
-  - 와인은 `id`가 아니라 `slug`로 참조한다. id는 재생성되면 바뀌지만 slug는 안 바뀐다.
-- 배포(`./server`)에서 덤프 → 바뀐 게 있으면 커밋·푸시. 또는 GitHub Actions에서
-  주기적으로 서버 DB를 읽어 커밋.
-  - ⚠️ `./server`는 안에서 `git pull`을 하므로, 서버에서 커밋·푸시하면 다음 배포의
-    pull과 충돌할 수 있다. 이 부분은 구현 시 신중히 — Actions 쪽이 안전할 수 있다.
-  - ⚠️ `server` 스크립트 자체를 고치면 **그 변경은 다음 배포부터** 적용된다
-    ([[wine-prod-deploy-data-safety]]).
-- 복구 경로도 함께 만든다: `scripts/restore-tastings.ts` — JSON을 읽어 없는 기록만
-  되살린다(있는 기록을 덮지 않는다, 유실 방지 원칙).
+**1단계(완료)** — 덤프·복구 스크립트와 기준 스냅샷:
+
+- `scripts/dump-tastings.ts` → `backup/tasting-notes.json` (37 KB, 60건).
+  형식·정렬 규칙은 `src/features/journal/tasting-backup.ts`에 두고 테스트로 고정했다.
+  - **와인은 `id`가 아니라 `slug`로 참조한다.** id(cuid)는 DB를 다시 만들면 바뀐다.
+  - **"내보낸 시각" 같은 필드를 넣지 않고 정렬을 고정한다.** 안 그러면 내용이 그대로여도
+    매번 diff가 생겨 헛커밋이 쌓인다.
+  - `--stdout`으로 파일 대신 표준출력에 쓸 수 있다(원격에서 긁어올 때).
+  - `isPublic` 여부와 무관하게 전부 담는다 — 백업 기준은 "화면에 보이는 것"이 아니라
+    "잃으면 안 되는 것"이다.
+- `scripts/restore-tastings.ts` — **없는 기록만 넣고 있는 기록은 건드리지 않는다.**
+  기본은 미리보기고 `--write`를 붙여야 실제로 넣는다. 원래 id를 그대로 살려 두 번 돌려도
+  중복이 생기지 않는다.
+- 백업 파일은 `/data/`가 아니라 **저장소 루트 `backup/`**에 둔다. `/data/`는 DB를 지키려고
+  통째로 gitignore돼 있고, 거기에 예외를 뚫으면 실수로 DB를 커밋할 위험이 생긴다.
+- 실제 프로덕션 데이터로 검증한 것: ① 두 번 돌려도 같은 파일 ② 지운 기록 1건이 전 필드
+  그대로 복구됨(나머지 59건 무변화) ③ 두 번 복구해도 중복 없음 ④ **복구가 수정된 기록을
+  덮어쓰지 않음**.
+
+**2단계(남음)** — 자동 실행:
+
+- `SERVER_SSH_KEY`는 **forced-command 키**(`command="cd .../wine.byb.kr && ./server"`)라
+  Actions에서 임의 명령을 돌릴 수 없다. 그래서 선택지는 둘이다.
+  - (가) 백업 전용 forced-command 키를 하나 더 두고(`command="... dump-tastings.ts --stdout"`)
+    Actions가 그걸로 긁어와 커밋한다. → 서버 `authorized_keys` 한 줄 + GitHub 시크릿 하나.
+  - (나) 관리자 인증이 걸린 내보내기 엔드포인트를 만들고 Actions가 HTTPS로 받아 커밋한다.
+    → GitHub 시크릿(관리자 비밀번호) 하나. 새 SSH 키는 없음.
+- ⚠️ 서버에서 직접 커밋·푸시하는 방식은 피한다. `./server`가 안에서 `git pull`을 해
+  충돌할 수 있다.
+- ⚠️ `server` 스크립트 자체를 고치면 **그 변경은 다음 배포부터** 적용된다
+  ([[wine-prod-deploy-data-safety]]).
 
 ### A — 홈 서버 pull 백업
 
@@ -132,10 +151,13 @@ health와 똑같이 byb.kr에 rclone·GPG 암호·크론을 두는 방식. rclon
 
 ## 열린 질문
 
-- C의 덤프·커밋을 어디서 돌릴까 — 서버(`./server`)에서 push할지, GitHub Actions에서
-  당겨와 커밋할지. `git pull` 충돌 가능성 때문에 Actions 쪽이 나아 보인다.
+- ~~C의 덤프·커밋을 어디서 돌릴까~~ → **결정: 서버에서 push하지 않는다**(`./server`의
+  `git pull`과 충돌). Actions가 당겨와 커밋한다. 다만 **당겨오는 방법**은 아직 안 정했다
+  (백업 전용 SSH 키 vs 관리자 인증 내보내기 엔드포인트 — 위 2단계 참고).
 - C에 시음 기록 외에 무엇을 더 담을까 — `Wine.colorHex`처럼 앱에서 편집하는 값도
   사용자 입력이라 유실 대상이다. 시음 기록만으로 시작하고 넓히는 게 안전하다.
+- `data/seed/`(초기 CSV·시음 노트 원문)도 gitignore돼 저장소에 없다. 시드의 출발점인데
+  서버·로컬에만 있는 셈이라, 이것도 백업 대상인지 따로 판단이 필요하다.
 - A에서 서버 `.env`(비밀)를 백업에 포함할지. health는 포함하되 **GPG 암호는 제외**한다.
 
 관련: [[wine-prod-deploy-data-safety]], [[wine-deploy-seed-ops]], `docs/DEPLOY.md`,
