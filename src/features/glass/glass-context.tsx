@@ -9,10 +9,17 @@ export type GlassState = {
   absorb: [number, number, number];
   glass: number;
   swirlScale: number;
+  /** 도수(%). 눈물자국의 세기·속도를 정한다. 모르면 null(흔한 식탁 와인으로 본다). */
+  abv: number | null;
 };
 
 // 홈 기본 잔(메를로 색·보르도 잔). 상세에서 홈으로 돌아오면 이 값으로 복귀한다.
-export const HOME_GLASS: GlassState = { absorb: [16, 78, 98], glass: 1, swirlScale: 0.8 };
+export const HOME_GLASS: GlassState = {
+  absorb: [16, 78, 98],
+  glass: 1,
+  swirlScale: 0.8,
+  abv: null,
+};
 
 type Ctx = {
   state: GlassState;
@@ -43,12 +50,12 @@ export function useGlassOptional(): Ctx | null {
  * 페이지에서 현재 잔 상태를 셸에 주입한다. 렌더 출력 없음.
  * 셸(GlassProvider) 밖에서 호출되면 아무 일도 하지 않는다(안전).
  */
-export function GlassSetter({ absorb, glass, swirlScale }: GlassState) {
+export function GlassSetter({ absorb, glass, swirlScale, abv }: GlassState) {
   const ctx = useGlassOptional();
   const setGlass = ctx?.setGlass;
   const [r, g, b] = absorb;
   useEffect(() => {
-    setGlass?.({ absorb: [r, g, b], glass, swirlScale });
-  }, [r, g, b, glass, swirlScale, setGlass]);
+    setGlass?.({ absorb: [r, g, b], glass, swirlScale, abv });
+  }, [r, g, b, glass, swirlScale, abv, setGlass]);
   return null;
 }

@@ -201,7 +201,12 @@ export function TastingNoteForm({
       <Field label="와인 색 (이날 관측)">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
           <div className="relative h-40 w-full shrink-0 overflow-hidden rounded-xl border border-foreground/12 bg-card/40 sm:h-32 sm:w-40">
-            <FluidLab wineAbsorb={previewAbsorb} glassType={previewGlass} swirlScale={0.4} />
+            <FluidLab
+              wineAbsorb={previewAbsorb}
+              abv={selWine?.abv}
+              glassType={previewGlass}
+              swirlScale={0.4}
+            />
           </div>
           <div className="flex flex-1 flex-col gap-2">
             <WineColorPicker
