@@ -5,6 +5,8 @@
 // 지저분한 시드 이름(공백·괄호·로마자 병기)에 맞도록 공백을 지우고 전체 이름으로 매칭한다.
 // 키는 정규화된 전체 이름이라 "까베르네 소비뇽"과 "까베르네 프랑"이 서로 안 겹친다.
 
+import { type GrapeAliasEntry, matchGrape } from "./grape-name";
+
 /** 음식 페어링 — 무엇과, 그리고 왜 어울리는지. 이유를 읽으면 다른 음식으로 대체할 때도 판단할 수 있다. */
 export interface Pairing {
   food: string;
@@ -22,7 +24,7 @@ export interface GrapeDetail {
   pairings?: Pairing[];
 }
 
-const ENTRIES: [string[], GrapeDetail][] = [
+const ENTRIES: readonly GrapeAliasEntry<GrapeDetail>[] = [
   // 레드
   [
     ["카나이올로", "Canaiolo"],
@@ -665,16 +667,9 @@ const ENTRIES: [string[], GrapeDetail][] = [
   ],
 ];
 
-const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
-
-/** 품종명으로 큐레이션 특성을 찾는다. 없으면 null. */
+/** 품종명으로 큐레이션 특성을 찾는다. 없으면 null. 표기 흔들림은 matchGrape 가 흡수한다. */
 export function grapeInfo(nameKo: string | null | undefined): GrapeDetail | null {
-  if (!nameKo) return null;
-  const n = norm(nameKo);
-  for (const [keys, detail] of ENTRIES) {
-    if (keys.some((k) => n.includes(k))) return detail;
-  }
-  return null;
+  return matchGrape(nameKo, ENTRIES);
 }
 
 /** 여러 품종에서 페어링을 모은다(와인 상세용). 대표 품종부터, 음식 기준 중복 제거. */

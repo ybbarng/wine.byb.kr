@@ -1,26 +1,55 @@
 // 실제 와인(DB) 의 type + 대표 품종 → 3D 글라스 색(Beer–Lambert absorb)·잔(glass 인덱스).
 // 홈 쇼케이스와 와인 상세/검색 페이지가 같은 규칙으로 글라스를 그리게 하는 단일 소스.
+import { type GrapeAliasEntry, matchGrape } from "./grape-name";
 import { GLASS } from "./showcase-wines";
 
 // 품종별 색(absorb). 없으면 타입 기본색. (홈 쇼케이스 값과 일관)
-const GRAPE_ABSORB: Record<string, [number, number, number]> = {
-  "카베르네 소비뇽": [13, 60, 80],
-  메를로: [16, 78, 98],
-  "피노 누아": [9, 40, 52],
-  시라: [11, 55, 72],
-  쉬라즈: [11, 55, 72],
-  산지오베제: [14, 66, 78],
-  네비올로: [10, 46, 58],
-  말벡: [15, 64, 74],
-  진판델: [13, 58, 72],
-  그르나슈: [10, 42, 54],
-  템프라니요: [13, 58, 72],
-  가메: [8, 36, 48],
-  샤르도네: [1.6, 3.2, 13],
-  "소비뇽 블랑": [1.3, 2.4, 11],
-  리슬링: [1.4, 2.6, 10],
-  모스카토: [1.5, 3.0, 12],
-};
+// 별칭으로 적는다 — DB 표기가 흔들려도(까/카, 띄어쓰기, 즐/슬) 같은 품종으로 본다.
+// 더 구체적인 품종을 위에 둔다(앞선 항목이 먼저 이긴다).
+
+/** 흑포도 — 껍질을 담가 색을 뽑았을 때의 색이다. 레드에만 쓴다. */
+const DARK_GRAPE_ABSORB: readonly GrapeAliasEntry<[number, number, number]>[] = [
+  [
+    ["까베르네 소비뇽", "카베르네 소비뇽"],
+    [13, 60, 80],
+  ],
+  [
+    ["메를로", "멀롯"],
+    [16, 78, 98],
+  ],
+  [
+    ["피노누아", "피노 누아"],
+    [9, 40, 52],
+  ],
+  [
+    ["쉬라즈", "시라"],
+    [11, 55, 72],
+  ],
+  [["산지오베제"], [14, 66, 78]],
+  [["네비올로"], [10, 46, 58]],
+  [["말벡"], [15, 64, 74]],
+  [
+    ["진판델", "프리미티보"],
+    [13, 58, 72],
+  ],
+  [["그르나슈"], [10, 42, 54]],
+  [["템프라니요"], [13, 58, 72]],
+  [["가메"], [8, 36, 48]],
+] as const;
+
+/** 청포도 — 화이트·스파클링·디저트처럼 옅은 술에 쓴다. */
+const LIGHT_GRAPE_ABSORB: readonly GrapeAliasEntry<[number, number, number]>[] = [
+  [["샤르도네"], [1.6, 3.2, 13]],
+  [["소비뇽 블랑"], [1.3, 2.4, 11]],
+  [
+    ["리즐링", "리슬링"],
+    [1.4, 2.6, 10],
+  ],
+  [
+    ["무스캇", "모스카토", "뮈스카"],
+    [1.5, 3.0, 12],
+  ],
+] as const;
 
 // 타입별 기본 색·잔.
 const TYPE_DEFAULT: Record<string, { absorb: [number, number, number]; glass: number }> = {
@@ -33,8 +62,16 @@ const TYPE_DEFAULT: Record<string, { absorb: [number, number, number]; glass: nu
   fortified: { absorb: [18, 74, 90], glass: GLASS.dessert },
 };
 
+/** 껍질 색이 그대로 드러나는 술. 나머지(화이트·로제·스파클링·디저트)는 옅다. */
+const DARK_TYPES = new Set(["red", "fortified"]);
+
 // 레드 중 넓은 볼(부르고뉴)이 어울리는 아로마틱 품종.
-const BURGUNDY_GRAPES = new Set(["피노 누아", "네비올로", "산지오베제", "가메"]);
+const BURGUNDY_GRAPES: readonly GrapeAliasEntry<true>[] = [
+  [["피노누아", "피노 누아"], true],
+  [["네비올로"], true],
+  [["산지오베제"], true],
+  [["가메"], true],
+] as const;
 
 // 타입·품종으로는 안 잡히는 특수한 색을 와인별(slug)로 지정. 로제 샴페인처럼
 // 품종을 넣으면(피노 누아 등) 오히려 어두워지는 경우를 여기서 바로잡는다.
@@ -114,8 +151,11 @@ export function wineGlassFor(
   let absorb = base.absorb;
   let glass = base.glass;
   const primary = grapeNames[0];
-  if (primary && GRAPE_ABSORB[primary]) absorb = GRAPE_ABSORB[primary];
-  if (t === "red" && primary && BURGUNDY_GRAPES.has(primary)) glass = GLASS.burgundy;
+  // 흑포도로 담근 옅은 술이 많다 — 블랑 드 누아 샴페인, 직압 로제. 껍질을 안 담갔으니
+  // 품종의 붉은색을 씌우면 안 된다. 술 색과 같은 계열의 표에서만 찾는다.
+  const byGrape = matchGrape(primary, DARK_TYPES.has(t) ? DARK_GRAPE_ABSORB : LIGHT_GRAPE_ABSORB);
+  if (byGrape) absorb = byGrape;
+  if (t === "red" && matchGrape(primary, BURGUNDY_GRAPES)) glass = GLASS.burgundy;
   if (slug && WINE_ABSORB[slug]) absorb = WINE_ABSORB[slug];
   if (colorHex) {
     const fromHex = hexToAbsorb(colorHex);
