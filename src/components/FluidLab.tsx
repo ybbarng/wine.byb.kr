@@ -42,6 +42,7 @@ import {
 } from "@/features/glass/glass-geometry";
 import { deriveLegs, type LegsProfile } from "@/features/glass/legs";
 import { deriveSloshConstants, stepSlosh } from "@/features/glass/slosh";
+import { flatWave, surfaceWaveHeight, W2SPD, W3SPD } from "@/features/glass/surface-wave";
 
 // 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
 
@@ -667,19 +668,15 @@ export default function FluidLab({
     //  - mode-2,3: 그 위를 천천히 도는 회전 로브(rp · cos(mθ-φ-w·t)).
     // 정지(waveAct=0)=평면. 위상 트리그(crC/crS/l2c…l3s)는 gg 에 담기고
     // render 에서 프레임마다 갱신. 파동 진폭·속도 상수는 잔과 무관해 공유.
-    const WAMP1 = 0.08; // 벽 크레스트(mode-1)
-    const WAMP2 = 0.024; // mode-2 로브
-    const WAMP3 = 0.014; // mode-3 로브
-    const WCREST_SHARP = 0.3; // Stokes 2차 — 주 마루 뾰족·골 완만(troch.js 검증, 평균 0)
-    // mode-m 각진동수 ω_m = √(g·k_m·tanh(k_m·h)), k_m = ε_m1/R (ε₂₁=3.054, ε₃₁=4.201).
-    // 위상이 cos(mθ−φ−w·t) 라 w 는 그 모드의 각진동수이고, 화면에서 도는 무늬의
-    // 각속도는 w/m 이다(차수가 높을수록 무늬가 느리게 돈다).
-    // ⚠️ 베셀 근 ε₂₁·ε₃₁ 을 그대로 여기 넣으면 안 된다(값이 비슷해 보이지만 파수를
-    // 정하는 상수지 각진동수가 아니다). 넣으면 10배 가까이 느려지고 차수 역전이 생긴다.
-    const W2SPD = 32.3; // mode-2 각진동수 → 무늬는 16.1 rad/s 로 회전
-    const W3SPD = 37.9; // mode-3 각진동수 → 무늬는 12.6 rad/s (mode-2 보다 느림 ✓)
+    // 진폭·속도 상수와 높이 식은 features/glass/surface-wave 에 있다(테스트로 고정).
+    // 여기서 다시 만들지 말 것 — 두 벌이 되면 곧 어긋나고, 이 파일은 `@ts-nocheck` 라
+    // 어긋나도 조용하다.
+    //
     // 표면 파동 높이. c,s=cosθ,sinθ(컬럼각), c2..s3=2θ·3θ 트리그, rp=r/rw(0중심~1벽).
     // 이 잔(gg)의 파동 위상·활성도를 읽어 render/rebuildLiquid 가 공유한다.
+    // 정점마다 불리므로 인자 객체를 새로 만들지 않고 이 두 개를 덮어써 재사용한다.
+    const wavePhase = flatWave();
+    const columnTrig = { c: 0, s: 0, c2: 0, s2: 0, c3: 0, s3: 0 };
     function surfWaveH(
       gg: GlassRuntime,
       c: number,
@@ -690,14 +687,20 @@ export default function FluidLab({
       s3: number,
       rp: number
     ): number {
-      if (gg.waveAct <= 1e-4) return 0;
-      const m1 = c * gg.crC + s * gg.crS; // cos(θ-φ)
-      const m2 = c2 * gg.l2c + s2 * gg.l2s; // cos(2θ-φ-w2·t)
-      const m3 = c3 * gg.l3c + s3 * gg.l3s; // cos(3θ-φ-w3·t)
-      // Stokes 2차 파형: 주 크레스트(mode-1) 마루를 뾰족하게·골을 완만하게 만든다.
-      // 사인파의 둥근 마루(젤리 표면)가 아니라 실제 중력파의 뾰족한 마루. 평균 0 → 부피 보존.
-      const m1s = m1 + WCREST_SHARP * (m1 * m1 - 0.5);
-      return gg.waveAct * (WAMP1 * rp * rp * m1s + WAMP2 * rp * m2 + WAMP3 * rp * m3);
+      wavePhase.act = gg.waveAct;
+      wavePhase.crC = gg.crC;
+      wavePhase.crS = gg.crS;
+      wavePhase.l2c = gg.l2c;
+      wavePhase.l2s = gg.l2s;
+      wavePhase.l3c = gg.l3c;
+      wavePhase.l3s = gg.l3s;
+      columnTrig.c = c;
+      columnTrig.s = s;
+      columnTrig.c2 = c2;
+      columnTrig.s2 = s2;
+      columnTrig.c3 = c3;
+      columnTrig.s3 = s3;
+      return surfaceWaveHeight(wavePhase, columnTrig, rp);
     }
     // Beer–Lambert: 와인 뒷면 거리 버퍼(두께=back−front) + 뒷면 재질 + 본 재질.
     // wineBackMat/liquidBodyMat/liquidMesh/liquidGeo/liquidPosAttr/glassGroup 은
