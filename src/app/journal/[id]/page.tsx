@@ -4,10 +4,15 @@ import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { NoteActions } from "@/features/journal/note-actions";
 import { getTastingNote } from "@/features/journal/queries";
-import { parseAromas, parseFlavor } from "@/features/journal/tasting-note-schema";
+import { parseAromas, parseFlavor, toDateInput } from "@/features/journal/tasting-note-schema";
 import { PriceBadge } from "@/features/wine/price-badge";
 import { RegionHierarchy } from "@/features/wine/region-hierarchy";
-import { FLAVOR_AXES, flavorLevelWord } from "@/features/wine/tasting-hints";
+import {
+  expectedAromaGroups,
+  expectedFlavorFor,
+  FLAVOR_AXES,
+  flavorLevelWord,
+} from "@/features/wine/tasting-hints";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 import { WineInfoSections } from "@/features/wine/wine-info-sections";
 import { priceVerdict, winePrice } from "@/features/wine/wine-price-info";
@@ -64,6 +69,19 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
   const aromas = parseAromas(note.aromasConfirmed); // 가이드 향 단계에서 맡은 향
   const flavor = parseFlavor(note.flavorFelt); // 가이드 맛 단계에서 느낀 정도(1~5)
   const feltAxes = FLAVOR_AXES.filter(({ key }) => flavor[key] != null);
+  // 기록할 때 곁들였던 "예상"을 다시 볼 때도 함께 보여준다. 예상만 보고 끝나면
+  // 배움이 반만 남는다 — 무엇을 예상했고 실제로 어땠는지가 나란히 있어야 다음에 쓴다.
+  // 예상은 기록한 항목 옆에만 붙인다(이 페이지는 안내가 아니라 기록이므로).
+  const expectedFlavor = expectedFlavorFor(grapeNames);
+  const expectedAromas = expectedAromaGroups({
+    grapes: grapeNames,
+    type: wine.type,
+    vintageYear: note.vintageYear,
+    drankOn: toDateInput(note.drankOn),
+    oakAging: wine.oakAging,
+  }).flatMap((g) => g.aromas);
+  // 예상했는데 고르지 않은 향 — "다음엔 이걸 찾아보자"가 된다.
+  const missedAromas = expectedAromas.filter((a) => !aromas.includes(a));
   const displayColor = note.colorHex ?? wine.colorHex ?? undefined;
   const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug, displayColor);
   const fair = winePrice(wine.slug);
@@ -227,30 +245,46 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
                 </span>
               ))}
             </div>
+            {/* 예상했는데 못 맡은 향 — 다음에 같은 와인을 열 때 찾아볼 거리가 된다. */}
+            {missedAromas.length > 0 ? (
+              <p className="mt-1.5 text-xs leading-snug text-muted/70">
+                예상했지만 고르지 않음 — {missedAromas.join(" · ")}
+              </p>
+            ) : null}
           </div>
         ) : null}
         {feltAxes.length > 0 ? (
           <div className="mt-3">
             <span className="text-[10px] uppercase tracking-wide text-muted">느낀 맛</span>
-            <div className="mt-1.5 flex flex-col gap-1.5">
+            {/* 좁은 화면에서 한 줄에 다 안 들어가므로 위저드 맛 단계와 같은 배치로 쌓는다:
+                윗줄에 축 이름과 예상, 아랫줄에 실제로 느낀 정도. */}
+            <div className="mt-1.5 flex flex-col gap-2">
               {feltAxes.map(({ key, label }) => {
                 const level = flavor[key] ?? 0;
                 return (
-                  <div key={key} className="flex items-center gap-2.5 text-sm">
-                    <span className="w-8 shrink-0 text-muted">{label}</span>
-                    <span className="flex gap-1" aria-hidden>
-                      {[1, 2, 3, 4, 5].map((n) => (
-                        <span
-                          key={n}
-                          className={`h-1.5 w-5 rounded-full ${
-                            n <= level ? "bg-gold" : "bg-foreground/12"
-                          }`}
-                        />
-                      ))}
-                    </span>
-                    <span className="text-xs text-muted/80">
-                      {level}/5 · {flavorLevelWord(key, level)}
-                    </span>
+                  <div key={key}>
+                    <div className="flex items-baseline justify-between gap-2 text-sm">
+                      <span className="text-muted">{label}</span>
+                      {/* 기록할 때 곁들였던 예상 — 맞았는지 틀렸는지는 매기지 않는다. */}
+                      {expectedFlavor[key] ? (
+                        <span className="text-xs text-gold/80">예상 {expectedFlavor[key]}</span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2.5">
+                      <span className="flex gap-1" aria-hidden>
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <span
+                            key={n}
+                            className={`h-1.5 w-5 rounded-full ${
+                              n <= level ? "bg-gold" : "bg-foreground/12"
+                            }`}
+                          />
+                        ))}
+                      </span>
+                      <span className="text-xs text-muted/80">
+                        {level}/5 · {flavorLevelWord(key, level)}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
