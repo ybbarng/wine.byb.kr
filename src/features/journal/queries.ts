@@ -1,3 +1,4 @@
+import { parseWinemaking } from "@/features/wine/winemaking";
 import { db } from "@/lib/db";
 
 // 마신 기록(내가 마신 기록) 조회. 작성은 관리자만, 조회는 누구나(§4.5).
@@ -15,6 +16,7 @@ export async function getWineOptions() {
       type: true,
       colorHex: true,
       oakAging: true,
+      winemaking: true,
       abv: true,
       // 단맛은 품종이 못 정하는 경우가 있어 라벨 표기(트로켄·브뤼)에서 읽는다.
       classification: true,
@@ -37,6 +39,7 @@ export async function getWineOptions() {
     type: w.type,
     colorHex: w.colorHex,
     oakAging: w.oakAging,
+    winemaking: parseWinemaking(w.winemaking),
     abv: w.abv,
     classification: w.classification,
     regionName: w.region?.nameKo ?? w.region?.parent?.nameKo ?? null,

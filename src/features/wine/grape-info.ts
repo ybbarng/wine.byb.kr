@@ -178,7 +178,9 @@ export const GRAPE_ENTRIES: readonly GrapeAliasEntry<GrapeDetail>[] = [
       body: "가벼움",
       acidity: "높음",
       tannin: "낮음",
-      aroma: ["붉은 과실", "빵", "꽃"],
+      // 빵·브리오슈는 이 포도의 향이 아니라 샴페인의 효모(리) 숙성에서 온다 →
+      // features/wine/winemaking 의 lees 로 옮겼다.
+      aroma: ["붉은 과실", "꽃"],
       pairings: [
         {
           food: "튀김·짭짤한 안주",

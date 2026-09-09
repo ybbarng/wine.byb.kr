@@ -17,6 +17,7 @@ import {
 import { wineGlassFor } from "@/features/wine/wine-glass";
 import { WineInfoSections } from "@/features/wine/wine-info-sections";
 import { priceVerdict, winePrice } from "@/features/wine/wine-price-info";
+import { parseWinemaking } from "@/features/wine/winemaking";
 import { formatDate, formatKRW } from "@/lib/format";
 import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
 
@@ -85,6 +86,7 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
     vintageYear: note.vintageYear,
     drankOn: toDateInput(note.drankOn),
     oakAging: wine.oakAging,
+    winemaking: parseWinemaking(wine.winemaking),
   }).flatMap((g) => g.aromas);
   // 예상했는데 고르지 않은 향 — "다음엔 이걸 찾아보자"가 된다.
   const missedAromas = expectedAromas.filter((a) => !aromas.includes(a));

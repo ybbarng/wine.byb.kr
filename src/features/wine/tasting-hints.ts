@@ -13,6 +13,7 @@ import { withJosa } from "@/lib/korean";
 import { type GrapeLike, levelOf, splitBlend, toShares, wordOf } from "./blend";
 import { grapeInfo } from "./grape-info";
 import { countryInfo, regionInfo } from "./region-info";
+import { type WinemakingTag, winemakingAromas, winemakingLabel, winemakingWhy } from "./winemaking";
 
 const COLOR_HINT: Record<string, string> = {
   red: "진한 루비~자주빛이 예상돼요 — 레드는 포도 껍질째 담가 색소가 진하게 우러나거든요.",
@@ -247,6 +248,8 @@ export function expectedAromaGroups(opts: {
   vintageYear?: number | null;
   drankOn?: string | null;
   oakAging?: string | null;
+  /** 양조 기법 태그. 빵·건포도처럼 포도가 아니라 양조에서 오는 향의 근거. */
+  winemaking?: WinemakingTag[];
 }): AromaGroup[] {
   const groups: AromaGroup[] = [];
   // 앞 묶음에서 이미 나온 향은 뒤에서 빼, 같은 칩이 두 번 뜨지 않게 한다.
@@ -277,6 +280,14 @@ export function expectedAromaGroups(opts: {
       `${withJosa(supportKnown.join("·"), "이/가")} 조금씩 섞여 있어요 — 주 품종만큼 앞에 서진 않아요.`,
       expectedAromasFor(support)
     );
+  }
+
+  // 양조에서 오는 향(효모 숙성의 빵, 말린 포도의 건포도). 품종·오크와 나란히 근거를 밝힌다.
+  const wm = opts.winemaking ?? [];
+  const wmAromas = winemakingAromas(wm);
+  if (wmAromas.length > 0) {
+    const label = winemakingLabel(wm);
+    add(label ? `양조에서 (${label})` : "양조에서", winemakingWhy(wm) ?? "", wmAromas);
   }
 
   const oaked = oakAromas(opts.oakAging);
