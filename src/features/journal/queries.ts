@@ -16,6 +16,8 @@ export async function getWineOptions() {
       colorHex: true,
       oakAging: true,
       abv: true,
+      // 단맛은 품종이 못 정하는 경우가 있어 라벨 표기(트로켄·브뤼)에서 읽는다.
+      classification: true,
       // 산지 기후 안내용 — 세부 산지 이름이 없으면 상위(국가·광역) 이름으로 찾는다.
       region: { select: { nameKo: true, parent: { select: { nameKo: true } } } },
       grapes: {
@@ -33,6 +35,7 @@ export async function getWineOptions() {
     colorHex: w.colorHex,
     oakAging: w.oakAging,
     abv: w.abv,
+    classification: w.classification,
     regionName: w.region?.nameKo ?? w.region?.parent?.nameKo ?? null,
     grapes: w.grapes.map((g) => g.grape.nameKo),
   }));

@@ -18,6 +18,7 @@ import {
   expectedFlavorFor,
   FLAVOR_AXES,
   oakNone,
+  sweetnessBreadthNote,
   wineAgeYears,
 } from "@/features/wine/tasting-hints";
 import { WineColorPicker } from "@/features/wine/wine-color-picker";
@@ -156,7 +157,24 @@ export function TastingNoteWizard({
   };
   // 가이드 맛 단계: 축별 예상 수준을 곁들여 보여주고, 실제로 느낀 정도(1~5)를 받는다.
   const flavorFelt = (watch("flavorFelt") as FlavorFelt | undefined) ?? {};
-  const expectedFlavor = useMemo(() => expectedFlavorFor(selWine?.grapes ?? []), [selWine]);
+  // 단맛은 라벨 표기(트로켄·브뤼)가 품종보다 앞선다 — 품종만으로는 못 정하는 경우가 있다.
+  const expectedFlavor = useMemo(
+    () =>
+      expectedFlavorFor(selWine?.grapes ?? [], {
+        type: selWine?.type,
+        label: [selWine?.nameLocal, selWine?.nameKo, selWine?.classification],
+      }),
+    [selWine]
+  );
+  // 예상을 비운 자리에 "왜 안 알려주는지"를 대신 놓는다.
+  const sweetNote = useMemo(
+    () =>
+      sweetnessBreadthNote(selWine?.grapes ?? [], {
+        type: selWine?.type,
+        label: [selWine?.nameLocal, selWine?.nameKo, selWine?.classification],
+      }),
+    [selWine]
+  );
   const setFlavor = (axis: keyof FlavorFelt, level: number) => {
     // 같은 값을 다시 누르면 해제(평가 안 함)한다.
     const next = { ...flavorFelt };
@@ -432,6 +450,8 @@ export function TastingNoteWizard({
             {/* 산지 기후·도수는 예상 값을 바꾸지 않고 치우칠 방향만 알려준다. */}
             {flavorClimateNote ? <span className="block mt-1">{flavorClimateNote}</span> : null}
             {alcoholNote ? <span className="block mt-1">{alcoholNote}</span> : null}
+            {/* 단맛 예상을 비웠으면 그 이유를 알린다(모르는 걸 아는 척하지 않는다). */}
+            {sweetNote ? <span className="block mt-1">{sweetNote}</span> : null}
           </p>
           {FLAVOR_AXES.map(({ key: axis, label, low, high }) => (
             <div key={axis}>
