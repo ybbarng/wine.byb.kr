@@ -24,7 +24,8 @@ export interface GrapeDetail {
   pairings?: Pairing[];
 }
 
-const ENTRIES: readonly GrapeAliasEntry<GrapeDetail>[] = [
+/** 품종 큐레이션 전체. 향 팔레트가 이 향들을 다 담는지 확인하는 테스트가 읽는다. */
+export const GRAPE_ENTRIES: readonly GrapeAliasEntry<GrapeDetail>[] = [
   // 레드
   [
     ["카나이올로", "Canaiolo"],
@@ -558,7 +559,7 @@ const ENTRIES: readonly GrapeAliasEntry<GrapeDetail>[] = [
       desc: "남프랑스의 화이트 품종. 부드럽고 향긋하며 블렌딩에 많이 쓰인다.",
       body: "중간",
       acidity: "낮음",
-      aroma: ["흰꽃", "사과"],
+      aroma: ["흰 꽃", "사과"],
       pairings: [
         {
           food: "해산물·샐러드",
@@ -573,7 +574,7 @@ const ENTRIES: readonly GrapeAliasEntry<GrapeDetail>[] = [
       desc: "남부 론 화이트 블렌딩. 산뜻한 산도와 감귤 향을 더한다.",
       body: "가벼움",
       acidity: "높음",
-      aroma: ["감귤", "흰꽃"],
+      aroma: ["감귤", "흰 꽃"],
       pairings: [
         {
           food: "해산물",
@@ -588,7 +589,7 @@ const ENTRIES: readonly GrapeAliasEntry<GrapeDetail>[] = [
       desc: "헝가리 토카이 블렌딩에 쓰는 품종. 귀부에 잘 걸려 스위트 와인에 쓰인다.",
       body: "중간",
       acidity: "중간",
-      aroma: ["흰꽃", "과일"],
+      aroma: ["흰 꽃", "과일"],
       pairings: [
         {
           food: "디저트",
@@ -641,7 +642,7 @@ const ENTRIES: readonly GrapeAliasEntry<GrapeDetail>[] = [
       desc: "루아르·남아공의 만능 화이트 품종. 드라이부터 스위트·스파클링까지 폭넓고, 산미가 높아 숙성력도 좋다.",
       body: "중간",
       acidity: "높음",
-      aroma: ["사과", "배", "꿀", "흰꽃"],
+      aroma: ["사과", "배", "꿀", "흰 꽃"],
       pairings: [
         {
           food: "닭·돼지 등 흰 살코기",
@@ -669,7 +670,7 @@ const ENTRIES: readonly GrapeAliasEntry<GrapeDetail>[] = [
 
 /** 품종명으로 큐레이션 특성을 찾는다. 없으면 null. 표기 흔들림은 matchGrape 가 흡수한다. */
 export function grapeInfo(nameKo: string | null | undefined): GrapeDetail | null {
-  return matchGrape(nameKo, ENTRIES);
+  return matchGrape(nameKo, GRAPE_ENTRIES);
 }
 
 /** 여러 품종에서 페어링을 모은다(와인 상세용). 대표 품종부터, 음식 기준 중복 제거. */
