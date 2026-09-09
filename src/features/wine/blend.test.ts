@@ -11,6 +11,7 @@ describe("splitBlend — 주 품종과 곁들임을 가른다", () => {
       { name: "그르나슈", percent: 30 },
     ]);
     expect(b.lead).toEqual(["쉬라즈", "무르베드르", "그르나슈"]);
+    expect(b.leadPercents).toEqual([40, 30, 30]);
     expect(b.support).toEqual([]);
   });
 
@@ -66,10 +67,19 @@ describe("splitBlend — 주 품종과 곁들임을 가른다", () => {
     expect(b.lead).toEqual(["많이", "적게"]);
   });
 
+  it("비율을 모르면 무게도 비운다", () => {
+    const b = splitBlend([{ name: "가" }, { name: "나" }]);
+    expect(b.leadPercents).toEqual([null]);
+  });
+
   it("단일 품종·빈 목록", () => {
-    expect(splitBlend([{ name: "템프라니요" }])).toEqual({ lead: ["템프라니요"], support: [] });
-    expect(splitBlend([])).toEqual({ lead: [], support: [] });
-    expect(splitBlend([{ name: "  " }])).toEqual({ lead: [], support: [] });
+    expect(splitBlend([{ name: "템프라니요" }])).toEqual({
+      lead: ["템프라니요"],
+      leadPercents: [null],
+      support: [],
+    });
+    expect(splitBlend([])).toEqual({ lead: [], leadPercents: [], support: [] });
+    expect(splitBlend([{ name: "  " }])).toEqual({ lead: [], leadPercents: [], support: [] });
   });
 });
 
