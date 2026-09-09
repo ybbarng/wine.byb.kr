@@ -9,6 +9,7 @@
 // 기후·도수: 값을 바꾸지 않고 "이래서 이렇게 치우칠 수 있다"는 안내만 곁들인다.
 
 import { deriveLegs, LEG_FLOOR } from "@/features/glass/legs";
+import { type GrapeLike, levelOf, splitBlend, toShares, wordOf } from "./blend";
 import { grapeInfo } from "./grape-info";
 import { countryInfo, regionInfo } from "./region-info";
 
@@ -33,10 +34,10 @@ export function expectedColorHint(type: string | null | undefined): string | nul
  * 대표 품종부터 순서를 지키며 중복은 제거한다. 아는 향이 없으면 빈 배열.
  * 블렌드는 여러 품종의 향을 합쳐 넉넉히 보여준다(비율 가중은 P5에서).
  */
-export function expectedAromasFor(grapeNames: (string | null | undefined)[]): string[] {
+export function expectedAromasFor(grapeNames: GrapeLike[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const name of grapeNames) {
+  for (const { name } of toShares(grapeNames)) {
     for (const aroma of grapeInfo(name)?.aroma ?? []) {
       if (seen.has(aroma)) continue;
       seen.add(aroma);
@@ -239,7 +240,8 @@ export interface AromaGroup {
  * 아는 게 없는 묶음은 아예 넣지 않는다.
  */
 export function expectedAromaGroups(opts: {
-  grapes: (string | null | undefined)[];
+  /** 비율을 알면 함께 준다. 모르면 이름만 — 그때는 순서(비율 내림차순)로 주 품종을 정한다. */
+  grapes: GrapeLike[];
   type: string | null | undefined;
   vintageYear?: number | null;
   drankOn?: string | null;
@@ -255,13 +257,26 @@ export function expectedAromaGroups(opts: {
     groups.push({ source, why, aromas: fresh });
   };
 
-  const fromGrapes = expectedAromasFor(opts.grapes);
-  const named = opts.grapes.filter((g): g is string => !!g && grapeInfo(g) != null);
+  // 주 품종과 곁들인 품종을 나눠 보여준다 — 다 합치면 목록이 길어져 무엇을 찾을지
+  // 흐려지고, 1%만 섞인 품종의 향까지 "예상"이라 말하는 셈이 된다.
+  const { lead, support } = splitBlend(opts.grapes);
+  const knows = (g: string) => grapeInfo(g) != null;
+  const leadKnown = lead.filter(knows);
+  const supportKnown = support.filter(knows);
   add(
-    "품종에서",
-    named.length > 0 ? `${named.join("·")}에서 흔히 나는 향이에요.` : "품종에서 오는 향이에요.",
-    fromGrapes
+    supportKnown.length > 0 ? "주 품종에서" : "품종에서",
+    leadKnown.length > 0
+      ? `${leadKnown.join("·")}에서 흔히 나는 향이에요.`
+      : "품종에서 오는 향이에요.",
+    expectedAromasFor(lead)
   );
+  if (supportKnown.length > 0) {
+    add(
+      "곁들인 품종에서",
+      `${supportKnown.join("·")}가 조금씩 섞여 있어요 — 주 품종만큼 앞에 서진 않아요.`,
+      expectedAromasFor(support)
+    );
+  }
 
   const oaked = oakAromas(opts.oakAging);
   if (oaked.length > 0) {
@@ -346,17 +361,30 @@ export type FlavorContext = {
 };
 
 export function expectedFlavorFor(
-  grapeNames: (string | null | undefined)[],
+  grapeNames: GrapeLike[],
   ctx: FlavorContext = {}
 ): ExpectedFlavor {
   const out: ExpectedFlavor = {};
-  for (const name of grapeNames) {
-    const info = grapeInfo(name);
-    if (!info) continue;
-    for (const { key } of FLAVOR_AXES) {
-      const v = info[key];
-      if (out[key] == null && v && !UNSETTLED_BY_GRAPE.has(v)) out[key] = v;
+  // 주 품종들만 평균낸다. 축마다 "값이 있는 첫 품종"을 쓰면 40/30/30 처럼 고르게 섞인
+  // 와인도 한 품종의 성격으로만 읽힌다. 곁들인 품종은 맛의 얼굴을 바꾸지 못한다고 본다.
+  const { lead } = splitBlend(grapeNames);
+  for (const { key } of FLAVOR_AXES) {
+    const levels: number[] = [];
+    let firstWord: string | null = null;
+    for (const name of lead) {
+      const v = grapeInfo(name)?.[key];
+      if (!v || UNSETTLED_BY_GRAPE.has(v)) continue;
+      firstWord ??= v;
+      const n = levelOf(v);
+      if (n != null) levels.push(n);
     }
+    if (levels.length === 0) {
+      // 말은 있는데 눈금으로 못 읽는 표현이면(새 표현 등) 첫 값을 그대로 쓴다.
+      if (firstWord) out[key] = firstWord;
+      continue;
+    }
+    const avg = levels.reduce((a, b) => a + b, 0) / levels.length;
+    out[key] = wordOf(avg, key === "body" ? "body" : "other");
   }
   // 단맛은 근거가 확실한 순서로: 라벨 표기 > 종류(디저트) > 품종.
   const fromLabel = labelSweetness(...(ctx.label ?? []));
@@ -371,12 +399,12 @@ export function expectedFlavorFor(
  * 라벨에서 이미 읽어냈거나 폭이 넓은 품종이 아니면 null(할 말이 없으면 안 한다).
  */
 export function sweetnessBreadthNote(
-  grapeNames: (string | null | undefined)[],
+  grapeNames: GrapeLike[],
   ctx: FlavorContext = {}
 ): string | null {
   // 이미 단맛을 알아냈으면(라벨·종류) 할 말이 없다.
   if (expectedFlavorFor(grapeNames, ctx).sweetness) return null;
-  for (const name of grapeNames) {
+  for (const { name } of toShares(grapeNames)) {
     const v = grapeInfo(name)?.sweetness;
     if (v && UNSETTLED_BY_GRAPE.has(v)) {
       return `${name} 같은 품종은 드라이도 스위트도 만들어요. 단맛은 품종보다 라벨(트로켄·브뤼 같은 표기)이 정하니, 예상 없이 느낀 대로 표시해 주세요.`;

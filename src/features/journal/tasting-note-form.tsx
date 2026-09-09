@@ -35,8 +35,8 @@ export interface WineOption {
   // 등급 표기 — 단맛을 품종이 못 정할 때 라벨에서 읽는 근거(트로켄·브뤼 등).
   classification: string | null;
   regionName: string | null;
-  // 가이드 시음 향 단계(P2)의 예상 향 계산용 — 비율순 품종 이름.
-  grapes: string[];
+  // 가이드 시음의 예상 계산용 — 비율 내림차순. 비율은 모르는 와인이 많다(null).
+  grapes: { name: string; percent: number | null }[];
 }
 
 // 수정 모드에서 폼을 채울 기존 값. 날짜는 서버에서 "YYYY-MM-DD"로 넘긴다.

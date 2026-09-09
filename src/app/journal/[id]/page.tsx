@@ -66,7 +66,8 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
         : null;
 
   // 잔 색: 이 기록에서 관찰한 색 → 와인 고정색 → 추정.
-  const grapeNames = wine.grapes.map((g) => g.grape.nameKo);
+  // 비율까지 넘겨야 주 품종/곁들임을 가른다(features/wine/blend).
+  const grapeNames = wine.grapes.map((g) => ({ name: g.grape.nameKo, percent: g.percent }));
   const aromas = parseAromas(note.aromasConfirmed); // 가이드 향 단계에서 맡은 향
   const flavor = parseFlavor(note.flavorFelt); // 가이드 맛 단계에서 느낀 정도(1~5)
   const feltAxes = FLAVOR_AXES.filter(({ key }) => flavor[key] != null);
@@ -88,7 +89,12 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
   // 예상했는데 고르지 않은 향 — "다음엔 이걸 찾아보자"가 된다.
   const missedAromas = expectedAromas.filter((a) => !aromas.includes(a));
   const displayColor = note.colorHex ?? wine.colorHex ?? undefined;
-  const { absorb, glass } = wineGlassFor(wine.type, grapeNames, wine.slug, displayColor);
+  const { absorb, glass } = wineGlassFor(
+    wine.type,
+    grapeNames.map((g) => g.name),
+    wine.slug,
+    displayColor
+  );
   const fair = winePrice(wine.slug);
 
   // 이름 아래 "생산자 · 지역 · 국가" — 생산자·지역은 각 페이지로 링크. 지역명이 국가와

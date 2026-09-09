@@ -21,7 +21,7 @@ export async function getWineOptions() {
       // 산지 기후 안내용 — 세부 산지 이름이 없으면 상위(국가·광역) 이름으로 찾는다.
       region: { select: { nameKo: true, parent: { select: { nameKo: true } } } },
       grapes: {
-        select: { grape: { select: { nameKo: true } } },
+        select: { percent: true, grape: { select: { nameKo: true } } },
         orderBy: { percent: "desc" },
       },
     },
@@ -37,7 +37,8 @@ export async function getWineOptions() {
     abv: w.abv,
     classification: w.classification,
     regionName: w.region?.nameKo ?? w.region?.parent?.nameKo ?? null,
-    grapes: w.grapes.map((g) => g.grape.nameKo),
+    // 비율을 함께 넘긴다 — 주 품종/곁들임을 가르는 근거다(features/wine/blend).
+    grapes: w.grapes.map((g) => ({ name: g.grape.nameKo, percent: g.percent })),
   }));
 }
 
