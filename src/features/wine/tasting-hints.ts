@@ -9,6 +9,7 @@
 // 기후·도수: 값을 바꾸지 않고 "이래서 이렇게 치우칠 수 있다"는 안내만 곁들인다.
 
 import { deriveLegs, LEG_FLOOR } from "@/features/glass/legs";
+import { withJosa } from "@/lib/korean";
 import { type GrapeLike, levelOf, splitBlend, toShares, wordOf } from "./blend";
 import { grapeInfo } from "./grape-info";
 import { countryInfo, regionInfo } from "./region-info";
@@ -195,9 +196,9 @@ export function climateAromaNote(regionName: string | null | undefined): string 
   const band = climateBand(regionName);
   const where = regionInfo(regionName)?.name ?? regionName ?? "이 산지";
   if (band === "cool")
-    return `${where}는 서늘한 산지라 과실이 농익기보다 새콤하고, 허브 같은 풋풋한 결이 스칠 수 있어요.`;
+    return `${withJosa(where, "은/는")} 서늘한 산지라 과실이 농익기보다 새콤하고, 허브 같은 풋풋한 결이 스칠 수 있어요.`;
   if (band === "warm")
-    return `${where}는 따뜻한 산지라 과실이 잘 익어 잼이나 말린 과일처럼 진하게 느껴질 수 있어요.`;
+    return `${withJosa(where, "은/는")} 따뜻한 산지라 과실이 잘 익어 잼이나 말린 과일처럼 진하게 느껴질 수 있어요.`;
   return null;
 }
 
@@ -206,9 +207,9 @@ export function climateFlavorNote(regionName: string | null | undefined): string
   const band = climateBand(regionName);
   const where = regionInfo(regionName)?.name ?? regionName ?? "이 산지";
   if (band === "cool")
-    return `${where}는 서늘한 산지라 산도가 예상보다 또렷하고 바디는 가볍게 느껴질 수 있어요.`;
+    return `${withJosa(where, "은/는")} 서늘한 산지라 산도가 예상보다 또렷하고 바디는 가볍게 느껴질 수 있어요.`;
   if (band === "warm")
-    return `${where}는 따뜻한 산지라 산도가 예상보다 눅고 바디는 묵직하게 느껴질 수 있어요.`;
+    return `${withJosa(where, "은/는")} 따뜻한 산지라 산도가 예상보다 눅고 바디는 묵직하게 느껴질 수 있어요.`;
   return null;
 }
 
@@ -273,7 +274,7 @@ export function expectedAromaGroups(opts: {
   if (supportKnown.length > 0) {
     add(
       "곁들인 품종에서",
-      `${supportKnown.join("·")}가 조금씩 섞여 있어요 — 주 품종만큼 앞에 서진 않아요.`,
+      `${withJosa(supportKnown.join("·"), "이/가")} 조금씩 섞여 있어요 — 주 품종만큼 앞에 서진 않아요.`,
       expectedAromasFor(support)
     );
   }

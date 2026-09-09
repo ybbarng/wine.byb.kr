@@ -11,7 +11,7 @@ export async function getWineBySlug(rawSlug: string) {
     include: {
       producer: true,
       region: { include: { parent: true } },
-      grapes: { include: { grape: true }, orderBy: { percent: "desc" } },
+      grapes: { include: { grape: true }, orderBy: [{ percent: "desc" }, { id: "asc" }] },
       tastingNotes: { where: { isPublic: true }, orderBy: [{ drankOn: "desc" }] },
     },
   });
