@@ -91,6 +91,9 @@ model Wine {
   // 오크 숙성 정도: none|light|heavy. null 이면 아직 모름(가이드에서 오크 얘기를 안 한다).
   // 바닐라·토스트는 품종이 아니라 양조(배럴)에서 오는 향이라 와인마다 따로 둔다.
   oakAging          String?
+  // 양조 기법(JSON 배열): lees·appassimento. null 이면 모름 → 가이드가 양조 얘기를 안 한다.
+  // 빵·브리오슈는 포도가 아니라 효모 숙성에서, 건포도는 포도를 말려서 온다.
+  winemaking        String?
   notesKo           String?
   foodPairing       String? // JSON 배열
   colorHex          String? // 컬러피커로 지정한 관찰 색(#rrggbb). 없으면 타입·품종 추정색.

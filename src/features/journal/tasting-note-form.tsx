@@ -9,6 +9,7 @@ import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
 import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, hexToAbsorb, wineGlassFor } from "@/features/wine/wine-glass";
+import type { WinemakingTag } from "@/features/wine/winemaking";
 import { wineDisplayName } from "@/lib/wine";
 import {
   type FlavorFelt,
@@ -30,6 +31,8 @@ export interface WineOption {
   colorHex: string | null;
   // 오크 숙성 정도(none|light|heavy). 오크에서 오는 향의 근거.
   oakAging: string | null;
+  // 양조 기법(lees·appassimento). 빵·건포도처럼 포도가 아닌 향의 근거.
+  winemaking: WinemakingTag[];
   // 도수·산지 — 질감(바디)과 기후 안내의 근거.
   abv: number | null;
   // 등급 표기 — 단맛을 품종이 못 정할 때 라벨에서 읽는 근거(트로켄·브뤼 등).

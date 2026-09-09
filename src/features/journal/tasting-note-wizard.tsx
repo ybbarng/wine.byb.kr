@@ -25,6 +25,7 @@ import {
 } from "@/features/wine/tasting-hints";
 import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
+import { winemakingFlavorNote } from "@/features/wine/winemaking";
 import { wineDisplayName } from "@/lib/wine";
 import { type ExistingNote, toDefaults, type WineOption } from "./tasting-note-form";
 import {
@@ -184,6 +185,7 @@ export function TastingNoteWizard({
         vintageYear,
         drankOn,
         oakAging: selWine?.oakAging,
+        winemaking: selWine?.winemaking,
       }),
     [selWine, vintageYear, drankOn]
   );
@@ -205,6 +207,8 @@ export function TastingNoteWizard({
   const [peeked, setPeeked] = useState<Record<string, boolean>>({});
   const peek = (step: string) => setPeeked((p) => ({ ...p, [step]: true }));
 
+  // 양조가 질감에 남기는 결(리 숙성의 크리미함 등). 예상 값은 바꾸지 않는다.
+  const winemakingNote = useMemo(() => winemakingFlavorNote(selWine?.winemaking ?? []), [selWine]);
   // 가이드 스월 단계(P4): 눈물자국은 도수가 만든다. 3D 잔과 같은 근거(deriveLegs)를 쓴다.
   const legsFelt = watch("legsFelt") as number | undefined;
   const legsNote = useMemo(() => expectedLegsNote(selWine?.abv), [selWine]);
@@ -578,6 +582,8 @@ export function TastingNoteWizard({
             {alcoholNote ? <span className="block mt-1">{alcoholNote}</span> : null}
             {/* 단맛 예상을 비웠으면 그 이유를 알린다(모르는 걸 아는 척하지 않는다). */}
             {sweetNote ? <span className="block mt-1">{sweetNote}</span> : null}
+            {/* 양조가 질감에 남기는 결(리 숙성의 크리미함 등). 예상 값은 바꾸지 않는다. */}
+            {winemakingNote ? <span className="block mt-1">{winemakingNote}</span> : null}
           </p>
           {FLAVOR_AXES.map(({ key: axis, label, low, high }) => (
             <div key={axis}>

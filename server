@@ -57,6 +57,10 @@ pnpm exec tsx scripts/enrich-wine-notes.ts || echo "⚠️  notes enrich skipped
 echo "🗂  Fixing catalog data..."
 pnpm exec tsx scripts/fix-catalog-data.ts || echo "⚠️  catalog fix skipped (non-fatal)"
 
+# 양조 기법(빵·건포도 향의 근거, 멱등). 실패해도 배포는 계속.
+echo "🧪 Setting winemaking..."
+pnpm exec tsx scripts/set-wine-winemaking.ts || echo "⚠️  winemaking skipped (non-fatal)"
+
 # 블렌드 비율(가이드 시음이 "주 품종"을 정하는 근거, 멱등). 실패해도 배포는 계속.
 echo "🍇 Setting blend percents..."
 pnpm exec tsx scripts/set-blend-percents.ts || echo "⚠️  blend percents skipped (non-fatal)"
