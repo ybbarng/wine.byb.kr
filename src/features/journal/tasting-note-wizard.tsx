@@ -17,6 +17,7 @@ import {
   expectedAromaGroups,
   expectedColorHint,
   expectedFlavorFor,
+  expectedLegsNote,
   FLAVOR_AXES,
   oakNone,
   sweetnessBreadthNote,
@@ -55,7 +56,7 @@ const VALUE_OPTS = ["아주 만족", "만족", "보통", "아쉬움", "매우 �
 const STEPS = [
   { key: "wine", title: "어떤 와인이에요?", sub: "기록할 와인을 골라요" },
   { key: "buy", title: "빈티지·구매 정보", sub: "병·영수증으로 미리 아는 것 — 없으면 건너뛰어요" },
-  { key: "color", title: "무슨 색이었어요?", sub: "실제 잔을 보며 맞춰요" },
+  { key: "color", title: "잔을 살펴볼까요?", sub: "색을 맞추고, 돌려서 벽을 봐요" },
   { key: "aroma", title: "어떤 향이 났어요?", sub: "코를 대고 맡은 향을 골라요" },
   { key: "flavor", title: "맛은 어땠어요?", sub: "한 모금 머금고 느낀 만큼 표시해요" },
   { key: "note", title: "한마디 남길까요?", sub: "인상·함께한 음식을 자유롭게" },
@@ -203,6 +204,10 @@ export function TastingNoteWizard({
   // 처음 답을 따로 저장하지는 않는다. 앞뒤 답을 나란히 두면 그 차이가 곧 채점이 된다.
   const [peeked, setPeeked] = useState<Record<string, boolean>>({});
   const peek = (step: string) => setPeeked((p) => ({ ...p, [step]: true }));
+
+  // 가이드 스월 단계(P4): 눈물자국은 도수가 만든다. 3D 잔과 같은 근거(deriveLegs)를 쓴다.
+  const legsFelt = watch("legsFelt") as number | undefined;
+  const legsNote = useMemo(() => expectedLegsNote(selWine?.abv), [selWine]);
 
   // 가이드 맛 단계: 축별 예상 수준을 곁들여 보여주고, 실제로 느낀 정도(1~5)를 받는다.
   const flavorFelt = (watch("flavorFelt") as FlavorFelt | undefined) ?? {};
@@ -417,6 +422,47 @@ export function TastingNoteWizard({
             onClear={() => setValue("colorHex", undefined)}
             showClear={!!colorHex}
           />
+          {/* 스월·외관(P4) — 색을 본 다음 자연스럽게 잔을 돌리게 된다. 그래서 단계를
+              새로 만들지 않고 여기 잇는다(잔 프리뷰도 이미 위에 있다). */}
+          {legsNote ? (
+            <div className="mt-2 border-foreground/10 border-t pt-3">
+              <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                <span className="text-sm text-foreground">눈물자국</span>
+                <span className="text-xs text-muted/70">잔을 돌린 뒤 벽을 보세요</span>
+              </div>
+              <div className="flex gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setValue("legsFelt", n === legsFelt ? undefined : n)}
+                    aria-label={`눈물자국 ${n}단계`}
+                    aria-pressed={legsFelt === n}
+                    className={`flex-1 rounded-lg border py-2.5 text-sm transition-colors ${
+                      legsFelt != null && n <= legsFelt
+                        ? "border-gold/50 bg-gold/10 text-foreground"
+                        : "border-foreground/15 text-muted hover:border-gold/40"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-1 flex justify-between text-[11px] text-muted/70">
+                <span>가늘고 빠르다</span>
+                <span>굵고 느리다</span>
+              </div>
+              <div className="mt-2">
+                <Reveal
+                  open={legsFelt != null || peeked.legs === true}
+                  onPeek={() => peek("legs")}
+                  prompt="돌려서 흘러내리는 걸 보고 표시해 보세요. 표시하면 예상을 알려드릴게요."
+                >
+                  {legsNote}
+                </Reveal>
+              </div>
+            </div>
+          ) : null}
         </div>
       );
 

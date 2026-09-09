@@ -54,6 +54,7 @@ export interface ExistingNote {
   colorHex: string | null;
   aromasConfirmed: string[];
   flavorFelt: FlavorFelt;
+  legsFelt: number | null;
   bodyText: string | null;
   foodPaired: string | null;
 }
@@ -72,6 +73,7 @@ export function toDefaults(n: ExistingNote): TastingNoteFormInput {
     colorHex: n.colorHex ?? undefined,
     aromasConfirmed: n.aromasConfirmed,
     flavorFelt: n.flavorFelt,
+    legsFelt: n.legsFelt ?? undefined,
     bodyText: n.bodyText ?? "",
     foodPaired: n.foodPaired ?? "",
   };

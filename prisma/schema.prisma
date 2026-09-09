@@ -150,6 +150,7 @@ model TastingNote {
   colorHex         String? // 이때 관측한 와인 색(#rrggbb). 와인 잔 색은 노트들의 평균.
   aromasConfirmed  String? // JSON 배열 — 가이드 시음에서 예상 향 중 실제로 맡은 향
   flavorFelt       String? // JSON — 가이드 시음에서 실제로 느낀 맛 {acidity,tannin,sweetness,body: 1..5}
+  legsFelt         Int? // 1~5 — 잔을 돌렸을 때 벽에 흐른 눈물자국이 얼마나 굵고 느렸는지
   bodyText         String?
   foodPaired       String?
   photos           String? // JSON 배열

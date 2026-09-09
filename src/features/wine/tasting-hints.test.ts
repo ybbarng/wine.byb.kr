@@ -10,6 +10,8 @@ import {
   expectedAromasFor,
   expectedColorHint,
   expectedFlavorFor,
+  expectedLegsLevel,
+  expectedLegsNote,
   flavorLevelWord,
   labelSweetness,
   oakNone,
@@ -356,5 +358,39 @@ describe("flavorLevelWord — 느낀 정도를 말로", () => {
     expect(flavorLevelWord("acidity", 5)).toBe("새콤하다");
     expect(flavorLevelWord("body", 2)).toBe("가볍다");
     expect(flavorLevelWord("body", 4)).toBe("묵직하다");
+  });
+});
+
+describe("눈물자국 예상 — 도수에서", () => {
+  it("도수가 높을수록 눈금이 크다", () => {
+    const moscato = expectedLegsLevel(5.5);
+    const table = expectedLegsLevel(13);
+    const zin = expectedLegsLevel(15.5);
+    expect(moscato).toBeLessThan(table as number);
+    expect(table).toBeLessThan(zin as number);
+    expect(moscato).toBe(1);
+    expect(zin).toBe(5);
+  });
+
+  it("눈금은 1~5 를 벗어나지 않는다", () => {
+    for (const abv of [0, 4, 8, 11, 12.5, 14, 20, 40]) {
+      const v = expectedLegsLevel(abv) as number;
+      expect(v, `${abv}%`).toBeGreaterThanOrEqual(1);
+      expect(v, `${abv}%`).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it("도수를 모르면 예상하지 않는다", () => {
+    expect(expectedLegsLevel(null)).toBeNull();
+    expect(expectedLegsLevel(undefined)).toBeNull();
+    expect(expectedLegsNote(null)).toBeNull();
+  });
+
+  it("안내에 도수와 근거가 들어간다", () => {
+    const note = expectedLegsNote(15.5) as string;
+    expect(note).toContain("15.5도");
+    expect(note).toContain("굵고");
+    expect(note).toContain("에탄올"); // 왜 그런지가 빠지면 안내가 아니라 단정이다
+    expect(expectedLegsNote(5.5)).toContain("가늘고");
   });
 });

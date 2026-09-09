@@ -10,6 +10,7 @@ import { RegionHierarchy } from "@/features/wine/region-hierarchy";
 import {
   expectedAromaGroups,
   expectedFlavorFor,
+  expectedLegsLevel,
   FLAVOR_AXES,
   flavorLevelWord,
 } from "@/features/wine/tasting-hints";
@@ -72,6 +73,7 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
   // 기록할 때 곁들였던 "예상"을 다시 볼 때도 함께 보여준다. 예상만 보고 끝나면
   // 배움이 반만 남는다 — 무엇을 예상했고 실제로 어땠는지가 나란히 있어야 다음에 쓴다.
   // 예상은 기록한 항목 옆에만 붙인다(이 페이지는 안내가 아니라 기록이므로).
+  const expectedLegs = expectedLegsLevel(wine.abv);
   const expectedFlavor = expectedFlavorFor(grapeNames, {
     type: wine.type,
     label: [wine.nameLocal, wine.nameKo, wine.classification],
@@ -292,6 +294,39 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
                   </div>
                 );
               })}
+            </div>
+          </div>
+        ) : null}
+        {note.legsFelt != null ? (
+          <div className="mt-3">
+            <span className="text-[10px] uppercase tracking-wide text-muted">눈물자국</span>
+            <div className="mt-1.5">
+              <div className="flex items-baseline justify-between gap-2 text-sm">
+                <span className="text-muted">굵기·속도</span>
+                {expectedLegs != null ? (
+                  <span className="text-xs text-gold/80">예상 {expectedLegs}/5</span>
+                ) : null}
+              </div>
+              <div className="mt-1 flex items-center gap-2.5">
+                <span className="flex gap-1" aria-hidden>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <span
+                      key={n}
+                      className={`h-1.5 w-5 rounded-full ${
+                        n <= (note.legsFelt ?? 0) ? "bg-gold" : "bg-foreground/12"
+                      }`}
+                    />
+                  ))}
+                </span>
+                <span className="text-xs text-muted/80">
+                  {note.legsFelt}/5 ·{" "}
+                  {note.legsFelt >= 4
+                    ? "굵고 느리다"
+                    : note.legsFelt <= 2
+                      ? "가늘고 빠르다"
+                      : "중간"}
+                </span>
+              </div>
             </div>
           </div>
         ) : null}
