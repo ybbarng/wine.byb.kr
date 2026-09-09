@@ -249,6 +249,55 @@ describe("expectedAromaGroups — 출처(품종·숙성)별 예상 향", () => {
   });
 });
 
+describe("양조에서 오는 향", () => {
+  it("양조 묶음이 근거와 함께 붙는다", () => {
+    const groups = expectedAromaGroups({
+      grapes: ["샤르도네"],
+      type: "champagne",
+      winemaking: ["lees"],
+    });
+    const wm = groups.find((g) => g.source.startsWith("양조에서"));
+    expect(wm?.source).toBe("양조에서 (효모 숙성)");
+    expect(wm?.aromas).toContain("브리오슈");
+    expect(wm?.why).toContain("효모"); // 근거 없이 단정하지 않는다
+  });
+
+  it("양조를 안 넘기면 묶음이 안 생긴다 — 모르면 말하지 않는다", () => {
+    const groups = expectedAromaGroups({ grapes: ["샤르도네"], type: "champagne" });
+    expect(groups.map((g) => g.source)).not.toContain("양조에서 (효모 숙성)");
+  });
+
+  it("품종 향과 겹치면 앞 묶음이 이기고 한 번만 뜬다", () => {
+    // 피노뫼니에에 아직 "빵"이 있다(양조 데이터가 prod 에 간 뒤 뗀다). 그동안 두 묶음에
+    // 같은 칩이 두 번 뜨면 안 된다.
+    const groups = expectedAromaGroups({
+      grapes: ["피노뫼니에"],
+      type: "champagne",
+      winemaking: ["lees"],
+    });
+    const all = groups.flatMap((g) => g.aromas);
+    expect(new Set(all).size).toBe(all.length);
+    expect(groups.find((g) => g.source === "품종에서")?.aromas).toContain("빵");
+    expect(groups.find((g) => g.source.startsWith("양조에서"))?.aromas).not.toContain("빵");
+  });
+
+  it("묶음 순서는 품종 → 양조 → 오크 → 숙성", () => {
+    const groups = expectedAromaGroups({
+      grapes: ["샤르도네"],
+      type: "white",
+      winemaking: ["lees"],
+      oakAging: "light",
+      vintageYear: 2010,
+      drankOn: "2026-09-09",
+    });
+    const order = groups.map((g) => g.source.replace(/ \(.*/, "").replace(/ \d+년\)/, ""));
+    expect(order[0]).toBe("품종에서");
+    expect(order[1]).toBe("양조에서");
+    expect(order[2]).toBe("오크에서");
+    expect(order[3]).toContain("숙성에서");
+  });
+});
+
 describe("오크에서 오는 향", () => {
   it("오크를 쓴 와인만 오크 묶음이 붙고, 정도에 따라 향이 다르다", () => {
     const light = expectedAromaGroups({

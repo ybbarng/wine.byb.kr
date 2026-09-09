@@ -14,6 +14,9 @@
 
 export type WinemakingTag = "lees" | "appassimento";
 
+/** 정의된 태그 전부. 테스트가 이걸 순회해 향이 팔레트에 다 있는지 확인한다. */
+export const ALL_WINEMAKING_TAGS: WinemakingTag[] = ["lees", "appassimento"];
+
 type TechniqueDetail = {
   /** 화면에 보일 이름. "양조에서 (효모 숙성)" 처럼 근거를 밝히는 데 쓴다. */
   label: string;
@@ -34,7 +37,7 @@ const TECHNIQUES: Record<WinemakingTag, TechniqueDetail> = {
   },
   appassimento: {
     label: "포도 말리기",
-    aromas: ["건포도", "말린 자두", "잼"],
+    aromas: ["건포도", "말린 자두"],
     why: "포도를 말려 수분을 날린 뒤 담갔어요 — 당과 향이 농축돼 건포도처럼 졸인 단 향이 납니다.",
     flavorNote: "말린 포도로 담가 같은 품종보다 바디가 두툼하고 단맛이 도는 인상일 수 있어요.",
   },
@@ -46,7 +49,12 @@ export function parseWinemaking(raw: string | null | undefined): WinemakingTag[]
   try {
     const v = JSON.parse(raw);
     if (!Array.isArray(v)) return [];
-    return v.filter((t): t is WinemakingTag => typeof t === "string" && t in TECHNIQUES);
+    // `t in TECHNIQUES` 는 프로토타입 체인까지 봐서 "constructor"·"toString" 이 통과한다.
+    // 그러면 화면에 함수 소스가 찍힐 수도 있다. 자기 키만 본다.
+    const tags = v.filter(
+      (t): t is WinemakingTag => typeof t === "string" && Object.hasOwn(TECHNIQUES, t)
+    );
+    return [...new Set(tags)];
   } catch {
     return [];
   }
@@ -54,7 +62,7 @@ export function parseWinemaking(raw: string | null | undefined): WinemakingTag[]
 
 /** 태그 배열을 DB 저장용 JSON 문자열로. 비었으면 null(= 모름). */
 export function serializeWinemaking(tags: WinemakingTag[]): string | null {
-  const kept = tags.filter((t) => t in TECHNIQUES);
+  const kept = [...new Set(tags.filter((t) => Object.hasOwn(TECHNIQUES, t)))];
   return kept.length > 0 ? JSON.stringify(kept) : null;
 }
 
@@ -63,7 +71,7 @@ export function winemakingAromas(tags: WinemakingTag[]): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const t of tags) {
-    for (const a of TECHNIQUES[t]?.aromas ?? []) {
+    for (const a of TECHNIQUES[t].aromas) {
       if (seen.has(a)) continue;
       seen.add(a);
       out.push(a);
@@ -74,18 +82,18 @@ export function winemakingAromas(tags: WinemakingTag[]): string[] {
 
 /** "효모 숙성·포도 말리기" 처럼 근거로 밝힐 이름. 없으면 null. */
 export function winemakingLabel(tags: WinemakingTag[]): string | null {
-  const labels = tags.map((t) => TECHNIQUES[t]?.label).filter(Boolean);
+  const labels = tags.map((t) => TECHNIQUES[t].label);
   return labels.length > 0 ? labels.join("·") : null;
 }
 
 /** 왜 그 향이 나는지. 여러 기법이면 이어 붙인다. 없으면 null. */
 export function winemakingWhy(tags: WinemakingTag[]): string | null {
-  const whys = tags.map((t) => TECHNIQUES[t]?.why).filter(Boolean);
+  const whys = tags.map((t) => TECHNIQUES[t].why);
   return whys.length > 0 ? whys.join(" ") : null;
 }
 
 /** 맛·질감 안내. 예상 값은 바꾸지 않는다. 없으면 null. */
 export function winemakingFlavorNote(tags: WinemakingTag[]): string | null {
-  const notes = tags.map((t) => TECHNIQUES[t]?.flavorNote).filter(Boolean);
+  const notes = tags.map((t) => TECHNIQUES[t].flavorNote);
   return notes.length > 0 ? notes.join(" ") : null;
 }

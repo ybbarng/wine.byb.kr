@@ -207,8 +207,9 @@ export function TastingNoteWizard({
   const [peeked, setPeeked] = useState<Record<string, boolean>>({});
   const peek = (step: string) => setPeeked((p) => ({ ...p, [step]: true }));
 
-  // 가이드 스월 단계(P4): 눈물자국은 도수가 만든다. 3D 잔과 같은 근거(deriveLegs)를 쓴다.
+  // 양조가 질감에 남기는 결(리 숙성의 크리미함 등). 예상 값은 바꾸지 않는다.
   const winemakingNote = useMemo(() => winemakingFlavorNote(selWine?.winemaking ?? []), [selWine]);
+  // 가이드 스월 단계(P4): 눈물자국은 도수가 만든다. 3D 잔과 같은 근거(deriveLegs)를 쓴다.
   const legsFelt = watch("legsFelt") as number | undefined;
   const legsNote = useMemo(() => expectedLegsNote(selWine?.abv), [selWine]);
 

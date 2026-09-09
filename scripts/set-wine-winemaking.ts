@@ -21,9 +21,12 @@ const WINEMAKING: Record<string, WinemakingTag[]> = {
   "gosset-grand-rose-brut": ["lees"], // 샴페인(전통방식). 고세는 리 숙성이 긴 하우스다
   "vranken-pommery-brut-nature": ["lees"], // notesKo: 빵 향
   "marques-de-monistrol-cava-brut": ["lees"], // notesKo: 전통방식, 은은한 빵 효모 향
+  "brown-brothers-premium-cuvee": ["lees"], // notesKo: 병 안 2차 발효 + 효모 위 몇 년, 비스킷·빵
+  // 샴페인·카바는 법으로 병내 효모 숙성을 거치므로(샴페인 15개월·카바 9개월 이상)
+  // 개별 서술이 짧아도 lees 로 본다. 고세는 리 숙성이 긴 하우스로 알려져 있다.
 
-  // 브라운 브라더스 프리미엄 뀌베는 탱크(샤르마) 방식으로 알려져 있어 리 숙성 향이
-  // 앞서지 않는다. notesKo 도 사과·시트러스 중심이라 적지 않는다(모르면 말 안 함).
+  // ── 스파클링이 아니어도 효모 앙금과 함께 숙성하면 질감이 달라진다 ──
+  "domaine-laroche-chablis-saint-martin": ["lees"], // notesKo: 발효 찌꺼기와 함께 숙성해 질감이 매끈
 
   // ── 포도를 말려 담근 와인 ──
   "aprimondo-appassimento-sangiovese-rubicone": ["appassimento"], // 이름·notesKo 모두 아파시멘토
@@ -42,12 +45,12 @@ async function main() {
       problems.push(`와인 없음: ${slug}`);
       continue;
     }
-    const next = serializeWinemaking(tags);
-    if (next == null) {
-      problems.push(`${slug}: 알 수 없는 태그만 적혀 있다 — ${tags.join(", ")}`);
+    if (tags.length === 0) {
+      problems.push(`${slug}: 태그가 비어 있다 — 적을 게 없으면 항목을 지울 것`);
       continue;
     }
-    if (wine.winemaking === next) continue; // 멱등
+    const next = serializeWinemaking(tags);
+    if (next == null || wine.winemaking === next) continue; // 멱등
     await db.wine.update({ where: { id: wine.id }, data: { winemaking: next } });
     console.log(`+ ${wine.nameKo} · ${wine.winemaking ?? "없음"} → ${next}`);
     changed++;
