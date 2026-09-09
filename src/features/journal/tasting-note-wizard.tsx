@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { ALL_PALETTE_AROMAS, AROMA_PALETTE } from "@/features/wine/aroma-palette";
 import {
   abvNote,
   agingColorNote,
@@ -64,6 +65,43 @@ const STEPS = [
 
 const inputClass =
   "w-full rounded-xl border border-foreground/20 bg-card/60 px-3 py-3 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";
+
+/**
+ * 예상 안내를 "답한 뒤"에 여는 껍데기. 답하기 전에는 무엇을 할 차례인지만 보여주고,
+ * 그래도 보고 싶으면 눌러서 열 수 있다(가이드는 강제가 아니라 곁들임).
+ */
+function Reveal({
+  open,
+  onPeek,
+  prompt,
+  children,
+}: {
+  open: boolean;
+  onPeek: () => void;
+  prompt: string;
+  children: React.ReactNode;
+}) {
+  if (!open) {
+    return (
+      <div className="rounded-xl border border-foreground/12 bg-foreground/[0.03] px-3 py-2">
+        <p className="text-sm leading-snug text-muted">{prompt}</p>
+        <button
+          type="button"
+          onClick={onPeek}
+          className="mt-1 text-xs text-gold/80 underline decoration-transparent underline-offset-2 transition-colors hover:decoration-gold/50"
+        >
+          예상 먼저 보기
+        </button>
+      </div>
+    );
+  }
+  return (
+    <p className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2 text-sm leading-snug text-muted">
+      <span className="mr-1 font-medium text-gold">예상</span>
+      {children}
+    </p>
+  );
+}
 
 export function TastingNoteWizard({
   wines,
@@ -155,6 +193,17 @@ export function TastingNoteWizard({
       : [...aromasConfirmed, aroma];
     setValue("aromasConfirmed", next, { shouldValidate: true });
   };
+  // ── 예상은 "먼저 답한 뒤"에 연다 ─────────────────────────────────────
+  // 예상을 먼저 보여주면 거기 매몰된다 — 적힌 색을 보고, 적힌 향을 맡고, 적힌 수준을
+  // 고른다. 그래서 각 단계는 스스로 답하기 전까지 예상을 감춘다. 답하면 그 자리에서
+  // 열리고, 입력은 계속 열려 있어 고치고 싶으면 고친다(고치라고 묻지는 않는다).
+  //
+  // 안 답하고도 보고 싶으면 "예상 먼저 보기"로 열 수 있다 — 가이드는 강제가 아니라
+  // 곁들임이라는 원칙(docs/guided-tasting.md)을 지킨다.
+  // 처음 답을 따로 저장하지는 않는다. 앞뒤 답을 나란히 두면 그 차이가 곧 채점이 된다.
+  const [peeked, setPeeked] = useState<Record<string, boolean>>({});
+  const peek = (step: string) => setPeeked((p) => ({ ...p, [step]: true }));
+
   // 가이드 맛 단계: 축별 예상 수준을 곁들여 보여주고, 실제로 느낀 정도(1~5)를 받는다.
   const flavorFelt = (watch("flavorFelt") as FlavorFelt | undefined) ?? {};
   // 단맛은 라벨 표기(트로켄·브뤼)가 품종보다 앞선다 — 품종만으로는 못 정하는 경우가 있다.
@@ -338,14 +387,17 @@ export function TastingNoteWizard({
     if (key === "color")
       return (
         <div className="flex flex-col gap-3">
-          {/* 가이드: 이 와인의 예상 색과 근거를 먼저 알려준다(강제 아님, 곁들이는 안내). */}
+          {/* 예상 색은 먼저 눈으로 보고 맞춘 뒤에 연다 — 먼저 보면 그 색을 찾게 된다. */}
           {colorHint || colorAgingNote ? (
-            <p className="rounded-xl border border-gold/25 bg-gold/5 px-3 py-2 text-sm leading-snug text-muted">
-              <span className="mr-1 font-medium text-gold">예상</span>
+            <Reveal
+              open={colorHex != null || peeked.color === true}
+              onPeek={() => peek("color")}
+              prompt="잔을 기울여 색부터 맞춰 보세요. 맞추면 예상 색을 알려드릴게요."
+            >
               {colorHint}
               {/* 빈티지를 적었으면 나이가 색에 남긴 흔적도 덧붙인다. */}
               {colorAgingNote ? <span className="block mt-1">{colorAgingNote}</span> : null}
-            </p>
+            </Reveal>
           ) : null}
           <div
             className="relative mx-auto h-72 w-full max-w-[19rem] overflow-hidden rounded-2xl border border-foreground/12"
@@ -370,7 +422,8 @@ export function TastingNoteWizard({
 
     if (key === "aroma") {
       // 예상 목록에 없지만 이미 고른 향(편집 시 데이터가 바뀐 경우)은 따로 묶어 남긴다.
-      const extras = aromasConfirmed.filter((a) => !expectedAromas.includes(a));
+      // 팔레트에 없는데 이미 고른 향(옛 데이터·품종 변경)은 지워지지 않게 따로 남긴다.
+      const extras = aromasConfirmed.filter((a) => !ALL_PALETTE_AROMAS.includes(a));
       const chip = (aroma: string) => {
         const on = aromasConfirmed.includes(aroma);
         return (
@@ -389,26 +442,57 @@ export function TastingNoteWizard({
           </button>
         );
       };
+      // 예상은 고른 뒤에 연다. 예상 향만 칩으로 깔면 그 목록이 곧 답안지가 되어,
+      // 적힌 향을 맡게 되고 목록에 없는 향은 고를 수도 없다. 그래서 넓은 어휘
+      // (AROMA_PALETTE)를 먼저 깔고, 고른 뒤에 무엇이 예상이었는지 알려준다.
+      const aromaOpen = aromasConfirmed.length > 0 || peeked.aroma === true;
+      const missed = expectedAromas.filter((a) => !aromasConfirmed.includes(a));
+      const hit = aromasConfirmed.filter((a) => expectedAromas.includes(a));
       return (
         <div className="flex flex-col gap-4">
           {aromaGroups.length === 0 ? (
             <p className="rounded-xl border border-foreground/12 bg-foreground/[0.03] px-3 py-2 text-sm leading-snug text-muted">
-              이 와인은 예상 향 정보가 아직 없어요. 다음 단계에서 느낀 향을 자유롭게 적어 주세요.
+              이 와인은 예상 향 정보가 아직 없어요. 맡은 향을 자유롭게 골라 주세요.
             </p>
-          ) : null}
-          {/* 어디서 오는 향인지(품종/숙성) 묶어 보여준다 — 예상만이 아니라 근거까지. */}
-          {aromaGroups.map((group) => (
-            <div key={group.source}>
+          ) : (
+            <Reveal
+              open={aromaOpen}
+              onPeek={() => peek("aroma")}
+              prompt="먼저 코를 대고, 맡은 향을 골라 보세요. 고르면 이 와인에서 예상되던 향을 알려드릴게요."
+            >
+              <span className="block">이 와인의 품종·숙성·오크에서 오는 향이에요.</span>
+              {aromaGroups.map((group) => (
+                <span key={group.source} className="mt-1.5 block">
+                  <span className="font-medium text-gold/90">{group.source}</span>{" "}
+                  {group.aromas.join(" · ")}
+                  <span className="block text-xs text-muted/80">{group.why}</span>
+                </span>
+              ))}
+              {hit.length > 0 ? (
+                <span className="mt-1.5 block">
+                  이 중 <span className="text-foreground">{hit.join(" · ")}</span> 를 찾으셨어요.
+                </span>
+              ) : null}
+              {missed.length > 0 ? (
+                <span className="mt-1.5 block text-xs">
+                  아직 안 고른 예상 향: {missed.join(" · ")} — 다시 맡아보고 있으면 더해 주세요.
+                </span>
+              ) : null}
+            </Reveal>
+          )}
+          {/* 어휘 팔레트 — 답이 아니라 "무엇을 고를 수 있는지"다. 계열로 좁혀 간다. */}
+          {AROMA_PALETTE.map((cat) => (
+            <div key={cat.name}>
               <div className="mb-1.5">
-                <span className="text-sm font-medium text-gold">{group.source}</span>
-                <p className="mt-0.5 text-xs leading-snug text-muted">{group.why}</p>
+                <span className="text-sm font-medium text-foreground">{cat.name}</span>
+                <p className="mt-0.5 text-xs leading-snug text-muted">{cat.hint}</p>
               </div>
-              <div className="flex flex-wrap gap-2">{group.aromas.map(chip)}</div>
+              <div className="flex flex-wrap gap-2">{cat.aromas.map(chip)}</div>
             </div>
           ))}
           {extras.length > 0 ? (
             <div>
-              <span className="text-sm font-medium text-muted">이전에 고른 향</span>
+              <span className="text-sm font-medium text-muted">그 밖에 고른 향</span>
               <div className="mt-1.5 flex flex-wrap gap-2">{extras.map(chip)}</div>
             </div>
           ) : null}
@@ -437,14 +521,10 @@ export function TastingNoteWizard({
                 : "border border-foreground/12 bg-foreground/[0.03]"
             }`}
           >
-            {hasAnyExpected ? (
-              <>
-                <span className="mr-1 font-medium text-gold">예상</span>이 와인의 품종이면 보통 이런
-                맛이에요. 한 모금 머금고 실제로 느낀 만큼 표시해 보세요.
-              </>
-            ) : (
-              "이 와인은 예상 맛 정보가 아직 없어요. 느낀 만큼 자유롭게 표시해 주세요."
-            )}
+            {hasAnyExpected
+              ? // 예상 수준은 축마다 따로, 그 축을 표시한 뒤에 옆에 뜬다(아래 참고).
+                "한 모금 머금고 축마다 느낀 만큼 표시해 보세요. 표시하면 그 축의 예상 수준을 알려드릴게요."
+              : "이 와인은 예상 맛 정보가 아직 없어요. 느낀 만큼 자유롭게 표시해 주세요."}
             {/* 빈티지를 적었으면 나이가 맛(특히 타닌)에 남긴 흔적도 덧붙인다. */}
             {flavorAgingNote ? <span className="block mt-1">{flavorAgingNote}</span> : null}
             {/* 산지 기후·도수는 예상 값을 바꾸지 않고 치우칠 방향만 알려준다. */}
@@ -457,8 +537,20 @@ export function TastingNoteWizard({
             <div key={axis}>
               <div className="mb-1.5 flex items-baseline justify-between gap-2">
                 <span className="text-sm text-foreground">{label}</span>
+                {/* 축을 표시하기 전엔 예상을 감춘다 — 먼저 보면 그 칸을 고르게 된다.
+                    표시하면 그 자리에서 열리고, 고치고 싶으면 그냥 다시 누르면 된다. */}
                 {expectedFlavor[axis] ? (
-                  <span className="text-xs text-gold/90">예상 {expectedFlavor[axis]}</span>
+                  flavorFelt[axis] != null || peeked[`flavor:${axis}`] === true ? (
+                    <span className="text-xs text-gold/90">예상 {expectedFlavor[axis]}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => peek(`flavor:${axis}`)}
+                      className="text-xs text-muted/70 underline decoration-transparent underline-offset-2 transition-colors hover:decoration-muted/50"
+                    >
+                      예상 먼저 보기
+                    </button>
+                  )
                 ) : null}
               </div>
               <div className="flex gap-1.5">
