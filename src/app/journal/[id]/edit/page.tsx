@@ -34,6 +34,7 @@ export default async function EditTastingNotePage({ params }: PageProps<"/journa
     colorHex: n.colorHex,
     aromasConfirmed: parseAromas(n.aromasConfirmed),
     flavorFelt: parseFlavor(n.flavorFelt),
+    legsFelt: n.legsFelt,
     bodyText: n.bodyText,
     foodPaired: n.foodPaired,
   };

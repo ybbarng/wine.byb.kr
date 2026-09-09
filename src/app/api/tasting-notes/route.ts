@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
       colorHex: d.colorHex ?? null,
       aromasConfirmed: serializeAromas(d.aromasConfirmed),
       flavorFelt: serializeFlavor(d.flavorFelt),
+      legsFelt: d.legsFelt ?? null,
       bodyText: d.bodyText ?? null,
       foodPaired: d.foodPaired ?? null,
       owner: "admin",

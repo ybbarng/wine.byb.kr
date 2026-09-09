@@ -8,6 +8,7 @@
 // 오크: 배럴에서 오는 향(바닐라·토스트)은 품종이 아니라 Wine.oakAging 을 근거로.
 // 기후·도수: 값을 바꾸지 않고 "이래서 이렇게 치우칠 수 있다"는 안내만 곁들인다.
 
+import { deriveLegs, LEG_FLOOR } from "@/features/glass/legs";
 import { grapeInfo } from "./grape-info";
 import { countryInfo, regionInfo } from "./region-info";
 
@@ -382,4 +383,33 @@ export function sweetnessBreadthNote(
     }
   }
   return null;
+}
+
+// ── 스월·외관(눈물자국) ─────────────────────────────────────────────
+// 잔을 돌리면 벽에 얇은 막이 남고, 거기서 에탄올이 물보다 빨리 증발하며 액체를 끌어
+// 올린다(마랑고니). 그래서 **눈물은 도수가 만든다** — 굵고 느리면 도수가 높다는 신호다.
+//
+// 세기·속도는 3D 잔이 쓰는 `features/glass/legs` 의 `deriveLegs` 를 그대로 쓴다.
+// 안내와 화면이 **같은 근거**를 봐야 "예상대로인지" 눈으로 대볼 수 있다.
+
+/** 눈물 세기(0~1)를 1~5 눈금으로. 화면의 잔과 사용자의 눈금이 같은 축을 쓰게 한다. */
+export function expectedLegsLevel(abv: number | null | undefined): number | null {
+  if (abv == null || !Number.isFinite(abv)) return null;
+  const { strength } = deriveLegs(abv);
+  // strength 는 하한 LEG_FLOOR(0.15)~1 이라 그 구간을 1~5 로 편다.
+  const t = (strength - LEG_FLOOR) / (1 - LEG_FLOOR);
+  return Math.min(5, Math.max(1, Math.round(1 + t * 4)));
+}
+
+/** 눈물 예상 한 줄(근거 포함). 도수를 모르면 null — 지어내지 않는다. */
+export function expectedLegsNote(abv: number | null | undefined): string | null {
+  const level = expectedLegsLevel(abv);
+  if (level == null) return null;
+  const how =
+    level >= 4
+      ? "굵고 천천히 흐를 거예요"
+      : level <= 2
+        ? "가늘고 금방 사라질 거예요"
+        : "중간쯤으로 흐를 거예요";
+  return `${abv}도라 눈물자국이 ${how} — 눈물은 에탄올이 만들거든요. 도수가 높을수록 띠가 두껍고 점성이 커져 느리게 내려와요.`;
 }

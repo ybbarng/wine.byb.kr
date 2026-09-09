@@ -65,6 +65,8 @@ export const tastingNoteSchema = z.object({
       })
       .optional()
   ),
+  // 가이드 시음(P4): 잔을 돌렸을 때 눈물자국이 얼마나 굵고 느렸는지. 1~5, 안 봤으면 없음.
+  legsFelt: flavorLevel,
 });
 
 /** aromasConfirmed(문자열 배열)을 DB 저장용 JSON 문자열로. 비었으면 null. */
@@ -154,5 +156,6 @@ export function buildTastingNoteUpdate(
   if (has("foodPaired")) data.foodPaired = d.foodPaired ?? null;
   if (has("aromasConfirmed")) data.aromasConfirmed = serializeAromas(d.aromasConfirmed);
   if (has("flavorFelt")) data.flavorFelt = serializeFlavor(d.flavorFelt);
+  if (has("legsFelt")) data.legsFelt = d.legsFelt ?? null;
   return data;
 }
