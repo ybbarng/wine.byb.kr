@@ -32,6 +32,8 @@ export interface WineOption {
   oakAging: string | null;
   // 도수·산지 — 질감(바디)과 기후 안내의 근거.
   abv: number | null;
+  // 등급 표기 — 단맛을 품종이 못 정할 때 라벨에서 읽는 근거(트로켄·브뤼 등).
+  classification: string | null;
   regionName: string | null;
   // 가이드 시음 향 단계(P2)의 예상 향 계산용 — 비율순 품종 이름.
   grapes: string[];

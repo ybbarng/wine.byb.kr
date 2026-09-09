@@ -72,7 +72,10 @@ export default async function TastingNotePage({ params }: PageProps<"/journal/[i
   // 기록할 때 곁들였던 "예상"을 다시 볼 때도 함께 보여준다. 예상만 보고 끝나면
   // 배움이 반만 남는다 — 무엇을 예상했고 실제로 어땠는지가 나란히 있어야 다음에 쓴다.
   // 예상은 기록한 항목 옆에만 붙인다(이 페이지는 안내가 아니라 기록이므로).
-  const expectedFlavor = expectedFlavorFor(grapeNames);
+  const expectedFlavor = expectedFlavorFor(grapeNames, {
+    type: wine.type,
+    label: [wine.nameLocal, wine.nameKo, wine.classification],
+  });
   const expectedAromas = expectedAromaGroups({
     grapes: grapeNames,
     type: wine.type,

@@ -11,7 +11,9 @@ import {
   expectedColorHint,
   expectedFlavorFor,
   flavorLevelWord,
+  labelSweetness,
   oakNone,
+  sweetnessBreadthNote,
   wineAgeYears,
 } from "./tasting-hints";
 
@@ -69,6 +71,72 @@ describe("expectedFlavorFor — 품종별 예상 맛", () => {
     // 소비뇽 블랑(화이트)엔 타닌 값이 없다.
     expect(expectedFlavorFor(["소비뇽 블랑"]).tannin).toBeUndefined();
     expect(expectedFlavorFor(["듣도보도못한품종"])).toEqual({});
+  });
+
+  it("품종이 못 정하는 단맛은 예상으로 내놓지 않는다", () => {
+    // "드라이~스위트"를 그대로 보여주면 다섯 칸 전부를 가리켜 고르기만 어려워진다.
+    expect(expectedFlavorFor(["리즐링"]).sweetness).toBeUndefined();
+    expect(expectedFlavorFor(["무스캇"]).sweetness).toBeUndefined();
+    // 다른 축은 그대로 온다.
+    expect(expectedFlavorFor(["리즐링"]).acidity).toBe("높음");
+  });
+
+  it("한 가지로 정해지는 단맛은 그대로 쓴다", () => {
+    expect(expectedFlavorFor(["브라케토"]).sweetness).toBe("스위트");
+  });
+
+  it("디저트 와인은 종류만으로 달다는 걸 안다", () => {
+    // 모스카토 다스티: 품종(무스캇)은 폭이 넓지만 디저트로 분류된 이상 달다.
+    expect(expectedFlavorFor(["무스캇"], { type: "dessert" }).sweetness).toBe("달다");
+    // 같은 품종이라도 화이트로 분류됐으면 종류가 정해주지 못한다.
+    expect(expectedFlavorFor(["무스캇"], { type: "white" }).sweetness).toBeUndefined();
+  });
+
+  it("라벨에 표기가 있으면 그게 품종보다 앞선다", () => {
+    const spec = expectedFlavorFor(["리즐링"], {
+      label: ["Mineralschiefer Riesling trocken", "Mosel QbA"],
+    });
+    expect(spec.sweetness).toBe("드라이");
+  });
+});
+
+describe("labelSweetness — 라벨에서 단맛 읽기", () => {
+  it("독일 표기", () => {
+    expect(labelSweetness("Riesling trocken")).toBe("드라이");
+    // halbtrocken 안에 trocken 이 들어 있다 — 긴 표기를 먼저 봐야 한다.
+    expect(labelSweetness("Riesling halbtrocken")).toBe("약간 단맛");
+    expect(labelSweetness("Riesling feinherb")).toBe("약간 단맛");
+    expect(labelSweetness("Riesling Auslese")).toBe("달다");
+  });
+
+  it("스파클링 표기", () => {
+    expect(labelSweetness("Champagne Brut")).toBe("드라이");
+    expect(labelSweetness("Brut Nature")).toBe("드라이");
+    expect(labelSweetness("Demi-Sec")).toBe("약간 단맛");
+  });
+
+  it("표기가 없으면 null — 지어내지 않는다", () => {
+    expect(labelSweetness("Pikes Clare Valley Riesling")).toBeNull();
+    expect(labelSweetness(null, undefined, "")).toBeNull();
+  });
+});
+
+describe("sweetnessBreadthNote — 폭이 넓다는 안내", () => {
+  it("품종이 못 정하면 라벨을 보라고 알린다", () => {
+    const note = sweetnessBreadthNote(["리즐링"], { label: ["Pikes Clare Valley Riesling"] });
+    expect(note).toContain("리즐링");
+    expect(note).toContain("라벨");
+  });
+
+  it("라벨에서 이미 읽어냈으면 말하지 않는다", () => {
+    expect(sweetnessBreadthNote(["리즐링"], { label: ["Riesling trocken"] })).toBeNull();
+    // 종류로 알아낸 경우도 마찬가지.
+    expect(sweetnessBreadthNote(["무스캇"], { type: "dessert" })).toBeNull();
+  });
+
+  it("폭이 넓지 않은 품종이면 말하지 않는다", () => {
+    expect(sweetnessBreadthNote(["까베르네 소비뇽"], { label: ["Cabernet Sauvignon"] })).toBeNull();
+    expect(sweetnessBreadthNote([])).toBeNull();
   });
 });
 

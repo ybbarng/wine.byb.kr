@@ -299,19 +299,87 @@ export function flavorLevelWord(axis: FlavorAxis, level: number): string {
 }
 
 /**
+ * 품종만으로는 정해지지 않는 표현. 축의 양 끝을 다 덮어서 "예상"으로 내놓으면
+ * 모든 선택지를 가리키는 셈이라 아무 정보가 없다 — 오히려 고르기 어려워진다.
+ * 리즐링·푸르민트·무스캇처럼 같은 품종으로 드라이도 스위트도 만드는 경우다.
+ * 이런 축은 예상을 비우고 `sweetnessBreadthNote` 로 "폭이 넓다"만 알린다.
+ */
+const UNSETTLED_BY_GRAPE = new Set(["드라이~스위트", "오프드라이~스위트"]);
+
+/**
+ * 라벨 표기에서 단맛을 읽는다. 품종이 못 정하는 걸 라벨은 정해 준다 —
+ * 독일 트로켄, 샴페인 브뤼처럼 당도는 대개 라벨에 적힌다.
+ * 이름(원어)·등급 어디에 있든 찾는다. 못 찾으면 null.
+ *
+ * 긴 표기를 먼저 본다 — "halbtrocken" 안에 "trocken" 이 들어 있어 순서가 뒤집히면
+ * 반달지를 드라이로 읽는다.
+ */
+const LABEL_SWEETNESS: [words: string[], level: string][] = [
+  [["halbtrocken", "feinherb", "demi-sec", "demisec", "off-dry", "abboccato"], "약간 단맛"],
+  [["extra brut", "brut nature", "pas dose", "brut", "trocken", "secco", "sec", "seco"], "드라이"],
+  [["doux", "dolce", "moelleux", "auslese", "beerenauslese", "trockenbeerenauslese"], "달다"],
+];
+
+export function labelSweetness(...texts: (string | null | undefined)[]): string | null {
+  const hay = texts.filter(Boolean).join(" ").toLowerCase();
+  if (!hay) return null;
+  for (const [words, level] of LABEL_SWEETNESS) {
+    for (const w of words) if (hay.includes(w)) return level;
+  }
+  return null;
+}
+
+/**
  * 와인의 품종들에서 예상되는 맛 수준을 모은다(근거: 품종 특성, [[grape-info]]).
  * 축마다 비율이 높은 품종부터 보며 값이 있는 첫 품종의 표현을 쓴다.
  * (블렌드 비율 가중 합성은 P5에서. 지금은 대표 품종 우선으로 단순하게.)
  * 화이트처럼 타닌 값이 없는 축은 키를 비워 둬 "예상"을 지어내지 않는다.
+ *
+ * `label` 에 와인 이름·등급을 주면 단맛은 라벨 표기를 우선한다(트로켄·브뤼 등).
  */
-export function expectedFlavorFor(grapeNames: (string | null | undefined)[]): ExpectedFlavor {
+export type FlavorContext = {
+  /** 와인 종류. 디저트는 종류만으로 달다는 게 정해진다. */
+  type?: string | null;
+  /** 이름(원어·한국어)·등급 등 라벨에 적히는 말. 여기서 단맛 표기를 찾는다. */
+  label?: (string | null | undefined)[];
+};
+
+export function expectedFlavorFor(
+  grapeNames: (string | null | undefined)[],
+  ctx: FlavorContext = {}
+): ExpectedFlavor {
   const out: ExpectedFlavor = {};
   for (const name of grapeNames) {
     const info = grapeInfo(name);
     if (!info) continue;
     for (const { key } of FLAVOR_AXES) {
-      if (out[key] == null && info[key]) out[key] = info[key];
+      const v = info[key];
+      if (out[key] == null && v && !UNSETTLED_BY_GRAPE.has(v)) out[key] = v;
     }
   }
+  // 단맛은 근거가 확실한 순서로: 라벨 표기 > 종류(디저트) > 품종.
+  const fromLabel = labelSweetness(...(ctx.label ?? []));
+  if (fromLabel) out.sweetness = fromLabel;
+  else if (ctx.type === "dessert") out.sweetness = "달다";
   return out;
+}
+
+/**
+ * 단맛이 품종만으로 안 정해지는 와인에 붙일 안내. 예상을 비운 자리를 설명한다 —
+ * "왜 안 알려주지"가 아니라 "이건 라벨을 봐야 한다"가 되도록.
+ * 라벨에서 이미 읽어냈거나 폭이 넓은 품종이 아니면 null(할 말이 없으면 안 한다).
+ */
+export function sweetnessBreadthNote(
+  grapeNames: (string | null | undefined)[],
+  ctx: FlavorContext = {}
+): string | null {
+  // 이미 단맛을 알아냈으면(라벨·종류) 할 말이 없다.
+  if (expectedFlavorFor(grapeNames, ctx).sweetness) return null;
+  for (const name of grapeNames) {
+    const v = grapeInfo(name)?.sweetness;
+    if (v && UNSETTLED_BY_GRAPE.has(v)) {
+      return `${name} 같은 품종은 드라이도 스위트도 만들어요. 단맛은 품종보다 라벨(트로켄·브뤼 같은 표기)이 정하니, 예상 없이 느낀 대로 표시해 주세요.`;
+    }
+  }
+  return null;
 }
