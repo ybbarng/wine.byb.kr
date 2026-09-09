@@ -22,7 +22,10 @@ export async function getWineOptions() {
       region: { select: { nameKo: true, parent: { select: { nameKo: true } } } },
       grapes: {
         select: { percent: true, grape: { select: { nameKo: true } } },
-        orderBy: { percent: "desc" },
+        // 2차 키가 없으면 비율이 전부 NULL 인 블렌드에서 순서가 정해지지 않는다 —
+        // 실제로 샤또 딸보·에스터하지가 저장 순서와 다르게 나와 엉뚱한 품종이 주 품종으로
+        // 잡혔다. blend.ts 가 "비율을 모르면 첫 품종이 대표"로 보므로 순서가 곧 결과다.
+        orderBy: [{ percent: "desc" }, { id: "asc" }],
       },
     },
     orderBy: { nameLocal: "asc" },
@@ -122,7 +125,7 @@ export async function getTastingNote(id: string) {
         include: {
           producer: true,
           region: { include: { parent: true } },
-          grapes: { include: { grape: true }, orderBy: { percent: "desc" } },
+          grapes: { include: { grape: true }, orderBy: [{ percent: "desc" }, { id: "asc" }] },
         },
       },
     },

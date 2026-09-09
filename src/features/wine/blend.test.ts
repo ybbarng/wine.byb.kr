@@ -38,6 +38,29 @@ describe("splitBlend — 주 품종과 곁들임을 가른다", () => {
     expect(b.support).toHaveLength(4);
   });
 
+  it("주 품종 뒤로 크게 떨어지면 곁들임으로 본다", () => {
+    // 반피 첸티네 60/20/20 — 산지오베제 와인이다. 셋을 다 주 품종으로 묶으면
+    // "곁들인 품종에서" 묶음이 사라져 목록을 나누는 의미가 없어진다.
+    const b = splitBlend([
+      { name: "산지오베제", percent: 60 },
+      { name: "까베르네 소비뇽", percent: 20 },
+      { name: "메를로", percent: 20 },
+    ]);
+    expect(b.lead).toEqual(["산지오베제"]);
+    expect(b.support).toEqual(["까베르네 소비뇽", "메를로"]);
+  });
+
+  it("둘째까지 비중이 있으면 둘 다 주 품종", () => {
+    // 토카이 레이트 하베스트 55/27/18.
+    const b = splitBlend([
+      { name: "푸르민트", percent: 55 },
+      { name: "무스캇", percent: 27 },
+      { name: "제타", percent: 18 },
+    ]);
+    expect(b.lead).toEqual(["푸르민트", "무스캇"]);
+    expect(b.support).toEqual(["제타"]);
+  });
+
   it("비율이 낮아도 가장 높은 품종은 주 품종", () => {
     // 문턱만 보면 전부 곁들임이 되어 얼굴이 없는 와인이 된다.
     const b = splitBlend([
@@ -48,7 +71,7 @@ describe("splitBlend — 주 품종과 곁들임을 가른다", () => {
   });
 
   it("비율을 모르면 저장된 순서의 첫 품종을 주 품종으로 본다", () => {
-    // 샤또 딸보 — 비율이 없다. 조회가 비율 내림차순이라 첫 품종이 대표일 가능성이 높다.
+    // 비율을 모르는 블렌드. 조회가 (비율 desc, id asc)로 정렬하므로 첫 품종이 대표다.
     const b = splitBlend([
       { name: "까베르네 소비뇽" },
       { name: "메를로" },
@@ -61,7 +84,7 @@ describe("splitBlend — 주 품종과 곁들임을 가른다", () => {
 
   it("비율이 뒤섞여 들어와도 높은 순으로 본다", () => {
     const b = splitBlend([
-      { name: "적게", percent: 20 },
+      { name: "적게", percent: 30 },
       { name: "많이", percent: 80 },
     ]);
     expect(b.lead).toEqual(["많이", "적게"]);

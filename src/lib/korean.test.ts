@@ -21,6 +21,15 @@ describe("josa — 받침에 따라 조사를 고른다", () => {
     expect(josa("", "이", "가")).toBe("가");
   });
 
+  it("조합형(NFD)으로 들어와도 받침을 읽는다", () => {
+    // 맥에서 붙여넣은 이름이 조합형인 경우가 있다. 미리 완성형으로 맞추지 않으면
+    // 마지막 글자가 종성 자모라 음절 영역 밖이 되고, 늘 무받침으로 떨어진다.
+    const nfd = "까베르네 프랑".normalize("NFD");
+    expect(nfd).not.toBe("까베르네 프랑"); // 실제로 다른 문자열인지 확인
+    expect(withJosa(nfd, "이/가").endsWith("이")).toBe(true);
+    expect(withJosa("리즐링".normalize("NFD"), "은/는").endsWith("은")).toBe(true);
+  });
+
   it("끝 공백이 있어도 마지막 글자로 판단한다", () => {
     expect(josa("리즐링 ", "은", "는")).toBe("은");
     expect(josa("메를로 ", "은", "는")).toBe("는");

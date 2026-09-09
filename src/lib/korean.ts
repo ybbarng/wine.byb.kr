@@ -5,9 +5,12 @@
 
 /** 한글 음절의 받침 여부. 한글이 아니면(영문·숫자) null — 판단하지 않는다. */
 function hasFinalConsonant(word: string): boolean | null {
-  const last = word.trim().at(-1);
+  // 조합형(NFD)으로 들어오면 마지막 글자가 종성 자모라 음절 영역 밖이 된다. 미리
+  // 완성형(NFC)으로 맞춘다 — 맥에서 붙여넣은 이름이 조합형인 경우가 있다.
+  const last = word.normalize("NFC").trim().at(-1);
   if (!last) return null;
-  const code = last.charCodeAt(0);
+  const code = last.codePointAt(0);
+  if (code == null) return null;
   // 한글 음절 영역(가~힣). 초성·중성·종성 조합이라 종성 유무를 계산할 수 있다.
   if (code < 0xac00 || code > 0xd7a3) return null;
   return (code - 0xac00) % 28 !== 0;
@@ -24,7 +27,7 @@ export function josa(word: string, withFinal: string, withoutFinal: string): str
   return hasFinalConsonant(word) ? withFinal : withoutFinal;
 }
 
-/** `${word}${josaFor(word, "이/가")}` 를 한 번에. 자주 쓰는 네 쌍만 받는다. */
+/** 이름과 조사를 한 번에 붙인다. 자주 쓰는 네 쌍만 받는다. */
 export function withJosa(word: string, pair: "이/가" | "은/는" | "을/를" | "과/와"): string {
   const [withFinal, withoutFinal] = pair.split("/");
   return `${word}${josa(word, withFinal, withoutFinal)}`;
