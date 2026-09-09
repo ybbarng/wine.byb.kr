@@ -367,24 +367,29 @@ export function expectedFlavorFor(
   const out: ExpectedFlavor = {};
   // 주 품종들만 평균낸다. 축마다 "값이 있는 첫 품종"을 쓰면 40/30/30 처럼 고르게 섞인
   // 와인도 한 품종의 성격으로만 읽힌다. 곁들인 품종은 맛의 얼굴을 바꾸지 못한다고 본다.
-  const { lead } = splitBlend(grapeNames);
+  const { lead, leadPercents } = splitBlend(grapeNames);
   for (const { key } of FLAVOR_AXES) {
-    const levels: number[] = [];
+    // 비율을 알면 그만큼 무게를 준다 — 60/20/20 을 균등 평균내면 60% 품종이 묻힌다.
+    // 비율을 모르면 무게 1로 균등하게(그때는 주 품종이 어차피 하나다).
+    let sum = 0;
+    let weight = 0;
     let firstWord: string | null = null;
-    for (const name of lead) {
+    for (const [i, name] of lead.entries()) {
       const v = grapeInfo(name)?.[key];
       if (!v || UNSETTLED_BY_GRAPE.has(v)) continue;
       firstWord ??= v;
       const n = levelOf(v);
-      if (n != null) levels.push(n);
+      if (n == null) continue;
+      const w = leadPercents[i] ?? 1;
+      sum += n * w;
+      weight += w;
     }
-    if (levels.length === 0) {
+    if (weight === 0) {
       // 말은 있는데 눈금으로 못 읽는 표현이면(새 표현 등) 첫 값을 그대로 쓴다.
       if (firstWord) out[key] = firstWord;
       continue;
     }
-    const avg = levels.reduce((a, b) => a + b, 0) / levels.length;
-    out[key] = wordOf(avg, key === "body" ? "body" : "other");
+    out[key] = wordOf(sum / weight, key === "body" ? "body" : "other");
   }
   // 단맛은 근거가 확실한 순서로: 라벨 표기 > 종류(디저트) > 품종.
   const fromLabel = labelSweetness(...(ctx.label ?? []));

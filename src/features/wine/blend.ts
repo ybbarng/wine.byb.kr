@@ -24,6 +24,8 @@ export const LEAD_MIN_PERCENT = 20;
 export type Blend = {
   /** 이 와인의 얼굴. 비율을 모르면 첫 품종 하나. 품종이 있으면 최소 하나는 들어간다. */
   lead: string[];
+  /** 주 품종의 비율(lead 와 같은 순서). 비율을 모르면 모두 null. */
+  leadPercents: (number | null)[];
   /** 곁들인 품종. 향에서는 따로 묶어 보여주고, 맛 예상에는 넣지 않는다. */
   support: string[];
 };
@@ -47,23 +49,34 @@ export function toShares(grapes: GrapeLike[]): GrapeShare[] {
  */
 export function splitBlend(grapes: GrapeLike[]): Blend {
   const named = toShares(grapes).filter((g) => g.name.trim());
-  if (named.length === 0) return { lead: [], support: [] };
-  if (named.length === 1) return { lead: [named[0].name], support: [] };
+  if (named.length === 0) return { lead: [], leadPercents: [], support: [] };
+  if (named.length === 1) {
+    return { lead: [named[0].name], leadPercents: [named[0].percent ?? null], support: [] };
+  }
 
   const hasPercent = named.some((g) => g.percent != null && Number.isFinite(g.percent));
   if (!hasPercent) {
-    return { lead: [named[0].name], support: named.slice(1).map((g) => g.name) };
+    return {
+      lead: [named[0].name],
+      leadPercents: [null],
+      support: named.slice(1).map((g) => g.name),
+    };
   }
 
   const sorted = [...named].sort((a, b) => (b.percent ?? 0) - (a.percent ?? 0));
   const lead: string[] = [];
+  const leadPercents: (number | null)[] = [];
   const support: string[] = [];
   for (const [i, g] of sorted.entries()) {
     // 가장 높은 품종은 비율이 얼마든 주 품종이다(문턱만 보면 다 곁들임이 될 수 있다).
-    if (i === 0 || (g.percent ?? 0) >= LEAD_MIN_PERCENT) lead.push(g.name);
-    else support.push(g.name);
+    if (i === 0 || (g.percent ?? 0) >= LEAD_MIN_PERCENT) {
+      lead.push(g.name);
+      leadPercents.push(g.percent ?? null);
+    } else {
+      support.push(g.name);
+    }
   }
-  return { lead, support };
+  return { lead, leadPercents, support };
 }
 
 // ── 맛 축의 말 ↔ 눈금 ────────────────────────────────────────────────

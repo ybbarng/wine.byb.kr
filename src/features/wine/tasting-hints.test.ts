@@ -75,6 +75,24 @@ describe("expectedFlavorFor — 품종별 예상 맛", () => {
     expect(expectedFlavorFor(["듣도보도못한품종"])).toEqual({});
   });
 
+  it("비율을 알면 그만큼 무게를 준다", () => {
+    // 반피 첸티네 60 산지오베제(산도 높음) / 20 까쇼(중간) / 20 메를로(중간).
+    // 균등 평균이면 (3+2+2)/3=2.33 → "중간~높음". 가중이면 (3·60+2·20+2·20)/100=2.6 → "높음".
+    const weighted = expectedFlavorFor([
+      { name: "산지오베제", percent: 60 },
+      { name: "까베르네 소비뇽", percent: 20 },
+      { name: "메를로", percent: 20 },
+    ]);
+    expect(weighted.acidity).toBe("높음");
+    // 고르게 섞이면 균등에 가깝다(GSM 40/30/30).
+    const even = expectedFlavorFor([
+      { name: "쉬라즈", percent: 40 },
+      { name: "무르베드르", percent: 30 },
+      { name: "그르나슈", percent: 30 },
+    ]);
+    expect(even.acidity).toBe("낮음~중간");
+  });
+
   it("품종이 못 정하는 단맛은 예상으로 내놓지 않는다", () => {
     // "드라이~스위트"를 그대로 보여주면 다섯 칸 전부를 가리켜 고르기만 어려워진다.
     expect(expectedFlavorFor(["리즐링"]).sweetness).toBeUndefined();
