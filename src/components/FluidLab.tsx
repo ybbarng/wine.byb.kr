@@ -34,6 +34,7 @@ import {
   vec4,
 } from "three/tsl";
 import * as THREE from "three/webgpu";
+import { AUTO_SWIRL_SECONDS, autoSwirlTilt, nextSwirlWait } from "@/features/glass/auto-swirl";
 import {
   buildGlassShape,
   GLASS_HEIGHT_M,
@@ -42,8 +43,14 @@ import {
   wineLevels,
 } from "@/features/glass/glass-geometry";
 import { deriveLegs, type LegsProfile } from "@/features/glass/legs";
-import { deriveSloshConstants, stepSlosh } from "@/features/glass/slosh";
-import { flatWave, surfaceWaveHeight, W2SPD, W3SPD } from "@/features/glass/surface-wave";
+import { deriveSloshConstants, stepSlosh, stepSpin } from "@/features/glass/slosh";
+import {
+  flatWave,
+  LOBE_SPIN_EXP,
+  surfaceWaveHeight,
+  W2SPD,
+  W3SPD,
+} from "@/features/glass/surface-wave";
 
 // 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
 
@@ -65,6 +72,7 @@ export default function FluidLab({
   bgColor,
   swirlScale,
   idleSwirlAfter,
+  idleSwirlEvery,
   bgIntensity,
   slideX,
   onReady,
@@ -77,9 +85,11 @@ export default function FluidLab({
   abv?: number | null;
   bgColor?: string; // 지정 시 배경을 이 단색으로(사이트 배경과 매끄럽게). 미지정=따뜻한 HDR.
   swirlScale?: number; // 최대 스월 기울기 배율(기본 1). 좁은 컨테이너(홈)에선 <1 로 줄여 영역 이탈 방지.
-  // 이 초만큼 아무도 잔을 안 만지면 자동 스월을 한 번 돌린다. 만지면 다시 열린다.
+  // 이 초만큼 아무도 잔을 안 만지면 자동 스월을 돌린다. 만지면 처음부터 다시 센다.
   // 미지정이면 안 돈다 — 상세 화면처럼 글을 읽는 자리에서 잔이 혼자 움직이면 산만하다.
   idleSwirlAfter?: number;
+  // 두 번째부터의 간격(초). 미지정이면 한 번만 돌고 만다.
+  idleSwirlEvery?: number;
   bgIntensity?: number; // 배경(HDR) 밝기 배율(기본 1). 좁은 프레임이 어두운 영역을 비출 때 ↑.
   // 백버퍼를 프레임이 아닌 화면(viewport) 크기로 잡는다. 셸(홈↔상세)처럼 프레임이 작게
   // 시작해 크게 자라는 경우, 처음부터 화면 크기로 잡아 두면 전환 중 항상 다운스케일만
@@ -139,6 +149,10 @@ export default function FluidLab({
   useEffect(() => {
     idleSwirlAfterRef.current = idleSwirlAfter;
   }, [idleSwirlAfter]);
+  const idleSwirlEveryRef = useRef(idleSwirlEvery);
+  useEffect(() => {
+    idleSwirlEveryRef.current = idleSwirlEvery;
+  }, [idleSwirlEvery]);
 
   // 슬라이드 x 위치 — 매 프레임 render 가 glassGroup.position.x 에 반영(리렌더/재초기화 없음).
   const slideXRef = useRef(slideX ?? 0);
@@ -760,16 +774,16 @@ export default function FluidLab({
     let mCurX = 0;
     let mCurY = 0;
     let swDragging = false;
-    // 클릭(거의 안 움직임) → 자동 스월 3바퀴(일관된 동작 보기용).
+    // 클릭(거의 안 움직임) → 자동 스월 한 번(일관된 동작 보기용).
     let autoSwirl = false;
     let autoSwirlT = 0;
     let downX = 0;
     let downY = 0;
     // 언제부터 가만히 두었는지(performance.now 기준). 만지면 null 로 돌아간다.
     let idleSince: number | null = null;
-    // 이번 유휴 구간에서 이미 자동 스월을 돌렸는지. 만지면 다시 열린다 —
-    // 계속 보고 있는 사람에게 잔이 혼자 반복해서 도는 건 부산하다.
-    let idleSwirlDone = false;
+    // 이번 유휴 구간에서 자동 스월을 몇 번 돌렸는지. 첫 번째와 그 뒤의 간격이 다르다
+    // (처음엔 빨리 보여 주고, 그 뒤엔 천천히). 만지면 0 으로 돌아간다.
+    let idleSwirlCount = 0;
 
     // 고정 토폴로지 그리드 생성(정점 위치는 rebuildLiquid 가 매 프레임 채움).
     // 방위별 수위선(pwCol)·파동(surfWaveH)·rebuild 클로저를 이 잔(gg)에 바인딩한다.
@@ -1163,22 +1177,27 @@ export default function FluidLab({
             active = gg;
           }
         }
-        // 가만히 두면 한 번 알아서 스월한다(홈에서만 켠다). 눈물자국은 벽이 젖어야
-        // 생기는데, 잔을 만져 본 적이 없으면 벽이 마른 채라 볼 것이 없다. 잔이 스스로
-        // 한 바퀴 돌아 와인이 벽을 타고 오르는 걸 보여 주는 역할.
+        // 가만히 두면 알아서 스월한다(홈에서만 켠다). 눈물자국은 벽이 젖어야 생기는데,
+        // 잔을 만져 본 적이 없으면 벽이 마른 채라 볼 것이 없다. 잔이 스스로 돌아 와인이
+        // 벽을 타고 오르는 걸 보여 주는 역할.
         // 잔이 들어오는 중(sliding)에는 세지 않는다 — 진입 애니메이션이 끝나야 유휴다.
         // 물리는 고정 스텝(dt)으로 돌지만 이 대기 시간은 **실제 시계**로 센다. dt 로
         // 세면 프레임 수를 세는 셈이라, 느린 기기에서는 몇 배로 늘어진다.
-        const idleAfter = idleSwirlAfterRef.current;
         const now = performance.now();
-        if (idleAfter != null && !swDragging && !autoSwirl && !glasses.some((g) => g.sliding)) {
+        if (!swDragging && !autoSwirl && !glasses.some((g) => g.sliding)) {
           if (idleSince == null) idleSince = now;
-          if (!idleSwirlDone && now - idleSince >= idleAfter * 1000) {
+          const wait = nextSwirlWait(
+            idleSwirlCount,
+            idleSwirlAfterRef.current,
+            idleSwirlEveryRef.current
+          );
+          if (wait != null && now - idleSince >= wait * 1000) {
             autoSwirl = true;
             autoSwirlT = 0;
-            idleSwirlDone = true;
+            idleSwirlCount++;
           }
         } else {
+          // 스월이 도는 동안에도 여기로 온다 → 끝나면 그 시점부터 다시 센다.
           idleSince = null;
         }
         // ── 잔별 스월·슬로싱·파동·legs·슬라이드 (각자 독립 상태로 실행) ──
@@ -1215,23 +1234,13 @@ export default function FluidLab({
           let gtz = 0;
           // 입력은 활성 잔에만. 나머지 잔은 gtx=gtz=0 → 자기 관성으로만 출렁.
           if (isActive && autoSwirl) {
-            // 자동 스월: 잔 기울기를 원으로 5바퀴(진폭 ramp in/out).
-            // 5바퀴/2.4초 ≈ 초당 2.1바퀴 — 사람이 **세게** 스월하는 속도(1~2.5Hz 범위).
-            // 예전 1.1Hz 는 슬로싱 공진(4Hz)에서 멀어 액체가 잘 안 따라 올라왔다.
-            // 2.1Hz 는 공진에 가까워져 같은 힘으로도 훨씬 크게 넘실댄다(물리 그대로).
-            // 기울기 배율은 1.0 — GMAX 를 넘기면 잔이 프레임을 벗어난다.
-            const TOTAL = 2.4;
-            const ROT = 5;
-            const ph = (2 * Math.PI * ROT * autoSwirlT) / TOTAL;
-            const env = Math.max(
-              0,
-              Math.min(autoSwirlT / 0.3, 1) * Math.min((TOTAL - autoSwirlT) / 0.4, 1)
-            );
-            const amp = GMAX * 1.0 * env;
-            gtx = amp * Math.cos(ph);
-            gtz = amp * Math.sin(ph);
+            // 파형·상수는 auto-swirl.ts 에 있다(여기선 타입 검사가 안 돌아 상수를
+            // 잘못 고쳐도 아무도 못 잡는다). GMAX 를 넘기면 잔이 프레임을 벗어난다.
+            const tilt = autoSwirlTilt(autoSwirlT, GMAX);
+            gtx = tilt.x;
+            gtz = tilt.z;
             autoSwirlT += dt;
-            if (autoSwirlT >= TOTAL) autoSwirl = false;
+            if (autoSwirlT >= AUTO_SWIRL_SECONDS) autoSwirl = false;
           } else if (isActive && swDragging) {
             // 카메라가 XZ 대각(−1.9,1.7,−1.9)에 있어 월드 X·Z 축이 화면과 45° 어긋난다.
             // 카메라의 화면 오른쪽·위를 월드 수평면에 투영해, 드래그 방향대로 잔 윗부분이
@@ -1315,17 +1324,9 @@ export default function FluidLab({
           // 보인다(중심이 얇아 밝은 것만 남음). 0.18 로 낮춰 오목 반사 단서를 남긴다.
           if (g.roughnessU) g.roughnessU.value = 0.14 + g.waveAct * 0.18;
           const phi = Math.atan2(g.sloshZ, g.sloshX);
-          // 스핀다운(회전 관성): 감쇠 진동자는 진폭만 줄고 회전 주파수는 ω로 고정이라,
-          // 그냥 두면 수면이 평평해져도 계속 빠르게 도는 것처럼 보인다. 실제 유체는
-          // 각운동량을 잃으며 잦아든다. 크레스트 각도(crestPh)를 슬로싱 방향 φ에 붙이되,
-          // 한 프레임 회전 상한을 회전 관성 spinE(0~1)로 건다.
-          //  - 충전: 잔을 움직이는 동안(gv) 빠르게 1로 → 선형·스월 모두 φ를 즉각 추종.
-          //  - 방전: 놓으면 감소. 감쇠율을 (1−spinE)에 비례시켜, 빠를 땐 천천히 줄고
-          //    느려지면 더 빨리 줄어 깔끔히 멈춘다(마른 마찰·접촉선 정지 느낌).
-          const glassMove = Math.hypot(gvx, gvz);
-          const charge = Math.min(1, glassMove / 0.8);
-          if (charge > g.spinE) g.spinE += (charge - g.spinE) * 0.3;
-          else g.spinE = Math.max(0, g.spinE - (0.18 + 0.6 * (1 - g.spinE)) * dt);
+          // 스핀다운(회전 관성): 크레스트 각도(crestPh)를 슬로싱 방향 φ 에 붙이되,
+          // 한 프레임 회전 상한을 spinE(0~1)로 건다. 식·상수는 slosh.ts 에 있다.
+          g.spinE = stepSpin(g.spinE, Math.hypot(gvx, gvz), dt);
           let dPhi = phi - g.crestPh;
           while (dPhi > Math.PI) dPhi -= Math.PI * 2;
           while (dPhi < -Math.PI) dPhi += Math.PI * 2;
@@ -1342,9 +1343,11 @@ export default function FluidLab({
               ? Math.max(-1, Math.min(1, angMom / (swirlMag * swirlMag * g.sloshConsts.omega)))
               : 0;
           g.rotSmooth += (rotInstant - g.rotSmooth) * 0.08;
-          // 로브 회전도 회전 관성으로 함께 잦아들게. 크레스트(crestPh) 위를 더 돈다.
-          g.w2ph += W2SPD * g.rotSmooth * g.spinE * dt;
-          g.w3ph += W3SPD * g.rotSmooth * g.spinE * dt;
+          // 로브 회전도 회전 관성으로 잦아들되, 크레스트보다 **먼저** 멎는다 —
+          // 차수가 높은 모드일수록 감쇠가 크다(이유는 surface-wave.ts 의 LOBE_SPIN_EXP).
+          const lobeSpin = g.spinE ** LOBE_SPIN_EXP;
+          g.w2ph += W2SPD * g.rotSmooth * lobeSpin * dt;
+          g.w3ph += W3SPD * g.rotSmooth * lobeSpin * dt;
           const a2 = g.crestPh + g.w2ph;
           g.l2c = Math.cos(a2);
           g.l2s = Math.sin(a2);
@@ -1493,7 +1496,7 @@ export default function FluidLab({
       const onSwDown = (e: PointerEvent) => {
         downIds.add(e.pointerId);
         idleSince = null; // 만졌으니 유휴가 아니다
-        idleSwirlDone = false; // 다시 가만히 두면 또 한 번 돈다
+        idleSwirlCount = 0; // 다시 가만히 두면 처음 간격부터 시작한다
         if (downIds.size > 1) {
           // 확대 제스처가 시작됐다 — 잔은 즉시 놓아 준다(탭으로도 치지 않는다).
           autoSwirl = false;

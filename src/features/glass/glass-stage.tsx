@@ -33,10 +33,13 @@ const FluidLab = dynamic(() => import("@/components/FluidLab"), {
   loading: () => null,
 });
 
-// 홈에서 이만큼 아무도 잔을 안 만지면 한 번 알아서 스월한다. 눈물자국은 벽이 젖어야
-// 생기니, 잔을 만져 볼 생각을 못 한 사람에게 "이거 움직인다"를 한 번 보여 주는 자리다.
+// 홈에서 이만큼 아무도 잔을 안 만지면 알아서 스월한다. 눈물자국은 벽이 젖어야 생기니,
+// 잔을 만져 볼 생각을 못 한 사람에게 "이거 움직인다"를 보여 주는 자리다.
 // 상세 화면에는 주지 않는다 — 글을 읽는 동안 옆에서 잔이 혼자 움직이면 산만하다.
 const HOME_IDLE_SWIRL_S = 7;
+
+// 두 번째부터는 천천히. 처음 간격(7초)으로 계속 돌면 화면이 쉬지 않아 부산하다.
+const HOME_SWIRL_EVERY_S = 18;
 
 const MOVE_MS = 700; // 홈→상세에서 창이 이동·축소하는 시간
 const REVEAL_MS = 500; // 콘텐츠 fade-in 시간(WineDetailView 의 duration-500 과 맞춤)
@@ -230,6 +233,7 @@ export function GlassStage() {
         bgColor={CANVAS_BG}
         swirlScale={swirlScale ?? HOME_GLASS.swirlScale}
         idleSwirlAfter={isHome ? HOME_IDLE_SWIRL_S : undefined}
+        idleSwirlEvery={isHome ? HOME_SWIRL_EVERY_S : undefined}
         backingToViewport
         onReady={(api) => {
           apiRef.current = api;

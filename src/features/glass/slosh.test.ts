@@ -4,7 +4,9 @@ import {
   deriveSloshConstants,
   SLOSH_MAX,
   type SloshConstants,
+  type SloshState,
   stepSlosh,
+  stepSpin,
   zeroSlosh,
 } from "./slosh";
 
@@ -140,5 +142,104 @@ describe("stepSlosh — 적분", () => {
       s = stepSlosh(s, { glassTiltVX: 0, glassTiltVZ: 0 }, c, DT);
     }
     expect(Math.hypot(s.x, s.z)).toBeLessThan(0.01); // 발산 대신 잦아든다
+  });
+});
+
+describe("stepSpin — 놓으면 수면 회전이 멎는다", () => {
+  /** 회전 관성이 0 이 될 때까지 걸린 시간(초). 잔은 가만히 둔다. */
+  function spinDownSeconds(from = 1) {
+    let spin = from;
+    let t = 0;
+    while (spin > 0 && t < 10) {
+      spin = stepSpin(spin, 0, DT);
+      t += DT;
+    }
+    return t;
+  }
+
+  it("1.5초 안에 멈춘다", () => {
+    // 2026-09-10 이전엔 2.4초여서 "액체가 너무 오래 돈다"는 이야기를 들었다.
+    // 너무 짧아도 안 된다 — 놓자마자 뚝 서면 물이 아니라 젤리로 보인다.
+    const t = spinDownSeconds();
+    expect(t).toBeGreaterThan(0.8);
+    expect(t).toBeLessThan(1.5);
+  });
+
+  it("느려질수록 더 빨리 준다 — 끝이 흐지부지되지 않게", () => {
+    // 같은 폭(0.2)을 지나는 데 걸리는 시간을 빠를 때와 느릴 때로 비교한다.
+    const span = (from: number, to: number) => {
+      let spin = from;
+      let t = 0;
+      while (spin > to && t < 10) {
+        spin = stepSpin(spin, 0, DT);
+        t += DT;
+      }
+      return t;
+    };
+    expect(span(1, 0.8)).toBeGreaterThan(span(0.3, 0.1));
+  });
+
+  it("잔을 움직이면 곧바로 다시 찬다", () => {
+    let spin = 0;
+    for (let i = 0; i < 10; i++) spin = stepSpin(spin, 2.0, DT);
+    expect(spin).toBeGreaterThan(0.9);
+  });
+
+  it("천천히 움직이면 그만큼만 찬다 — 살살 흔들면 살살 돈다", () => {
+    let spin = 0;
+    for (let i = 0; i < 30; i++) spin = stepSpin(spin, 0.4, DT);
+    expect(spin).toBeGreaterThan(0.3);
+    expect(spin).toBeLessThan(0.7);
+  });
+});
+
+describe("회전 마찰 — 도는 것만 잡고 출렁임은 놔둔다", () => {
+  /** 한 주기 창에서 |s| 의 최소/최대 비. 1 이면 원운동, 0 이면 한 축 왕복. */
+  function roundnessAt(c: SloshConstants, s0: SloshState, seconds: number) {
+    const win = Math.round((2 * Math.PI) / c.omega / DT);
+    let s = s0;
+    const hist: number[] = [];
+    for (let t = 0; t < seconds; t += DT) {
+      s = stepSlosh(s, { glassTiltVX: 0, glassTiltVZ: 0 }, c, DT);
+      hist.push(Math.hypot(s.x, s.z));
+      if (hist.length > win) hist.shift();
+    }
+    const hi = Math.max(...hist);
+    const lo = Math.min(...hist);
+    return { round: hi > 1e-12 ? lo / hi : 0, mag: Math.hypot(s.x, s.z) };
+  }
+
+  /** 정확히 원을 그리며 도는 초기 상태. */
+  const circular = (c: SloshConstants, a = 0.2): SloshState => ({
+    x: a,
+    z: 0,
+    vx: 0,
+    vz: a * c.omega,
+  });
+
+  it("원운동은 한 축 왕복으로 바뀐다", () => {
+    // 시간이 갈수록 덜 둥글어지고, 1.5초 뒤에는 거의 한 축으로만 오간다.
+    const c = constsFor("bordeaux");
+    const early = roundnessAt(c, circular(c), 0.35).round;
+    const late = roundnessAt(c, circular(c), 1.5).round;
+    expect(late, `이른 ${early.toFixed(2)} · 늦은 ${late.toFixed(2)}`).toBeLessThan(early);
+    expect(late).toBeLessThan(0.35);
+  });
+
+  it("가장 오래 도는 잔(부르고뉴)도 2초 안에 회전이 사라진다", () => {
+    // 감쇠가 가장 작은 잔이라 예전에는 3초 뒤에도 둥글기 0.87 로 계속 돌았다.
+    const c = constsFor("burgundy");
+    expect(roundnessAt(c, circular(c), 2).round).toBeLessThan(0.4);
+  });
+
+  it("한 축으로만 출렁이면 아무 영향도 받지 않는다", () => {
+    // 사용자가 좋다고 한 "출렁임의 액체 느낌"이 이쪽이다. 접선 성분이 0 이라
+    // 마찰이 걸릴 데가 없어야 한다 — 축을 벗어나지 않고 그대로 오간다.
+    const c = constsFor("bordeaux");
+    let s: SloshState = { x: 0.2, z: 0, vx: 0, vz: 0 };
+    for (let t = 0; t < 3; t += DT) {
+      s = stepSlosh(s, { glassTiltVX: 0, glassTiltVZ: 0 }, c, DT);
+      expect(Math.abs(s.z)).toBeLessThan(1e-12);
+    }
   });
 });
