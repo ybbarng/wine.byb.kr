@@ -3,11 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
-import { getGrapeBySlug } from "@/features/wine/collection-queries";
-import { GrapeCharacter } from "@/features/wine/grape-character";
-import { GrapeColorDot } from "@/features/wine/grape-color";
-import { grapeInfo } from "@/features/wine/grape-info";
-import { RegionMyStats } from "@/features/wine/region-my-stats";
+import { grapeInfo } from "@/features/wine/curation/grape-info";
+import { getGrapeBySlug } from "@/features/wine/db/collection-queries";
+import { GrapeCharacter } from "@/features/wine/ui/grape-character";
+import { GrapeColorDot } from "@/features/wine/ui/grape-color";
+import { RegionMyStats } from "@/features/wine/ui/region-my-stats";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 
 export const dynamic = "force-dynamic";

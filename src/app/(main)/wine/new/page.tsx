@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { AdminGuard } from "@/features/admin/admin-guard";
-import { WineForm } from "@/features/wine/wine-form";
+import { WineForm } from "@/features/wine/ui/wine-form";
 
 export const metadata: Metadata = {
   title: "새 와인",

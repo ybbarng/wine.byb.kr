@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { levelOf, splitBlend, wordOf } from "./blend";
+import { levelOf, splitBlend, wordOf } from "@/features/wine/blend";
 
 // DB 에 실제로 들어 있는 블렌드로 확인한다 — 문턱은 이 와인들을 뜻대로 가르도록 잡았다.
 describe("splitBlend — 주 품종과 곁들임을 가른다", () => {

@@ -5,8 +5,13 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import {
+  WINE_TYPES,
+  type WineFormInput,
+  type WineInput,
+  wineSchema,
+} from "@/features/wine/wine-schema";
 import { wineTypeLabel } from "@/lib/wine";
-import { WINE_TYPES, type WineFormInput, type WineInput, wineSchema } from "./wine-schema";
 
 const inputClass =
   "w-full rounded-lg border border-foreground/20 bg-card/60 px-3 py-2 text-foreground outline-none transition-colors placeholder:text-muted/60 focus:border-gold/50";

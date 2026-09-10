@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_PALETTE_AROMAS } from "./aroma-palette";
+import { ALL_PALETTE_AROMAS } from "@/features/wine/aroma-palette";
 import {
   ALL_WINEMAKING_TAGS,
   parseWinemaking,
@@ -8,7 +8,7 @@ import {
   winemakingFlavorNote,
   winemakingLabel,
   winemakingWhy,
-} from "./winemaking";
+} from "@/features/wine/winemaking";
 
 describe("parseWinemaking / serializeWinemaking", () => {
   it("돌아온다", () => {

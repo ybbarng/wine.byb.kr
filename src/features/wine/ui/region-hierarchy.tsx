@@ -3,8 +3,8 @@
 // 이 와인은 국가·지역까지 기록돼 있고, 마을·밭은 개념으로 설명한다.
 
 import Link from "next/link";
-import { countryFlag } from "./country-names";
-import { countryInfo, regionInfo } from "./region-info";
+import { countryFlag } from "@/features/wine/curation/country-names";
+import { countryInfo, regionInfo } from "@/features/wine/curation/region-info";
 
 interface Level {
   key: string;

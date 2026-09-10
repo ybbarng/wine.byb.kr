@@ -5,8 +5,7 @@ import { WineDetailView } from "@/components/WineDetailView";
 import { NoteActions } from "@/features/journal/note-actions";
 import { getTastingNote } from "@/features/journal/queries";
 import { parseAromas, parseFlavor, toDateInput } from "@/features/journal/tasting-note-schema";
-import { PriceBadge } from "@/features/wine/price-badge";
-import { RegionHierarchy } from "@/features/wine/region-hierarchy";
+import { priceVerdict, winePrice } from "@/features/wine/curation/wine-price-info";
 import {
   expectedAromaGroups,
   expectedFlavorFor,
@@ -14,9 +13,10 @@ import {
   FLAVOR_AXES,
   flavorLevelWord,
 } from "@/features/wine/tasting-hints";
+import { PriceBadge } from "@/features/wine/ui/price-badge";
+import { RegionHierarchy } from "@/features/wine/ui/region-hierarchy";
+import { WineInfoSections } from "@/features/wine/ui/wine-info-sections";
 import { wineGlassFor } from "@/features/wine/wine-glass";
-import { WineInfoSections } from "@/features/wine/wine-info-sections";
-import { priceVerdict, winePrice } from "@/features/wine/wine-price-info";
 import { parseWinemaking } from "@/features/wine/winemaking";
 import { formatDate, formatKRW } from "@/lib/format";
 import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";

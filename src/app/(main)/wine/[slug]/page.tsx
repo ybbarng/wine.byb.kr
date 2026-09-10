@@ -3,12 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
-import { PriceBadge } from "@/features/wine/price-badge";
-import { getWineBySlug } from "@/features/wine/queries";
-import { RegionHierarchy } from "@/features/wine/region-hierarchy";
+import { priceVerdict, winePrice } from "@/features/wine/curation/wine-price-info";
+import { getWineBySlug } from "@/features/wine/db/queries";
+import { PriceBadge } from "@/features/wine/ui/price-badge";
+import { RegionHierarchy } from "@/features/wine/ui/region-hierarchy";
+import { WineInfoSections } from "@/features/wine/ui/wine-info-sections";
 import { averageHex, wineGlassFor } from "@/features/wine/wine-glass";
-import { WineInfoSections } from "@/features/wine/wine-info-sections";
-import { priceVerdict, winePrice } from "@/features/wine/wine-price-info";
 import { formatDate, formatKRW } from "@/lib/format";
 import { WINE_TYPE_LABELS, wineDisplayName, wineTypeLabel } from "@/lib/wine";
 

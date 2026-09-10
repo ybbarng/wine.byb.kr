@@ -24,7 +24,7 @@ import {
   sweetnessBreadthNote,
   wineAgeYears,
 } from "@/features/wine/tasting-hints";
-import { WineColorPicker } from "@/features/wine/wine-color-picker";
+import { WineColorPicker } from "@/features/wine/ui/wine-color-picker";
 import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
 import { winemakingFlavorNote } from "@/features/wine/winemaking";
 import { wineDisplayName } from "@/lib/wine";

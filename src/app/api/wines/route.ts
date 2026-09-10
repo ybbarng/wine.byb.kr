@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { createWine } from "@/features/wine/mutations";
+import { createWine } from "@/features/wine/db/mutations";
 import { wineSchema } from "@/features/wine/wine-schema";
 import { verifyAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";

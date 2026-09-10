@@ -4,8 +4,8 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { FeatureCollection } from "geojson";
 import type { FilterSpecification, LngLatBoundsLike, Map as MlMap } from "maplibre-gl";
 import { useEffect, useRef } from "react";
-import { englishCountry } from "./country-names";
-import { countryGeo } from "./wine-geo";
+import { englishCountry } from "@/features/wine/curation/country-names";
+import { countryGeo } from "@/features/wine/wine-geo";
 
 // 지도가 처음 뜨기 전(타일 로드 전) 컨테이너를 채울 색. maplibre 기본 흰 배경이 탄 톤
 // 테마와 대비돼 "흰 플래시"처럼 보이던 걸 없앤다. 로드된 지도의 옅은 땅 색과도 가깝다.

@@ -30,7 +30,7 @@ const mutations = vi.hoisted(() => ({
   createWine: vi.fn(),
   updateWineColor: vi.fn(),
 }));
-vi.mock("@/features/wine/mutations", () => mutations);
+vi.mock("@/features/wine/db/mutations", () => mutations);
 
 /** 인증 성공/실패를 시험마다 갈아 끼운다. */
 const auth = vi.hoisted(() => ({ ok: true }));

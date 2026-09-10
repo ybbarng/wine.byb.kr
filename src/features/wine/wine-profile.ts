@@ -1,6 +1,6 @@
 // 와인 하나를 "종합 판단"할 수 있게, 타입·품종·산지·등급을 모아 프로필을 만든다.
 // 색·서빙 온도는 타입/품종에서 유도하고, 수준(고급/보급)은 아는 와인만 큐레이션한다.
-import type { GrapeDetail } from "./grape-info";
+import type { GrapeDetail } from "@/features/wine/curation/grape-info";
 
 export interface WineProfile {
   color: string; // 색

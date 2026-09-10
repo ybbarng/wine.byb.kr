@@ -34,11 +34,11 @@ description: 준 와인을 사이트에 추가 — 상세·산지·생산자·�
      **작성 원칙 전문: `docs/wine-notes-style.md`** (반드시 이 톤·구조로).
 
 3. **큐레이션 (해당 산지/생산자/품종이 없으면 추가)**
-   - `src/features/wine/region-info.ts` — `RegionDetail { desc, climate?, soil?, classification?, keyGrapes?, styles? }`. 키=한국어 산지명(regionName.includes 매칭).
-   - `src/features/wine/producer-info.ts` — `ProducerDetail { desc, homepage? }`. 키=이름 일부(공백제거 소문자 norm, includes). 홈페이지는 확인된 것만.
-   - `src/features/wine/grape-info.ts` — `[aliases[], { desc, body?, acidity?, tannin?, aroma?, pairings?:[{food,why}] }]`. 레드/화이트 섹션에 맞게.
+   - `src/features/wine/curation/region-info.ts` — `RegionDetail { desc, climate?, soil?, classification?, keyGrapes?, styles? }`. 키=한국어 산지명(regionName.includes 매칭).
+   - `src/features/wine/curation/producer-info.ts` — `ProducerDetail { desc, homepage? }`. 키=이름 일부(공백제거 소문자 norm, includes). 홈페이지는 확인된 것만.
+   - `src/features/wine/curation/grape-info.ts` — `[aliases[], { desc, body?, acidity?, tannin?, aroma?, pairings?:[{food,why}] }]`. 레드/화이트 섹션에 맞게.
 
-4. **국내 적정가** — `src/features/wine/wine-price-info.ts` 의 `PRICES` 에
+4. **국내 적정가** — `src/features/wine/curation/wine-price-info.ts` 의 `PRICES` 에
    `{ low, high, note? }`(원). 실구매가가 "아주 잘 샀어요~비싸게" 중 무엇인지 판정하는
    기준선. **자주 빠뜨리니 꼭 챙긴다.** 2024–2025 국내 소매(마진·주세 포함) 감각.
 

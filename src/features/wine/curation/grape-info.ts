@@ -5,7 +5,7 @@
 // 지저분한 시드 이름(공백·괄호·로마자 병기)에 맞도록 공백을 지우고 전체 이름으로 매칭한다.
 // 키는 정규화된 전체 이름이라 "까베르네 소비뇽"과 "까베르네 프랑"이 서로 안 겹친다.
 
-import { type GrapeAliasEntry, matchGrape } from "./grape-name";
+import { type GrapeAliasEntry, matchGrape } from "@/features/wine/grape-name";
 
 /** 음식 페어링 — 무엇과, 그리고 왜 어울리는지. 이유를 읽으면 다른 음식으로 대체할 때도 판단할 수 있다. */
 export interface Pairing {

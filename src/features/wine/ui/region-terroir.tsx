@@ -1,7 +1,7 @@
 // 산지의 떼루아 — 기후·토양·등급·주력 품종·대표 스타일. 값이 있는 항목만 보여준다.
 // 데이터는 페이지에서 "DB 우선, 없으면 큐레이션(region-info)"으로 합쳐 넘긴다.
 
-import { GrapeColorDot } from "./grape-color";
+import { GrapeColorDot } from "@/features/wine/ui/grape-color";
 
 export interface Terroir {
   climate?: string | null;

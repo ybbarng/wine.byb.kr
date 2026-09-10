@@ -1,5 +1,5 @@
+import type { WineInput } from "@/features/wine/wine-schema";
 import { db } from "@/lib/db";
-import type { WineInput } from "./wine-schema";
 
 // 새 와인을 만든다. 국가·생산자는 이름으로 find-or-create,
 // 품종은 원본 문자열(blendRaw)로만 보관한다(구조화는 시드/후속 편집에서).

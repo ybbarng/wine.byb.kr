@@ -17,7 +17,7 @@ import {
   oakNone,
   sweetnessBreadthNote,
   wineAgeYears,
-} from "./tasting-hints";
+} from "@/features/wine/tasting-hints";
 
 describe("expectedColorHint — 예상 색 안내", () => {
   it("종류별로 예상 색·근거 문구를 준다", () => {

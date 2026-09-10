@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { updateWineColor } from "@/features/wine/mutations";
+import { updateWineColor } from "@/features/wine/db/mutations";
 import { verifyAdmin } from "@/lib/auth";
 
 // 컬러피커로 지정한 색을 와인에 저장한다(관리자만). colorHex=null 이면 추정색으로 되돌린다.

@@ -3,9 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
-import { getProducerBySlug } from "@/features/wine/collection-queries";
-import { countryFlag } from "@/features/wine/country-names";
-import { producerInfo } from "@/features/wine/producer-info";
+import { countryFlag } from "@/features/wine/curation/country-names";
+import { producerInfo } from "@/features/wine/curation/producer-info";
+import { getProducerBySlug } from "@/features/wine/db/collection-queries";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 
 export const dynamic = "force-dynamic";
