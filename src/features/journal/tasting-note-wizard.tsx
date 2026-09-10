@@ -27,13 +27,13 @@ import { WineColorPicker } from "@/features/wine/wine-color-picker";
 import { defaultColorHex, wineGlassFor } from "@/features/wine/wine-glass";
 import { winemakingFlavorNote } from "@/features/wine/winemaking";
 import { wineDisplayName } from "@/lib/wine";
-import { type ExistingNote, toDefaults, type WineOption } from "./tasting-note-form";
 import {
   type FlavorFelt,
   type TastingNoteFormInput,
   type TastingNoteInput,
   tastingNoteSchema,
 } from "./tasting-note-schema";
+import { type ExistingNote, toDefaults, type WineOption } from "./tasting-note-types";
 
 const FluidLab = dynamic(() => import("@/components/FluidLab"), {
   ssr: false,

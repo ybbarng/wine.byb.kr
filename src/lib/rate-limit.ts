@@ -59,14 +59,6 @@ export function clearFailedAttempts(ip: string): void {
 }
 
 /** 창이 지난 오래된 기록을 정리한다(테스트·주기적 정리용). */
-export function cleanupExpiredRecords(): void {
-  const now = Date.now();
-  for (const [ip, record] of attempts.entries()) {
-    if (now > record.resetAt) {
-      attempts.delete(ip);
-    }
-  }
-}
 
 /** 테스트에서 상태를 비우기 위한 헬퍼. */
 export function resetRateLimitStore(): void {

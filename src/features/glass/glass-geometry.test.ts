@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildGlassShape,
+  GLASS,
   GLASS_HEIGHT_M,
   GLASSES,
   realDimensions,
@@ -98,5 +99,19 @@ describe("realDimensions — 실제 치수", () => {
       expect(surfR, def.key).toBeGreaterThan(0);
       expect(liqH, def.key).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("GLASS — 이름과 인덱스", () => {
+  it("GLASSES 배열의 순서와 일치한다", () => {
+    // 어긋나면 "부르고뉴 잔"을 골랐는데 화이트 잔이 뜬다. 조용히 틀리는 종류라
+    // 두 값을 같은 파일에 두고 여기서 묶어 둔다.
+    for (const [key, idx] of Object.entries(GLASS)) {
+      expect(GLASSES[idx]?.key, key).toBe(key);
+    }
+  });
+
+  it("모든 잔이 이름을 갖는다", () => {
+    expect(Object.keys(GLASS)).toHaveLength(GLASSES.length);
   });
 });

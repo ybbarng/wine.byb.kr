@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { GLASS } from "@/features/glass/glass-geometry";
 import { grapeInfo } from "./grape-info";
-import { GLASS } from "./showcase-wines";
 import { wineGlassFor } from "./wine-glass";
 
 // DB 에 실제로 들어 있는 품종 표기. 코드 쪽 표와 표기가 흔들리는 것들을 골랐다.
