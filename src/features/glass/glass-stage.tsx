@@ -10,7 +10,7 @@
 //     교차 슬라이드한다(lab 에서 검증한 엔진). 페이지를 옮겨도 캔버스는 재초기화되지
 //     않고, imperative API(slideOut/addGlass)로 이전 잔을 내보내고 새 잔을 반대편에서
 //     들인다. 슬라이드 가속도가 안의 액체를 관성으로 출렁이게 한다.
-//   - 캔버스 배경색이 프레임·페이지 배경과 같은 #bda588 이라, 잔이 슬라이드해도 배경
+//   - 캔버스 배경색이 프레임·페이지 배경과 같은 색이라(canvas-bg.ts), 잔이 슬라이드해도 배경
 //     사각형은 보이지 않고 "잔"만 미끄러지는 것처럼 보인다.
 //
 // 전환 순서:
@@ -25,11 +25,8 @@
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { CANVAS_BG } from "./canvas-bg";
 import { HOME_GLASS, useGlassOptional } from "./glass-context";
-
-// 글라스 캔버스 배경(3D 씬) → ACES 톤매핑 후 화면엔 #bda588 로 보인다(프레임·페이지와 동일).
-const CANVAS_BG = "#9a8168";
-const CANVAS_RENDERED = "#bda588";
 
 const FluidLab = dynamic(() => import("@/components/FluidLab"), {
   ssr: false,
@@ -223,8 +220,8 @@ export function GlassStage() {
   return (
     <div
       data-testid="glass-stage"
-      className={`pointer-events-none absolute z-10 overflow-hidden transition-all ease-in-out ${frameClass(frameHome)}`}
-      style={{ background: CANVAS_RENDERED, transitionDuration: `${MOVE_MS}ms` }}
+      className={`pointer-events-none absolute z-10 overflow-hidden bg-background transition-all ease-in-out ${frameClass(frameHome)}`}
+      style={{ transitionDuration: `${MOVE_MS}ms` }}
     >
       <FluidLab
         wineAbsorb={initialRef.current.absorb}

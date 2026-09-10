@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { CANVAS_BG } from "@/features/glass/canvas-bg";
 import { ALL_PALETTE_AROMAS, AROMA_PALETTE } from "@/features/wine/aroma-palette";
 import {
   abvNote,
@@ -39,12 +40,6 @@ const FluidLab = dynamic(() => import("@/components/FluidLab"), {
   ssr: false,
   loading: () => null,
 });
-
-// 글라스 캔버스 배경 — 와인 페이지(WineDetailView)와 같은 평평한 웜톤으로 통일해,
-// 프리뷰에서 고른 색이 실제 와인 페이지 잔과 같게 보이게 한다. (bgColor 를 안 주면
-// 흐린 HDR 이 뒤에 비쳐 뿌옇고 위쪽이 어둡다.) 색 정확도는 hexToAbsorb 로그 보정으로.
-const CANVAS_BG = "#9a8168";
-const CANVAS_RENDERED = "#bda588";
 
 const REPURCHASE_OPTS = ["응", "아마", "아니"] as const;
 // 가격 대비 5단계(기존 3단계를 포함). 왼→오: 좋음 → 아쉬움.
@@ -408,10 +403,10 @@ export function TastingNoteWizard({
               {colorAgingNote ? <span className="block mt-1">{colorAgingNote}</span> : null}
             </Reveal>
           ) : null}
-          <div
-            className="relative mx-auto h-72 w-full max-w-[19rem] overflow-hidden rounded-2xl border border-foreground/12"
-            style={{ backgroundColor: CANVAS_RENDERED }}
-          >
+          {/* 배경을 와인 페이지(WineDetailView)와 같은 평평한 웜톤으로 통일해, 여기서 고른
+              색이 실제 와인 페이지 잔과 같게 보이게 한다. bgColor 를 안 주면 흐린 HDR 이
+              뒤에 비쳐 뿌옇고 위쪽이 어둡다. 색 정확도는 hexToAbsorb 로그 보정으로. */}
+          <div className="relative mx-auto h-72 w-full max-w-[19rem] overflow-hidden rounded-2xl border border-foreground/12 bg-background">
             <FluidLab
               wineAbsorb={previewAbsorb}
               abv={selWine?.abv}

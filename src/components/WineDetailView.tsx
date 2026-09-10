@@ -2,14 +2,10 @@
 
 import dynamic from "next/dynamic";
 import { type ReactNode, useEffect, useState } from "react";
+import { CANVAS_BG } from "@/features/glass/canvas-bg";
 import { GlassSetter, useGlassOptional } from "@/features/glass/glass-context";
 import { RegionMap } from "@/features/wine/region-map";
 import { ShowcaseHeader } from "./ShowcaseHeader";
-
-// 글라스 캔버스 배경(3D 씬) → ACES 톤매핑 후 화면엔 #bda588. 페이지 배경을 그
-// 렌더색에 맞춰 캔버스 이음새를 없앤다(홈과 동일).
-const CANVAS_BG = "#9a8168";
-const CANVAS_RENDERED = "#bda588";
 
 const FluidLab = dynamic(() => import("./FluidLab"), {
   ssr: false,
@@ -152,10 +148,7 @@ export function WineDetailView({
 
   // standalone: 배경·헤더·자체 잔까지 직접 렌더(셸 밖 페이지용).
   return (
-    <div
-      className="relative min-h-screen w-full md:h-screen md:overflow-hidden"
-      style={{ backgroundColor: CANVAS_RENDERED }}
-    >
+    <div className="relative min-h-screen w-full bg-background md:h-screen md:overflow-hidden">
       <ShowcaseHeader hairline={false} />
       {body}
     </div>
