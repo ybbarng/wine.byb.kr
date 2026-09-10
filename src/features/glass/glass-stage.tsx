@@ -110,6 +110,7 @@ export function GlassStage() {
   const swirlScale = ctx?.state.swirlScale;
   const abv = ctx?.state.abv ?? null;
   const setReveal = ctx?.setRevealContent;
+  const noteSwap = ctx?.noteSwap;
 
   // 잔 상태를 항상 최신으로 참조한다. 잔 교체(doSwap)는 지연 실행되므로, 그 시점의
   // "가장 최신" 잔을 넣어야 한다(새 페이지의 GlassSetter 가 잔 상태를 넣은 뒤 교체).
@@ -129,11 +130,14 @@ export function GlassStage() {
     shownRef.current = snap;
     const api = apiRef.current;
     if (!api) {
+      // 아직 FluidLab 이 준비되기 전이면 미뤄 둔다. 이름 등장도 함께 미뤄져야 하므로
+      // noteSwap 은 여기서 부르지 않는다(onReady 가 흘려보낼 때 부른다).
       pendingRef.current = { dir, snap };
       return;
     }
     api.slideOut(dir);
     api.addGlass(snap.glass, snap.absorb, dir === "left" ? "right" : "left", snap.abv);
+    noteSwap?.();
   };
 
   // useLayoutEffect: 페인트 전에 실행해, 홈→상세 진입 순간 콘텐츠를 먼저 숨긴다(깜빡 방지).
@@ -252,6 +256,7 @@ export function GlassStage() {
               p.dir === "left" ? "right" : "left",
               p.snap.abv
             );
+            noteSwap?.();
           }
         }}
       />

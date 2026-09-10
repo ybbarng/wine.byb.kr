@@ -44,6 +44,16 @@ type Ctx = {
   noteTouch: () => void;
   /** 홈 순환이 마지막으로 보여 준 와인 slug. 상세를 다녀와도 거기서 이어지게. */
   lastHomeWine: RefObject<string | null>;
+  /**
+   * 잔이 실제로 미끄러지기 시작할 때마다 오르는 수.
+   *
+   * 잔 상태를 바꾼 시각과 잔이 움직이기 시작하는 시각은 다르다 — 첫 교체는 FluidLab
+   * 초기화(WebGPU)를 기다렸다가 움직인다. 이름을 잔에 맞춰 얹으려면 "상태를 바꾼 때"가
+   * 아니라 이 시점을 기준으로 삼아야 한다.
+   */
+  swapSeq: number;
+  /** GlassStage 가 잔을 밀어내기 직전에 부른다. */
+  noteSwap: () => void;
 };
 const GlassContext = createContext<Ctx | null>(null);
 
@@ -52,9 +62,11 @@ export function GlassProvider({ children }: { children: ReactNode }) {
   const [revealContent, setRevealContent] = useState(true);
   const touchedAt = useRef(0);
   const lastHomeWine = useRef<string | null>(null);
+  const [swapSeq, setSwapSeq] = useState(0);
   const noteTouch = useCallback(() => {
     touchedAt.current = performance.now();
   }, []);
+  const noteSwap = useCallback(() => setSwapSeq((n) => n + 1), []);
   const value = useMemo(
     () => ({
       state,
@@ -64,8 +76,10 @@ export function GlassProvider({ children }: { children: ReactNode }) {
       touchedAt,
       noteTouch,
       lastHomeWine,
+      swapSeq,
+      noteSwap,
     }),
-    [state, revealContent, noteTouch]
+    [state, revealContent, noteTouch, swapSeq, noteSwap]
   );
   return <GlassContext.Provider value={value}>{children}</GlassContext.Provider>;
 }
