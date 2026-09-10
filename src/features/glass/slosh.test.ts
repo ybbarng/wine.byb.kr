@@ -21,8 +21,8 @@ const constsFor = (key: string) => {
 
 /** 자유 진동을 돌려 주파수와 진폭 반감기를 잰다. 진폭은 에너지로 재야 한다 — */
 /** |기울기| 는 선형 진동에서 반주기마다 0 을 지나므로 감쇠 대신 위상을 재게 된다. */
-function ringDown(c: SloshConstants, seconds = 25) {
-  let s = { ...zeroSlosh(), x: 0.1 }; // 기울인 채로 놓는다
+function ringDown(c: SloshConstants, seconds = 25, x0 = 0.1) {
+  let s = { ...zeroSlosh(), x: x0 }; // 기울인 채로 놓는다
   const trace: { t: number; x: number; amp: number }[] = [];
   for (let t = 0; t < seconds; t += DT) {
     s = stepSlosh(s, { glassTiltVX: 0, glassTiltVZ: 0 }, c, DT);
@@ -86,6 +86,21 @@ describe("stepSlosh — 적분", () => {
     const { halfLife } = ringDown(constsFor("bordeaux"));
     expect(halfLife).toBeGreaterThan(0.5); // 너무 빨리 죽으면 꿀처럼 보인다
     expect(halfLife).toBeLessThan(5); // 너무 오래 돌면 촐랑거린다
+  });
+
+  it("크게 출렁일수록 빨리 죽는다 — 액체와 용수철을 가르는 축", () => {
+    // 선형 감쇠만 있으면 진폭과 무관하게 같은 비율로 줄어, 출렁임이 앞것의 축소
+    // 복사본이 된다. 그게 "젤리 같다"의 정체다(2026-08-31·2026-09-09 실사용 피드백).
+    const c = constsFor("bordeaux");
+    const big = ringDown({ ...c }, 25, 0.28).halfLife;
+    const small = ringDown({ ...c }, 25, 0.06).halfLife;
+    expect(small / big, `큰 ${big.toFixed(2)}s · 작은 ${small.toFixed(2)}s`).toBeGreaterThan(1.3);
+  });
+
+  it("그래도 초기에 급사하지는 않는다 — 급사하면 꿀처럼 보인다", () => {
+    // QUAD 가 과하면(예전에 3.0 에서 겪음) 첫 출렁에서 뚝 떨어져 점성 인상이 된다.
+    const { halfLife } = ringDown(constsFor("bordeaux"), 25, 0.28);
+    expect(halfLife).toBeGreaterThan(0.4);
   });
 
   it("가만두면 움직이지 않는다", () => {
