@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { CANVAS_BG } from "@/features/glass/canvas-bg";
 import { GLASS, GLASSES } from "@/features/glass/glass-geometry";
 import { hexToAbsorb } from "@/features/wine/wine-glass";
 
@@ -29,11 +30,6 @@ const WINE_PRESETS: Preset[] = [
   { name: "샴페인", color: "#f1e7b4", glass: GLASS.flute },
   { name: "아이스와인", color: "#cf8f2a", glass: GLASS.dessert },
 ];
-
-// 와인 페이지(WineDetailView)와 같은 평평한 웜톤 배경. HDR 을 그대로 쓰면 위쪽이
-// 어두운 회색 천장 영역으로 그라데이션 져 지저분하다. 프리뷰는 이 단색을 쓴다.
-const CANVAS_BG = "#9a8168";
-const CANVAS_RENDERED = "#bda588";
 
 type WineRow = {
   slug: string;
@@ -104,8 +100,10 @@ export default function FluidLabMount() {
     setTimeout(() => setSaveState("idle"), 2500);
   };
 
+  // 배경은 평평한 웜톤 단색(bg-background). HDR 을 그대로 쓰면 위쪽이 어두운 회색
+  // 천장으로 그라데이션 져 지저분하다 — 와인 페이지(WineDetailView)와 같게 맞춘다.
   return (
-    <div className="relative h-full w-full" style={{ backgroundColor: CANVAS_RENDERED }}>
+    <div className="relative h-full w-full bg-background">
       <FluidLab
         wineAbsorb={absorb}
         glassType={glassIdx}
@@ -178,10 +176,7 @@ export default function FluidLabMount() {
 
       {/* 작은 프리뷰 — 와인 페이지와 같은 평평한 웜 배경(HDR 그라데이션 없이 깔끔). */}
       <div className="absolute bottom-3 right-3 z-10 flex flex-col items-center gap-1">
-        <div
-          className="relative h-72 w-52 overflow-hidden rounded-2xl border border-white/25"
-          style={{ backgroundColor: CANVAS_RENDERED }}
-        >
+        <div className="relative h-72 w-52 overflow-hidden rounded-2xl border border-white/25 bg-background">
           <FluidLab wineAbsorb={absorb} glassType={glassIdx} bgColor={CANVAS_BG} swirlScale={0.4} />
         </div>
         <span className="rounded bg-black/45 px-1.5 py-0.5 text-[10px] text-white/70 backdrop-blur">

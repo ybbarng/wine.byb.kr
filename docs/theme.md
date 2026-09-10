@@ -97,6 +97,11 @@
 ## 쇼케이스 캔버스 배경 (글라스 페이지 전용)
 
 글라스 3D 씬은 ACES 톤매핑을 거쳐 화면에 `#bda588`로 나온다. 그래서 캔버스에
-넘기는 배경(`bgColor`)은 `#9a8168`(= 톤매핑 후 `#bda588`), 페이지 배경은
-`#bda588`로 둬야 이음새가 없다. `WineDetailView`가 이 두 값을 상수로 들고 있다
-(`CANVAS_BG` / `CANVAS_RENDERED`).
+넘기는 배경(`bgColor`)은 `#9a8168`(= 톤매핑 후 `#bda588`)이어야 하고, 캔버스를 감싸는
+쪽 배경은 `--background`와 같아야 이음새가 없다.
+
+- 캔버스에 넘기는 값은 `features/glass/canvas-bg.ts`의 **`CANVAS_BG` 하나뿐**이다.
+  hex를 화면 요소에 다시 적지 않는다.
+- 감싸는 쪽 배경은 `bg-background`를 쓴다 — 색의 단일 출처는 토큰이다.
+- `--background`를 바꾸면 `CANVAS_BG`도 다시 잡아야 한다. `canvas-bg.test.ts`가
+  globals.css를 읽어 어긋남을 잡는다.
