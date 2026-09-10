@@ -43,7 +43,7 @@ import {
   wineLevels,
 } from "@/features/glass/glass-geometry";
 import { deriveLegs, type LegsProfile } from "@/features/glass/legs";
-import { deriveSloshConstants, stepSlosh } from "@/features/glass/slosh";
+import { deriveSloshConstants, stepSlosh, stepSpin } from "@/features/glass/slosh";
 import { flatWave, surfaceWaveHeight, W2SPD, W3SPD } from "@/features/glass/surface-wave";
 
 // 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
@@ -1315,17 +1315,9 @@ export default function FluidLab({
           // 보인다(중심이 얇아 밝은 것만 남음). 0.18 로 낮춰 오목 반사 단서를 남긴다.
           if (g.roughnessU) g.roughnessU.value = 0.14 + g.waveAct * 0.18;
           const phi = Math.atan2(g.sloshZ, g.sloshX);
-          // 스핀다운(회전 관성): 감쇠 진동자는 진폭만 줄고 회전 주파수는 ω로 고정이라,
-          // 그냥 두면 수면이 평평해져도 계속 빠르게 도는 것처럼 보인다. 실제 유체는
-          // 각운동량을 잃으며 잦아든다. 크레스트 각도(crestPh)를 슬로싱 방향 φ에 붙이되,
-          // 한 프레임 회전 상한을 회전 관성 spinE(0~1)로 건다.
-          //  - 충전: 잔을 움직이는 동안(gv) 빠르게 1로 → 선형·스월 모두 φ를 즉각 추종.
-          //  - 방전: 놓으면 감소. 감쇠율을 (1−spinE)에 비례시켜, 빠를 땐 천천히 줄고
-          //    느려지면 더 빨리 줄어 깔끔히 멈춘다(마른 마찰·접촉선 정지 느낌).
-          const glassMove = Math.hypot(gvx, gvz);
-          const charge = Math.min(1, glassMove / 0.8);
-          if (charge > g.spinE) g.spinE += (charge - g.spinE) * 0.3;
-          else g.spinE = Math.max(0, g.spinE - (0.18 + 0.6 * (1 - g.spinE)) * dt);
+          // 스핀다운(회전 관성): 크레스트 각도(crestPh)를 슬로싱 방향 φ 에 붙이되,
+          // 한 프레임 회전 상한을 spinE(0~1)로 건다. 식·상수는 slosh.ts 에 있다.
+          g.spinE = stepSpin(g.spinE, Math.hypot(gvx, gvz), dt);
           let dPhi = phi - g.crestPh;
           while (dPhi > Math.PI) dPhi -= Math.PI * 2;
           while (dPhi < -Math.PI) dPhi += Math.PI * 2;

@@ -58,6 +58,40 @@ export const QUAD_DAMPING = 0.16;
  */
 export const SLOSH_MAX = 0.3;
 
+/**
+ * 회전 관성(0~1) — 수면의 크레스트가 잔을 도는 "여력".
+ *
+ * 감쇠 진동자는 진폭만 줄고 회전 주파수는 ω 로 고정이라, 그냥 두면 수면이 거의
+ * 평평해져도 계속 빠르게 도는 것처럼 보인다. 실제 유체는 각운동량을 잃으며 멎는다.
+ * 그래서 크레스트가 한 프레임에 돌 수 있는 각도에 이 값을 상한으로 건다.
+ *
+ * 충전은 빠르게(잔을 움직이는 동안 곧바로 1), 방전은 느리게. 방전 속도를 `(1−spin)`
+ * 에 비례시켜 **빠를 땐 천천히, 느려지면 더 빨리** 줄인다 — 끝이 흐지부지되지 않고
+ * 깔끔히 멈춘다(마른 마찰·접촉선 정지 느낌).
+ *
+ * 2026-09-10: 멎는 데 2.4초가 걸려 "액체가 너무 오래 돈다"는 이야기를 들었다.
+ * 1.43초로 줄였다. 감쇠(ζ·QUAD)는 건드리지 않았다 — 그쪽을 올리면 출렁임 자체가
+ * 급사해 꿀처럼 보인다. 문제는 출렁임이 아니라 **회전**이었다.
+ */
+const SPIN_DECAY_BASE = 0.35;
+const SPIN_DECAY_SLOW = 0.9;
+
+/** 이 각속도(rad/s)로 잔을 움직이면 회전 관성이 가득 찬다. */
+const SPIN_CHARGE_SPEED = 0.8;
+
+/** 충전은 프레임당 이 비율로 따라붙는다. */
+const SPIN_CHARGE_EASE = 0.3;
+
+/**
+ * 회전 관성 한 스텝. `glassSpeed` 는 잔 기울기의 각속도 크기(rad/s).
+ * 움직이는 동안엔 차고, 놓으면 잦아든다.
+ */
+export function stepSpin(spin: number, glassSpeed: number, dt: number): number {
+  const charge = Math.min(1, glassSpeed / SPIN_CHARGE_SPEED);
+  if (charge > spin) return spin + (charge - spin) * SPIN_CHARGE_EASE;
+  return Math.max(0, spin - (SPIN_DECAY_BASE + SPIN_DECAY_SLOW * (1 - spin)) * dt);
+}
+
 /** 이 잔의 슬로싱 상수. 형상에서 유도한다. */
 export interface SloshConstants {
   omega: number; // 1차 슬로싱 각진동수(rad/s)
