@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { autoSwirlTilt } from "./auto-swirl";
 import { buildGlassShape, GLASSES, realDimensions } from "./glass-geometry";
 import {
   deriveSloshConstants,
   SLOSH_MAX,
   type SloshConstants,
+  type SloshDrive,
   type SloshState,
   stepSlosh,
   stepSpin,
@@ -241,5 +243,81 @@ describe("회전 마찰 — 도는 것만 잡고 출렁임은 놔둔다", () => 
       s = stepSlosh(s, { glassTiltVX: 0, glassTiltVZ: 0 }, c, DT);
       expect(Math.abs(s.z)).toBeLessThan(1e-12);
     }
+  });
+});
+
+describe("스월 뒤와 이동 뒤가 비슷한 시간에 멎는다", () => {
+  /** 눈에 띄게 출렁인다고 볼 최소 기울기. */
+  const VISIBLE = 0.015;
+
+  /** 구동이 끝난 뒤 언제까지 눈에 띄게 출렁이는가(초). */
+  function quietAfter(
+    c: SloshConstants,
+    drive: (t: number) => SloshDrive,
+    driveEnd: number
+  ): number {
+    let s = zeroSlosh();
+    let last = 0;
+    for (let t = 0; t < 12; t += DT) {
+      s = stepSlosh(s, drive(t), c, DT);
+      if (Math.hypot(s.x, s.z) > VISIBLE) last = t;
+    }
+    return Math.max(0, last - driveEnd);
+  }
+
+  /** 자동 스월 — 잔을 원으로 돌린다(회전 구동). */
+  function swirlDrive(): (t: number) => SloshDrive {
+    const MAX_TILT = 0.32 * 0.8; // 홈의 swirlScale
+    let px = 0;
+    let pz = 0;
+    return (t) => {
+      const g = autoSwirlTilt(t, MAX_TILT);
+      const nx = px + (g.x - px) * 0.5; // FluidLab 의 잔 추종(gEase)
+      const nz = pz + (g.z - pz) * 0.5;
+      const d = { glassTiltVX: (nx - px) / DT, glassTiltVZ: (nz - pz) / DT };
+      px = nx;
+      pz = nz;
+      return d;
+    };
+  }
+
+  /** 교차 슬라이드 — 잔이 옆으로 미끄러진다(한 축 구동). smootherstep 의 가속도. */
+  function slideDrive(dist: number, dur = 1.3): (t: number) => SloshDrive {
+    return (t) => {
+      if (t >= dur) return { glassTiltVX: 0, glassTiltVZ: 0 };
+      const u = t / dur;
+      const acc = ((60 * u - 180 * u * u + 120 * u * u * u) * dist) / (dur * dur);
+      return { glassTiltVX: 0, glassTiltVZ: 0, slideAX: acc };
+    };
+  }
+
+  it("이동 뒤가 스월 뒤보다 지나치게 오래 남지 않는다", () => {
+    // 둘은 성격이 다르다. 스월은 회전이라 SWIRL_FRICTION 이 잡지만, 이동은 한 축
+    // 왕복이라 마찰이 걸릴 데가 없다. 같은 세기로 밀면 이동 쪽만 한참 남아
+    // "스월 뒤는 빨리 죽고 이동 뒤는 너무 오래"가 된다(2026-09-10 실사용 피드백).
+    const c = constsFor("bordeaux");
+    const swirl = quietAfter(c, swirlDrive(), 1.4);
+    const slide = quietAfter(c, slideDrive(3), 1.3);
+    expect(slide, `스월 ${swirl.toFixed(1)}s · 이동 ${slide.toFixed(1)}s`).toBeLessThan(
+      swirl * 2.5
+    );
+  });
+
+  it("스월 뒤가 너무 빨리 죽지도 않는다", () => {
+    // 놓자마자 뚝 서면 물이 아니라 젤리로 보인다.
+    const c = constsFor("bordeaux");
+    expect(quietAfter(c, swirlDrive(), 1.4)).toBeGreaterThan(0.7);
+  });
+
+  it("그래도 이동이 액체를 흔들기는 한다 — 안 흔들리면 잔만 따로 움직여 보인다", () => {
+    const c = constsFor("bordeaux");
+    const drive = slideDrive(3);
+    let s = zeroSlosh();
+    let peak = 0;
+    for (let t = 0; t < 3; t += DT) {
+      s = stepSlosh(s, drive(t), c, DT);
+      peak = Math.max(peak, Math.hypot(s.x, s.z));
+    }
+    expect(peak).toBeGreaterThan(0.02);
   });
 });

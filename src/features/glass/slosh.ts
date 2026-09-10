@@ -83,10 +83,32 @@ export const SLOSH_MAX = 0.3;
  * ```
  *
  * 마찰은 도는 성분을 깎으므로 **스월 최대 진폭도 함께 줄인다.** 그게 올릴 수 있는 한계다.
- * 5.0 이면 회전은 2초 안에 사라지면서도 최대 진폭은 예전(2026-09-10 이전 파형, 보르도
- * 0.171)보다 여전히 크다.
+ *
+ * 처음엔 5.0 으로 뒀다가 "스월 뒤 진동이 좀 빨리 죽는다"는 이야기를 듣고 3.0 으로 내렸다.
+ * 스월이 끝나고 눈에 안 띌 때까지 보르도 0.6 → 1.0초, 부르고뉴 1.1 → 1.6초.
+ * 아래 `SLIDE_COUPLING` 과 짝이다 — 스월 뒤와 이동 뒤가 비슷한 시간에 멎어야 한다.
  */
-export const SWIRL_FRICTION = 5.0;
+export const SWIRL_FRICTION = 3.0;
+
+/**
+ * 잔이 옆으로 미끄러질 때 그 가속도가 액체를 미는 세기.
+ *
+ * 스월과 달리 이건 **한 축 왕복**을 만든다 — 도는 성분이 없어 `SWIRL_FRICTION` 이 걸릴
+ * 데가 없고 오직 보통 감쇠로만 잦아든다. 그래서 같은 세기로 밀면 스월보다 훨씬 오래
+ * 남는다. 0.8 에서는 이동 뒤 3.3초를 출렁여, 1초 만에 멎는 스월과 어긋났다
+ * (2026-09-10 "이동 후 진동은 너무 오래 유지되는 느낌").
+ *
+ * ```
+ *   결합   이동 뒤 잦아듦(거리 2 / 3 / 4)
+ *   0.8    2.7초 / 3.3초 / 3.3초
+ *   0.35   1.2초 / 2.0초 / 2.4초
+ * ```
+ *
+ * 미는 양 자체를 줄였다. 감쇠(ζ·QUAD)를 올려 잡으려 하면 스월과 드래그의 손맛까지 함께
+ * 죽는다 — 문제는 감쇠가 아니라 **이 구동이 과했던 것**이다. 0 으로 두면 안 된다:
+ * 잔이 미끄러지는데 안이 잠잠하면 잔만 따로 움직이는 것처럼 보인다.
+ */
+export const SLIDE_COUPLING = 0.35;
 
 /**
  * 회전 관성(0~1) — 수면의 크레스트가 잔을 도는 "여력".
@@ -191,8 +213,8 @@ export function stepSlosh(
   const w2 = c.omega * c.omega;
   let vx = s.vx + (-w2 * s.x - damp * s.vx) * dt - c.couple * drive.glassTiltVZ * dt;
   let vz = s.vz + (-w2 * s.z - damp * s.vz) * dt + c.couple * drive.glassTiltVX * dt;
-  if (drive.slideAX) vx -= c.couple * 0.8 * drive.slideAX * dt;
-  if (drive.slideAZ) vz -= c.couple * 0.8 * drive.slideAZ * dt;
+  if (drive.slideAX) vx -= c.couple * SLIDE_COUPLING * drive.slideAX * dt;
+  if (drive.slideAZ) vz -= c.couple * SLIDE_COUPLING * drive.slideAZ * dt;
   // 회전 마찰 — 속도를 지름/접선으로 나눠 접선(도는) 쪽만 깎는다. 한 축 왕복은 접선
   // 성분이 0 이라 그대로 지나간다(SWIRL_FRICTION 참고).
   const r2 = s.x * s.x + s.z * s.z;
