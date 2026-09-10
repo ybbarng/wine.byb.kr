@@ -58,8 +58,6 @@ export function clearFailedAttempts(ip: string): void {
   attempts.delete(ip);
 }
 
-/** 창이 지난 오래된 기록을 정리한다(테스트·주기적 정리용). */
-
 /** 테스트에서 상태를 비우기 위한 헬퍼. */
 export function resetRateLimitStore(): void {
   attempts.clear();

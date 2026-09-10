@@ -739,7 +739,7 @@ export default function FluidLab({
     // 와인 뒤 장면(와인만 숨김) — 와인이 이걸 굴절+흡수로 샘플 → 투과(화이트와인 비침).
     // biome-ignore lint/suspicious/noExplicitAny: TSL RT
     let bgRT: any;
-    // 스월 상태(WineGlass.tsx 방식 이식): 드래그로 잔을 기울이고, 액체 수면은
+    // 스월 상태: 드래그로 잔을 기울이고, 액체 수면은
     // 월드 수평(중력)을 유지 → 잔 벽을 타고 출렁. 관성 진동(a)으로 넘실.
     // 슬로싱: 수면 기울기(sloshX,Z)=2D 감쇠 진동자. 마우스 움직임이 구동 →
     // 원으로 흔들면 기울기가 세차(회전)해 수면 크레스트가 돌고, 멈추면 잦아듦.
@@ -1470,7 +1470,7 @@ export default function FluidLab({
       // 있어 검색·내비는 안 막힌다). standalone 은 원래 auto 라 영향 없다.
       renderer.domElement.style.pointerEvents = "auto";
 
-      // 스월링 입력: 드래그로 잔을 기울인다(WineGlass.tsx 방식).
+      // 스월링 입력: 드래그로 잔을 기울인다.
       //
       // 손가락 하나만 따라간다. 화면을 확대하려고 두 손가락을 올리면 각 손가락이 따로
       // pointermove 를 보내는데, 그걸 다 받으면 좌표가 두 손가락 사이를 오가며 튄다 →
