@@ -35,6 +35,7 @@ import {
 } from "three/tsl";
 import * as THREE from "three/webgpu";
 import { AUTO_SWIRL_SECONDS, autoSwirlTilt, nextSwirlWait } from "@/features/glass/auto-swirl";
+import { CROSS_SLIDE_SECONDS, crossSlideEase } from "@/features/glass/cross-slide";
 import {
   buildGlassShape,
   GLASS_HEIGHT_M,
@@ -1078,7 +1079,7 @@ export default function FluidLab({
       gg.slideTo = to;
       gg.slideTarget = to;
       gg.slideT = 0;
-      gg.slideDur = 1.3;
+      gg.slideDur = CROSS_SLIDE_SECONDS;
       gg.sliding = true;
     }
 
@@ -1211,8 +1212,7 @@ export default function FluidLab({
           //  ② 손 슬라이더(잔 1개, 활성): 연속 조작이라 지수 이징(부드럽게 따라가기).
           if (g.sliding) {
             g.slideT = Math.min(1, g.slideT + dt / g.slideDur);
-            const t = g.slideT;
-            const s = t * t * t * (t * (t * 6 - 15) + 10); // smootherstep
+            const s = crossSlideEase(g.slideT);
             g.slideX = g.slideFrom + (g.slideTo - g.slideFrom) * s;
             if (g.slideT >= 1) g.sliding = false;
           } else {
