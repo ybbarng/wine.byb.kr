@@ -267,18 +267,27 @@ describe("양조에서 오는 향", () => {
     expect(groups.map((g) => g.source)).not.toContain("양조에서 (효모 숙성)");
   });
 
-  it("품종 향과 겹치면 앞 묶음이 이기고 한 번만 뜬다", () => {
-    // 피노뫼니에에 아직 "빵"이 있다(양조 데이터가 prod 에 간 뒤 뗀다). 그동안 두 묶음에
-    // 같은 칩이 두 번 뜨면 안 된다.
+  it("빵은 품종이 아니라 양조에서 온다", () => {
+    // 피노뫼니에에 "빵"이 붙어 있었는데, 그건 이 포도의 향이 아니라 샴페인의 리
+    // 숙성에서 오는 향이다. 근거를 밝히는 자리가 달라져야 한다.
     const groups = expectedAromaGroups({
       grapes: ["피노뫼니에"],
       type: "champagne",
       winemaking: ["lees"],
     });
+    expect(groups.find((g) => g.source === "품종에서")?.aromas).not.toContain("빵");
+    expect(groups.find((g) => g.source.startsWith("양조에서"))?.aromas).toContain("빵");
+  });
+
+  it("같은 향이 두 묶음에 두 번 뜨지 않는다", () => {
+    const groups = expectedAromaGroups({
+      grapes: ["샤르도네"],
+      type: "champagne",
+      winemaking: ["lees"],
+      oakAging: "light",
+    });
     const all = groups.flatMap((g) => g.aromas);
     expect(new Set(all).size).toBe(all.length);
-    expect(groups.find((g) => g.source === "품종에서")?.aromas).toContain("빵");
-    expect(groups.find((g) => g.source.startsWith("양조에서"))?.aromas).not.toContain("빵");
   });
 
   it("묶음 순서는 품종 → 양조 → 오크 → 숙성", () => {
