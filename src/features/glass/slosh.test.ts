@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { autoSwirlTilt } from "./auto-swirl";
+import { AUTO_SWIRL_SECONDS, autoSwirlTilt } from "./auto-swirl";
+import { CROSS_SLIDE_SECONDS, crossSlideAccel } from "./cross-slide";
 import { buildGlassShape, GLASSES, realDimensions } from "./glass-geometry";
 import {
   deriveSloshConstants,
@@ -281,32 +282,54 @@ describe("스월 뒤와 이동 뒤가 비슷한 시간에 멎는다", () => {
     };
   }
 
-  /** 교차 슬라이드 — 잔이 옆으로 미끄러진다(한 축 구동). smootherstep 의 가속도. */
-  function slideDrive(dist: number, dur = 1.3): (t: number) => SloshDrive {
-    return (t) => {
-      if (t >= dur) return { glassTiltVX: 0, glassTiltVZ: 0 };
-      const u = t / dur;
-      const acc = ((60 * u - 180 * u * u + 120 * u * u * u) * dist) / (dur * dur);
-      return { glassTiltVX: 0, glassTiltVZ: 0, slideAX: acc };
-    };
+  /** 교차 슬라이드 — 잔이 옆으로 미끄러진다(한 축 구동). 파형은 cross-slide.ts 그대로. */
+  function slideDrive(dist: number): (t: number) => SloshDrive {
+    return (t) => ({ glassTiltVX: 0, glassTiltVZ: 0, slideAX: crossSlideAccel(t, dist) });
   }
 
   it("이동 뒤가 스월 뒤보다 지나치게 오래 남지 않는다", () => {
     // 둘은 성격이 다르다. 스월은 회전이라 SWIRL_FRICTION 이 잡지만, 이동은 한 축
-    // 왕복이라 마찰이 걸릴 데가 없다. 같은 세기로 밀면 이동 쪽만 한참 남아
-    // "스월 뒤는 빨리 죽고 이동 뒤는 너무 오래"가 된다(2026-09-10 실사용 피드백).
+    // 왕복이라 마찰이 걸릴 데가 없다. 같은 세기로 밀면 이동 쪽만 한참 남는다.
+    //
+    // 이동 거리는 화면 가로 비율을 따른다(offscreenSlide = camera.right + 1.2).
+    // 좁은 화면 2 부터 아주 넓은 화면 4 까지 전부 본다 — 하나만 보면 넓은 화면에서
+    // 조용히 어긋난다.
     const c = constsFor("bordeaux");
-    const swirl = quietAfter(c, swirlDrive(), 1.4);
-    const slide = quietAfter(c, slideDrive(3), 1.3);
-    expect(slide, `스월 ${swirl.toFixed(1)}s · 이동 ${slide.toFixed(1)}s`).toBeLessThan(
-      swirl * 2.5
-    );
+    const swirl = quietAfter(c, swirlDrive(), AUTO_SWIRL_SECONDS);
+    for (const dist of [2, 3, 4]) {
+      const slide = quietAfter(c, slideDrive(dist), CROSS_SLIDE_SECONDS);
+      expect(
+        slide,
+        `거리 ${dist}: 스월 ${swirl.toFixed(1)}s · 이동 ${slide.toFixed(1)}s`
+      ).toBeLessThan(swirl * 2.5);
+    }
   });
 
   it("스월 뒤가 너무 빨리 죽지도 않는다", () => {
     // 놓자마자 뚝 서면 물이 아니라 젤리로 보인다.
     const c = constsFor("bordeaux");
-    expect(quietAfter(c, swirlDrive(), 1.4)).toBeGreaterThan(0.7);
+    expect(quietAfter(c, swirlDrive(), AUTO_SWIRL_SECONDS)).toBeGreaterThan(0.7);
+  });
+
+  it("실제 스월 파형으로도 회전이 3초 안에 잦아든다", () => {
+    // 위 "회전 마찰" 블록은 완전한 원을 놓고 재는데, 그러면 마찰이 처음부터 끝까지
+    // 걸려 실제보다 후하다. 홈에서 일어나는 일 그대로 — 자동 스월을 돌리고 놓은 뒤
+    // 얼마나 도는지 — 를 재야 SWIRL_FRICTION 을 낮췄을 때 회전이 되살아나는 걸 잡는다.
+    const c = constsFor("burgundy"); // 감쇠가 가장 작아 제일 오래 돈다
+    const drive = swirlDrive();
+    let s = zeroSlosh();
+    const win = Math.round((2 * Math.PI) / c.omega / DT);
+    const hist: number[] = [];
+    for (let t = 0; t < 3; t += DT) {
+      s = stepSlosh(s, drive(t), c, DT);
+      hist.push(Math.hypot(s.x, s.z));
+      if (hist.length > win) hist.shift();
+    }
+    const hi = Math.max(...hist);
+    const lo = Math.min(...hist);
+    const round = hi > 1e-12 ? lo / hi : 0;
+    expect(round, `둥글기 ${round.toFixed(2)} · 기울기 ${hi.toFixed(3)}`).toBeLessThan(0.6);
+    expect(hi).toBeLessThan(0.03); // 그 무렵엔 진폭도 눈에 안 띄어야 한다
   });
 
   it("그래도 이동이 액체를 흔들기는 한다 — 안 흔들리면 잔만 따로 움직여 보인다", () => {
