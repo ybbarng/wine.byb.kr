@@ -225,6 +225,11 @@ export function GlassStage() {
       data-testid="glass-stage"
       className={`pointer-events-none absolute z-10 overflow-hidden bg-background transition-all ease-in-out ${frameClass(frameHome)}`}
       style={{ transitionDuration: `${MOVE_MS}ms` }}
+      // 잔을 만지는 동안엔 홈 순환이 잔을 갈아 끼우지 않는다 — 붙잡고 돌리는 중에
+      // 잔이 미끄러져 나가면 최악이다. 캔버스의 포인터 이벤트가 여기까지 올라온다.
+      onPointerDown={ctx.noteTouch}
+      onPointerMove={ctx.noteTouch}
+      onPointerUp={ctx.noteTouch}
     >
       <FluidLab
         wineAbsorb={initialRef.current.absorb}

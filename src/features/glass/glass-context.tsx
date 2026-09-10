@@ -3,7 +3,17 @@
 // 홈·상세가 공유하는 "떠 있는 와인잔" 상태. (main) 레이아웃이 FluidLab 을 한 번만
 // 마운트하고, 각 페이지는 GlassSetter 로 현재 잔(색·잔 종류)만 갈아끼운다. 이렇게 하면
 // 페이지를 옮겨도 잔이 재초기화되지 않고, 위치만 CSS 로 옮겨 자연스럽게 이동한다.
-import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 export type GlassState = {
   absorb: [number, number, number];
@@ -28,17 +38,36 @@ type Ctx = {
   // 이동하는 동안은 false 로 숨겨 겹침을 막고, 이동이 끝나면 true 로 fade-in 한다.
   revealContent: boolean;
   setRevealContent: (v: boolean) => void;
+  /** 잔을 마지막으로 만진 시각(performance.now). 홈 순환이 이걸 보고 기다린다. */
+  touchedAt: RefObject<number>;
+  /** 잔을 만졌다고 알린다. 리렌더를 만들지 않으려고 ref 로 둔다. */
+  noteTouch: () => void;
+  /** 홈 순환이 마지막으로 보여 준 와인 slug. 상세를 다녀와도 거기서 이어지게. */
+  lastHomeWine: RefObject<string | null>;
 };
 const GlassContext = createContext<Ctx | null>(null);
 
 export function GlassProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GlassState>(HOME_GLASS);
   const [revealContent, setRevealContent] = useState(true);
-  return (
-    <GlassContext.Provider value={{ state, setGlass: setState, revealContent, setRevealContent }}>
-      {children}
-    </GlassContext.Provider>
+  const touchedAt = useRef(0);
+  const lastHomeWine = useRef<string | null>(null);
+  const noteTouch = useCallback(() => {
+    touchedAt.current = performance.now();
+  }, []);
+  const value = useMemo(
+    () => ({
+      state,
+      setGlass: setState,
+      revealContent,
+      setRevealContent,
+      touchedAt,
+      noteTouch,
+      lastHomeWine,
+    }),
+    [state, revealContent, noteTouch]
   );
+  return <GlassContext.Provider value={value}>{children}</GlassContext.Provider>;
 }
 
 /** (main) 셸 안에서만 유효. 셸 밖(producer/journal 등)에서는 null 을 반환한다. */

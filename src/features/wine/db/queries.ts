@@ -1,3 +1,4 @@
+import { averageHex, wineGlassFor } from "@/features/wine/wine-glass";
 import { db } from "@/lib/db";
 import { decodeSlug } from "@/lib/slug";
 
@@ -33,4 +34,69 @@ export async function getWineBySlug(rawSlug: string) {
       : [];
 
   return { wine, similar };
+}
+
+/** 홈에서 잔을 갈아 끼우며 보여 줄 와인 한 종. 잔·색·이름·산지에 필요한 것만. */
+export type RotationWine = {
+  slug: string;
+  nameKo: string;
+  nameLocal: string | null;
+  type: string | null;
+  abv: number | null;
+  /** 잔 안 와인의 흡수계수(색). */
+  absorb: [number, number, number];
+  /** GLASSES 인덱스. */
+  glass: number;
+  /** "샤블리 · 프랑스" 처럼 이름 아래 붙일 한 줄. 없으면 null. */
+  origin: string | null;
+};
+
+/**
+ * 홈 순환에 쓸 와인들. 색·잔은 상세 페이지와 **같은 방법**으로 미리 정한다
+ * (wineGlassFor + 시음 기록 색 평균) — 홈에서 본 잔이 눌러 들어간 페이지와 달라
+ * 보이면 안 된다.
+ *
+ * 서버에서 한 번에 다 내려보낸다. 잔을 바꿀 때마다 요청하면 네트워크가 느릴 때
+ * 리듬이 끊긴다 — 60종 남짓이라 그냥 다 보내는 편이 단순하다.
+ */
+export async function getRotationWines(): Promise<RotationWine[]> {
+  const wines = await db.wine.findMany({
+    select: {
+      slug: true,
+      nameKo: true,
+      nameLocal: true,
+      type: true,
+      abv: true,
+      colorHex: true,
+      region: { select: { nameKo: true, country: true, parent: { select: { nameKo: true } } } },
+      grapes: {
+        select: { grape: { select: { nameKo: true } } },
+        orderBy: [{ percent: "desc" }, { id: "asc" }],
+      },
+      tastingNotes: { where: { isPublic: true }, select: { colorHex: true } },
+    },
+    orderBy: { slug: "asc" },
+  });
+
+  return wines.map((w) => {
+    const displayColor = w.colorHex ?? averageHex(w.tastingNotes.map((n) => n.colorHex));
+    const { absorb, glass } = wineGlassFor(
+      w.type,
+      w.grapes.map((g) => g.grape.nameKo),
+      w.slug,
+      displayColor
+    );
+    const country = w.region?.country ?? w.region?.parent?.nameKo ?? null;
+    const parts = [w.region?.nameKo, country].filter((p): p is string => !!p);
+    return {
+      slug: w.slug,
+      nameKo: w.nameKo,
+      nameLocal: w.nameLocal,
+      type: w.type,
+      abv: w.abv,
+      absorb,
+      glass,
+      origin: parts.length > 0 ? [...new Set(parts)].join(" · ") : null,
+    };
+  });
 }
