@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { GLASS } from "@/features/glass/glass-geometry";
-import { grapeInfo } from "./grape-info";
-import { wineGlassFor } from "./wine-glass";
+import { grapeInfo } from "@/features/wine/curation/grape-info";
+import { wineGlassFor } from "@/features/wine/wine-glass";
 
 // DB 에 실제로 들어 있는 품종 표기. 코드 쪽 표와 표기가 흔들리는 것들을 골랐다.
 // 정확히 일치로 찾으면 이것들이 조용히 빗나가 타입 기본값으로 떨어진다.

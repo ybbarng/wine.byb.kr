@@ -2,7 +2,7 @@
 // 후보가 없으면(겹치는 품종이 없거나 다른 산지가 없으면) 아무것도 안 그린다.
 
 import Link from "next/link";
-import type { SimilarRegion } from "./collection-queries";
+import type { SimilarRegion } from "@/features/wine/db/collection-queries";
 
 export function SimilarRegions({ regions }: { regions: SimilarRegion[] }) {
   if (regions.length === 0) return null;

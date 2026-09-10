@@ -1,6 +1,6 @@
+import { regionInfo } from "@/features/wine/curation/region-info";
 import { db } from "@/lib/db";
 import { decodeSlug } from "@/lib/slug";
-import { regionInfo } from "./region-info";
 
 // 산지/품종/타입 "컬렉션" 페이지용 조회. (러프 — 목록 + 대표 정보)
 const WINE_LIST_INCLUDE = {

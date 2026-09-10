@@ -4,7 +4,7 @@ import Link from "next/link";
 import { type ComponentProps, useState } from "react";
 import type { CatalogRegionGroup } from "@/app/catalog/page";
 import { WineList } from "@/components/WineList";
-import { GrapeColorDot } from "@/features/wine/grape-color";
+import { GrapeColorDot } from "@/features/wine/ui/grape-color";
 
 type Tab = "wine" | "region" | "grape";
 

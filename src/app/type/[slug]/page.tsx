@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { WineDetailView } from "@/components/WineDetailView";
 import { WineList } from "@/components/WineList";
-import { getWinesByType } from "@/features/wine/collection-queries";
+import { getWinesByType } from "@/features/wine/db/collection-queries";
 import { wineGlassFor } from "@/features/wine/wine-glass";
 import { WINE_TYPE_LABELS, wineTypeLabel } from "@/lib/wine";
 

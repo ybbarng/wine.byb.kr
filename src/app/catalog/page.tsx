@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { SiteHeader } from "@/components/site-header";
 import { CatalogView } from "@/features/catalog/catalog-view";
-import { countryFlag } from "@/features/wine/country-names";
-import { regionInfo } from "@/features/wine/region-info";
+import { countryFlag } from "@/features/wine/curation/country-names";
+import { regionInfo } from "@/features/wine/curation/region-info";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";

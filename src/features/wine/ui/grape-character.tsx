@@ -2,7 +2,7 @@
 // 음식 페어링은 "무엇과, 왜"를 함께 보여준다(이유를 알면 다른 음식으로도 응용할 수 있다).
 // 값이 있는 항목만 그린다. 데이터는 페이지에서 "DB 우선, 없으면 큐레이션(grape-info)"으로 넘긴다.
 
-import type { Pairing } from "./grape-info";
+import type { Pairing } from "@/features/wine/curation/grape-info";
 
 export interface Character {
   body?: string | null;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { ALL_PALETTE_AROMAS, AROMA_PALETTE } from "./aroma-palette";
-import { GRAPE_ENTRIES } from "./grape-info";
-import { agingAromas, oakAromas } from "./tasting-hints";
+import { ALL_PALETTE_AROMAS, AROMA_PALETTE } from "@/features/wine/aroma-palette";
+import { GRAPE_ENTRIES } from "@/features/wine/curation/grape-info";
+import { agingAromas, oakAromas } from "@/features/wine/tasting-hints";
 
 /**
  * 예상으로 나올 수 있는 모든 향을 모은다 — 품종·숙성(레드/화이트 × 구간)·오크.

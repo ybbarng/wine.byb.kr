@@ -1,4 +1,4 @@
-import type { PriceVerdict } from "./wine-price-info";
+import type { PriceVerdict } from "@/features/wine/curation/wine-price-info";
 
 const VERDICT_CLASS: Record<PriceVerdict["tone"], string> = {
   gold: "border-gold/25 bg-gold/10 text-gold",

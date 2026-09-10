@@ -1,8 +1,8 @@
 // "나와 이 산지의 관계" — 이 산지 와인을 얼마나 마셨는지 시음 기록에서 집계해 보여준다.
 // 개인 와인 사이트라 산지 페이지에 개인적 레이어를 더한다. 기록이 없으면 아무것도 안 그린다.
 
+import type { RegionStats } from "@/features/wine/db/collection-queries";
 import { formatKRW } from "@/lib/format";
-import type { RegionStats } from "./collection-queries";
 
 function Stat({ value, label }: { value: React.ReactNode; label: string }) {
   return (

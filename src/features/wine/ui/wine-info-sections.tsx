@@ -1,11 +1,11 @@
 import Link from "next/link";
+import { grapeInfo, pairingsForGrapes } from "@/features/wine/curation/grape-info";
+import { producerInfo } from "@/features/wine/curation/producer-info";
+import { regionInfo } from "@/features/wine/curation/region-info";
+import { winePrice } from "@/features/wine/curation/wine-price-info";
+import { GrapeColorDot } from "@/features/wine/ui/grape-color";
+import { wineProfile } from "@/features/wine/wine-profile";
 import { formatKRW } from "@/lib/format";
-import { GrapeColorDot } from "./grape-color";
-import { grapeInfo, pairingsForGrapes } from "./grape-info";
-import { producerInfo } from "./producer-info";
-import { regionInfo } from "./region-info";
-import { winePrice } from "./wine-price-info";
-import { wineProfile } from "./wine-profile";
 
 // 와인 상세와 시음 기록이 함께 쓰는 "와인 보편 정보" 섹션 묶음:
 // 종합 프로필 · 떼루아 · 품종 · 시음 포인트 · 페어링 · 생산자 · 국내 적정가.

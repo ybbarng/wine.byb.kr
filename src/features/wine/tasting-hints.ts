@@ -9,11 +9,16 @@
 // 기후·도수: 값을 바꾸지 않고 "이래서 이렇게 치우칠 수 있다"는 안내만 곁들인다.
 
 import { deriveLegs, LEG_FLOOR } from "@/features/glass/legs";
+import { type GrapeLike, levelOf, splitBlend, toShares, wordOf } from "@/features/wine/blend";
+import { grapeInfo } from "@/features/wine/curation/grape-info";
+import { countryInfo, regionInfo } from "@/features/wine/curation/region-info";
+import {
+  type WinemakingTag,
+  winemakingAromas,
+  winemakingLabel,
+  winemakingWhy,
+} from "@/features/wine/winemaking";
 import { withJosa } from "@/lib/korean";
-import { type GrapeLike, levelOf, splitBlend, toShares, wordOf } from "./blend";
-import { grapeInfo } from "./grape-info";
-import { countryInfo, regionInfo } from "./region-info";
-import { type WinemakingTag, winemakingAromas, winemakingLabel, winemakingWhy } from "./winemaking";
 
 const COLOR_HINT: Record<string, string> = {
   red: "진한 루비~자주빛이 예상돼요 — 레드는 포도 껍질째 담가 색소가 진하게 우러나거든요.",

@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { type ReactNode, useEffect, useState } from "react";
 import { CANVAS_BG } from "@/features/glass/canvas-bg";
 import { GlassSetter, useGlassOptional } from "@/features/glass/glass-context";
-import { RegionMap } from "@/features/wine/region-map";
+import { RegionMap } from "@/features/wine/ui/region-map";
 import { ShowcaseHeader } from "./ShowcaseHeader";
 
 const FluidLab = dynamic(() => import("./FluidLab"), {

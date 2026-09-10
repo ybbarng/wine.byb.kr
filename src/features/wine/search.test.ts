@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSearchResults, SEARCH_RESULT_LIMIT } from "./search";
+import { buildSearchResults, SEARCH_RESULT_LIMIT } from "@/features/wine/search";
 
 // 실제 DB 조회 결과 형태에 맞춘 픽스처.
 const region = {

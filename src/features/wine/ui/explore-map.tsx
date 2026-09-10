@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ExploreCountry } from "@/app/explore/page";
 import { BrandLogo } from "@/components/BrandLogo";
-import { countryFlag } from "./country-names";
+import { countryFlag } from "@/features/wine/curation/country-names";
 
 // 나라별 구분색(밝은 지도 위에서 또렷한 중간 톤). 폴리곤·핀·라벨에 함께 쓴다.
 const COUNTRY_COLOR: Record<string, string> = {

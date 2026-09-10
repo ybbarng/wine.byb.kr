@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { ExploreMap } from "@/features/wine/explore-map";
-import { regionInfo } from "@/features/wine/region-info";
+import { regionInfo } from "@/features/wine/curation/region-info";
+import { ExploreMap } from "@/features/wine/ui/explore-map";
 import { allCountries } from "@/features/wine/wine-geo";
 import { db } from "@/lib/db";
 

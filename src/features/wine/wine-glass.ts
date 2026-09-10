@@ -2,7 +2,7 @@
 // 홈 쇼케이스와 와인 상세/검색 페이지가 같은 규칙으로 글라스를 그리게 하는 단일 소스.
 
 import { GLASS } from "@/features/glass/glass-geometry";
-import { type GrapeAliasEntry, matchGrape } from "./grape-name";
+import { type GrapeAliasEntry, matchGrape } from "@/features/wine/grape-name";
 
 // 품종별 색(absorb). 없으면 타입 기본색. (홈 쇼케이스 값과 일관)
 // 별칭으로 적는다 — DB 표기가 흔들려도(까/카, 띄어쓰기, 즐/슬) 같은 품종으로 본다.
