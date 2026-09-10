@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { AdminGuard } from "@/features/admin/admin-guard";
 import { getTastingNote, getWineOptions } from "@/features/journal/queries";
-import type { ExistingNote } from "@/features/journal/tasting-note-form";
 import { parseAromas, parseFlavor, toDateInput } from "@/features/journal/tasting-note-schema";
+import type { ExistingNote } from "@/features/journal/tasting-note-types";
 import { TastingNoteWizard } from "@/features/journal/tasting-note-wizard";
 
 export const metadata: Metadata = {

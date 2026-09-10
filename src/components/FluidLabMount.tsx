@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import { adminHeaders, useAuthStore } from "@/features/admin/auth-store";
+import { GLASS, GLASSES } from "@/features/glass/glass-geometry";
 import { hexToAbsorb } from "@/features/wine/wine-glass";
 
 const FluidLab = dynamic(() => import("./FluidLab"), {
@@ -10,23 +11,8 @@ const FluidLab = dynamic(() => import("./FluidLab"), {
   loading: () => null,
 });
 
-// 대표 와인잔 형태(FluidLab 의 GLASSES 순서와 일치). 와인→잔 자동 매핑의 인덱스.
-const GLASS = {
-  universal: 0,
-  bordeaux: 1,
-  burgundy: 2,
-  white: 3,
-  flute: 4,
-  dessert: 5,
-};
-const GLASS_OPTIONS: { label: string; desc: string }[] = [
-  { label: "표준", desc: "만능형" },
-  { label: "보르도", desc: "풀바디 레드" },
-  { label: "부르고뉴", desc: "피노 누아" },
-  { label: "화이트", desc: "샤르도네·소비뇽블랑" },
-  { label: "플루트", desc: "샴페인·스파클링" },
-  { label: "디저트", desc: "아이스와인·포트" },
-];
+// 잔 고르는 버튼은 아래에서 `GLASSES` 를 그대로 순회해 만든다. 이름·설명을 손으로 다시
+// 적으면 잔을 하나 더할 때 버튼과 실제 형상이 조용히 어긋난다.
 
 // 대표 색 프리셋. color = 컬러피커 초기값(눈에 보이는 색), glass = 어울리는 잔.
 type Preset = { name: string; color: string; glass: number };
@@ -275,10 +261,10 @@ export default function FluidLabMount() {
 
       {/* 잔 형태 (좌하) */}
       <div className="absolute bottom-3 left-3 z-10 flex max-w-[92vw] flex-wrap gap-1.5">
-        {GLASS_OPTIONS.map((g, i) => (
+        {GLASSES.map((g, i) => (
           <button
             type="button"
-            key={g.label}
+            key={g.key}
             onClick={() => setGlassIdx(i)}
             title={g.desc}
             className={`rounded-full border px-2.5 py-1 text-xs backdrop-blur transition-colors ${
