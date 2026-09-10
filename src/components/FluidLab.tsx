@@ -44,7 +44,13 @@ import {
 } from "@/features/glass/glass-geometry";
 import { deriveLegs, type LegsProfile } from "@/features/glass/legs";
 import { deriveSloshConstants, stepSlosh, stepSpin } from "@/features/glass/slosh";
-import { flatWave, surfaceWaveHeight, W2SPD, W3SPD } from "@/features/glass/surface-wave";
+import {
+  flatWave,
+  LOBE_SPIN_EXP,
+  surfaceWaveHeight,
+  W2SPD,
+  W3SPD,
+} from "@/features/glass/surface-wave";
 
 // 최소자승 다항식 피팅 — 볼 내벽 반경 곡선을 계수로 압축(잔 경계용).
 
@@ -1334,9 +1340,11 @@ export default function FluidLab({
               ? Math.max(-1, Math.min(1, angMom / (swirlMag * swirlMag * g.sloshConsts.omega)))
               : 0;
           g.rotSmooth += (rotInstant - g.rotSmooth) * 0.08;
-          // 로브 회전도 회전 관성으로 함께 잦아들게. 크레스트(crestPh) 위를 더 돈다.
-          g.w2ph += W2SPD * g.rotSmooth * g.spinE * dt;
-          g.w3ph += W3SPD * g.rotSmooth * g.spinE * dt;
+          // 로브 회전도 회전 관성으로 잦아들되, 크레스트보다 **먼저** 멎는다 —
+          // 차수가 높은 모드일수록 감쇠가 크다(이유는 surface-wave.ts 의 LOBE_SPIN_EXP).
+          const lobeSpin = g.spinE ** LOBE_SPIN_EXP;
+          g.w2ph += W2SPD * g.rotSmooth * lobeSpin * dt;
+          g.w3ph += W3SPD * g.rotSmooth * lobeSpin * dt;
           const a2 = g.crestPh + g.w2ph;
           g.l2c = Math.cos(a2);
           g.l2s = Math.sin(a2);

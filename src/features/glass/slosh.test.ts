@@ -4,6 +4,7 @@ import {
   deriveSloshConstants,
   SLOSH_MAX,
   type SloshConstants,
+  type SloshState,
   stepSlosh,
   stepSpin,
   zeroSlosh,
@@ -189,5 +190,56 @@ describe("stepSpin — 놓으면 수면 회전이 멎는다", () => {
     for (let i = 0; i < 30; i++) spin = stepSpin(spin, 0.4, DT);
     expect(spin).toBeGreaterThan(0.3);
     expect(spin).toBeLessThan(0.7);
+  });
+});
+
+describe("회전 마찰 — 도는 것만 잡고 출렁임은 놔둔다", () => {
+  /** 한 주기 창에서 |s| 의 최소/최대 비. 1 이면 원운동, 0 이면 한 축 왕복. */
+  function roundnessAt(c: SloshConstants, s0: SloshState, seconds: number) {
+    const win = Math.round((2 * Math.PI) / c.omega / DT);
+    let s = s0;
+    const hist: number[] = [];
+    for (let t = 0; t < seconds; t += DT) {
+      s = stepSlosh(s, { glassTiltVX: 0, glassTiltVZ: 0 }, c, DT);
+      hist.push(Math.hypot(s.x, s.z));
+      if (hist.length > win) hist.shift();
+    }
+    const hi = Math.max(...hist);
+    const lo = Math.min(...hist);
+    return { round: hi > 1e-12 ? lo / hi : 0, mag: Math.hypot(s.x, s.z) };
+  }
+
+  /** 정확히 원을 그리며 도는 초기 상태. */
+  const circular = (c: SloshConstants, a = 0.2): SloshState => ({
+    x: a,
+    z: 0,
+    vx: 0,
+    vz: a * c.omega,
+  });
+
+  it("원운동은 한 축 왕복으로 바뀐다", () => {
+    // 시간이 갈수록 덜 둥글어지고, 1.5초 뒤에는 거의 한 축으로만 오간다.
+    const c = constsFor("bordeaux");
+    const early = roundnessAt(c, circular(c), 0.35).round;
+    const late = roundnessAt(c, circular(c), 1.5).round;
+    expect(late, `이른 ${early.toFixed(2)} · 늦은 ${late.toFixed(2)}`).toBeLessThan(early);
+    expect(late).toBeLessThan(0.35);
+  });
+
+  it("가장 오래 도는 잔(부르고뉴)도 2초 안에 회전이 사라진다", () => {
+    // 감쇠가 가장 작은 잔이라 예전에는 3초 뒤에도 둥글기 0.87 로 계속 돌았다.
+    const c = constsFor("burgundy");
+    expect(roundnessAt(c, circular(c), 2).round).toBeLessThan(0.4);
+  });
+
+  it("한 축으로만 출렁이면 아무 영향도 받지 않는다", () => {
+    // 사용자가 좋다고 한 "출렁임의 액체 느낌"이 이쪽이다. 접선 성분이 0 이라
+    // 마찰이 걸릴 데가 없어야 한다 — 축을 벗어나지 않고 그대로 오간다.
+    const c = constsFor("bordeaux");
+    let s: SloshState = { x: 0.2, z: 0, vx: 0, vz: 0 };
+    for (let t = 0; t < 3; t += DT) {
+      s = stepSlosh(s, { glassTiltVX: 0, glassTiltVZ: 0 }, c, DT);
+      expect(Math.abs(s.z)).toBeLessThan(1e-12);
+    }
   });
 });
