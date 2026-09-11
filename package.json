@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "glass:snap": "node scripts/glass-snapshot.mjs",
+    "toast:fonts": "tsx scripts/build-toast-fonts.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "tsx scripts/seed-from-notes.ts",

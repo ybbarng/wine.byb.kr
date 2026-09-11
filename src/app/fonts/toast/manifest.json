@@ -1,0 +1,47 @@
+{
+  "greek": {
+    "family": "Noto Serif",
+    "chars": "Γαειμς",
+    "bytes": 1428
+  },
+  "cyrillic": {
+    "family": "Noto Serif",
+    "chars": "БЖЗНавдезилморуьј",
+    "bytes": 2424
+  },
+  "georgian": {
+    "family": "Noto Serif Georgian",
+    "chars": "აგმორსუჯ",
+    "bytes": 1972
+  },
+  "armenian": {
+    "family": "Noto Serif Armenian",
+    "chars": "Կաենց",
+    "bytes": 1300
+  },
+  "hebrew": {
+    "family": "Noto Serif Hebrew",
+    "chars": "חילם",
+    "bytes": 1132
+  },
+  "arabic": {
+    "family": "Noto Naskh Arabic",
+    "chars": "بتحصكم",
+    "bytes": 3592
+  },
+  "han": {
+    "family": "Noto Serif JP",
+    "chars": "乾干杯",
+    "bytes": 1348
+  },
+  "hangul": {
+    "family": "Noto Serif KR",
+    "chars": "건배",
+    "bytes": 4148
+  },
+  "thai": {
+    "family": "Noto Serif Thai",
+    "chars": "กชนวแ้",
+    "bytes": 1628
+  }
+}

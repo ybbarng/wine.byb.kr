@@ -30,6 +30,18 @@
   --font-sans: "Pretendard Variable", var(--font-geist-sans), system-ui,
     sans-serif;
   --font-serif: var(--font-playfair);
+  /* 건배말 — 그 나라 문자 그대로 쓰므로 라틴 말고도 그리스·키릴·조지아·아르메니아·
+     히브리·아랍·태국·한글·한자가 들어온다. 브라우저는 **글자 단위로** 이 목록을 훑어
+     그 글자를 가진 첫 폰트를 쓴다.
+
+     **잘라낸 Noto 들이 Playfair 보다 앞에 와야 한다.** Playfair 에도 키릴이 들어 있어서
+     뒤에 두면 키릴 건배말이 Playfair 의 키릴 서브셋(21KB)을 끌어온다 — 우리가 2.4KB 로
+     잘라 둔 파일은 영영 안 쓰인다. 앞에 두어도 라틴은 안 뺏긴다. 잘라낸 폰트마다
+     `unicode-range` 를 적어 뒀기 때문이다(layout.tsx). */
+  --font-toast: var(--font-toast-greek), var(--font-toast-cyrillic), var(--font-toast-georgian),
+    var(--font-toast-armenian), var(--font-toast-hebrew), var(--font-toast-arabic),
+    var(--font-toast-thai), var(--font-toast-hangul), var(--font-toast-han),
+    var(--font-playfair), serif;
   --font-logo: var(--font-logo);
   --font-mono: var(--font-geist-mono);
 }

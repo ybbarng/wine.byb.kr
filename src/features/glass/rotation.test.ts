@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { NAME_DELAY_S, NAME_LEAD_S, rotationOrder, WINE_HOLD_S } from "./rotation";
+import {
+  isToastTurn,
+  NAME_DELAY_S,
+  NAME_LEAD_S,
+  NAME_MOVE_MS,
+  rotationOrder,
+  TOAST_DELAY_S,
+  TOAST_EVERY,
+  TOAST_EXIT_S,
+  TOAST_NAME_DELAY_S,
+  WINE_HOLD_S,
+} from "./rotation";
+
+const MOVE_S = NAME_MOVE_MS / 1000;
 
 const wines = ["a", "b", "c", "d", "e"].map((slug) => ({ slug }));
 
@@ -46,5 +59,48 @@ describe("리듬", () => {
 
   it("한 잔이 머무는 시간이 이름 전환보다 충분히 길다", () => {
     expect(WINE_HOLD_S).toBeGreaterThan((NAME_LEAD_S + NAME_DELAY_S) * 10);
+  });
+});
+
+describe("건배말이 끼어드는 차례", () => {
+  it("첫 교체에는 안 뜬다 — 막 들어온 사람은 이름부터 봐야 한다", () => {
+    expect(isToastTurn(0)).toBe(false);
+  });
+
+  it("정해진 간격마다 뜬다", () => {
+    const turns = [];
+    for (let i = 0; i < 12; i++) if (isToastTurn(i)) turns.push(i);
+    expect(turns).toEqual([3, 7, 11]);
+    expect(turns.every((i) => (i + 1) % TOAST_EVERY === 0)).toBe(true);
+  });
+
+  it("연달아 두 번 뜨지 않는다", () => {
+    for (let i = 0; i < 40; i++) {
+      expect(isToastTurn(i) && isToastTurn(i + 1)).toBe(false);
+    }
+  });
+
+  it("아직 기본 잔일 때(i = -1)는 뜨지 않는다", () => {
+    expect(isToastTurn(-1)).toBe(false);
+  });
+});
+
+describe("건배말이 뜨는 회차의 시간표", () => {
+  it("건배말이 다 빠진 뒤에 이름이 들어온다", () => {
+    // 겹치면 한 자리에 글 두 줄이 동시에 보인다.
+    expect(TOAST_NAME_DELAY_S).toBeGreaterThanOrEqual(TOAST_EXIT_S + MOVE_S);
+  });
+
+  it("읽을 시간이 있다 — 들어오자마자 나가지 않는다", () => {
+    const readable = TOAST_EXIT_S - (TOAST_DELAY_S + MOVE_S);
+    expect(readable).toBeGreaterThan(1);
+  });
+
+  it("그 회차만 이름이 늦다", () => {
+    expect(TOAST_NAME_DELAY_S).toBeGreaterThan(NAME_DELAY_S);
+  });
+
+  it("건배말까지 다 끝나도 다음 교체까지 한참 남는다", () => {
+    expect(WINE_HOLD_S).toBeGreaterThan((NAME_LEAD_S + TOAST_NAME_DELAY_S) * 10);
   });
 });
