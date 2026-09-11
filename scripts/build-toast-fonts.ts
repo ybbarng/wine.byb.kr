@@ -8,12 +8,12 @@
 // 마흔 남짓이라, 구글 폰트의 `text=` 로 그 글자만 잘라 받으면 파일 하나가 1~2KB 다.
 //
 // 다시 만들어야 할 때: **건배말 문구를 고쳤을 때.** 안 만들면 새 글자가 빠진 채로
-// 남아 그 글자만 두부가 된다 — `toast.test.ts` 가 매니페스트와 문구를 맞춰 보며 잡는다.
+// 남아 그 글자만 두부가 된다 — `toast.test.ts` 가 문구와 실제 파일을 맞춰 보며 잡는다.
 //
-//   npx tsx scripts/build-toast-fonts.ts
+//   pnpm toast:fonts
 
 import { execFile } from "node:child_process";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { SCRIPT_FONTS, toastCharsByScript } from "../src/features/glass/toast";
@@ -61,9 +61,21 @@ async function main() {
     console.log(`${script.padEnd(9)} ${family.padEnd(20)} ${chars}  ${bytes.length}B`);
   }
 
+  // 안 쓰는 문자 체계의 폰트는 지운다. 남겨 두면 아무도 안 받는 파일이 레포에 쌓인다.
+  for (const f of await readdir(OUT_DIR)) {
+    const script = f.replace(/\.woff2$/, "");
+    if (f.endsWith(".woff2") && !manifest[script]) {
+      await rm(join(OUT_DIR, f));
+      console.log(`${script.padEnd(9)} (안 쓰여서 지움)`);
+    }
+  }
+
   await writeFile(join(OUT_DIR, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
   const total = Object.values(manifest).reduce((s, m) => s + m.bytes, 0);
   console.log(`\n합계 ${Object.keys(manifest).length}개 ${total}B`);
 }
 
-main();
+main().catch((e) => {
+  console.error(e);
+  process.exitCode = 1; // 구글 폰트가 안 열렸는데 성공으로 끝나면 빈 폰트가 커밋된다
+});

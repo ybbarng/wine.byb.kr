@@ -99,7 +99,10 @@ export async function getRotationWines(): Promise<RotationWine[]> {
       absorb,
       glass,
       origin: parts.length > 0 ? [...new Set(parts)].join(" · ") : null,
-      country,
+      // `country` 를 다시 읽는다 — 위의 지역 변수는 국가가 비면 **상위 지역 이름**으로
+      // 대신 채운 값이라 이름 아래 한 줄에는 맞아도 나라로 쓰면 안 된다. 미국의
+      // "조지아" 같은 지역명이 들어오면 조지아(나라) 말로 건배하게 된다.
+      country: w.region?.country ?? null,
     };
   });
 }

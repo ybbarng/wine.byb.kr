@@ -1,12 +1,20 @@
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+// 폰트가 `src/app/` 안에 있는 건 `next/font/local` 이 파일을 부르는 쪽 기준 상대경로로만
+// 받기 때문이다(layout.tsx 옆이어야 한다). 그래서 여기만 별칭 대신 상대경로다.
 import manifest from "../../app/fonts/toast/manifest.json" with { type: "json" };
 import {
+  allToastChars,
   COVERED_COUNTRIES,
   countryCode,
   SCRIPT_FONTS,
+  SCRIPT_UNICODE_RANGE,
   toastCharsByScript,
   toastFor,
 } from "./toast";
+
+const FONT_DIR = join(import.meta.dirname, "../../app/fonts/toast");
 
 /** 산지 데이터에 실제로 들어 있는 국가명(2026-09 기준 12개). 여기가 다 나와야 한다. */
 const IN_DB = [
@@ -130,7 +138,7 @@ describe("나라 → 건배말", () => {
 describe("잘라낸 폰트가 지금 문구를 덮는가", () => {
   // 라틴이 아닌 글자는 시스템 폰트에 기댈 수 없다(윈도우는 문자별 폰트를 나중에 까는
   // 선택 기능으로 돌려놨다). 그래서 쓰는 글자만 잘라낸 woff2 를 레포에 넣어 둔다.
-  // 문구를 고치고 `npx tsx scripts/build-toast-fonts.ts` 를 안 돌리면 새 글자만
+  // 문구를 고치고 `pnpm toast:fonts` 를 안 돌리면 새 글자만
   // 두부(□)가 되는데, 화면을 안 보면 아무도 모른다. 여기서 잡는다.
   const need = toastCharsByScript();
 
@@ -142,9 +150,49 @@ describe("잘라낸 폰트가 지금 문구를 덮는가", () => {
     }
   });
 
-  it("문자 체계마다 쓸 폰트가 정해져 있다", () => {
+  it("매니페스트가 아니라 진짜 파일이 있다 — 크기까지 맞는다", () => {
+    // 매니페스트만 보면 두 가지를 놓친다. ① 매니페스트에 글자를 손으로 한 자 적어 넣기
+    // ② 스크립트를 돌리고 woff2 를 커밋에서 빠뜨리기(바이너리라 눈에 안 띈다).
+    // 둘 다 테스트는 통과하고 화면만 두부가 된다. 파일 크기를 맞춰 보면 둘 다 걸린다.
+    for (const [script, m] of Object.entries(manifest as Record<string, { bytes: number }>)) {
+      const path = join(FONT_DIR, `${script}.woff2`);
+      expect(existsSync(path), `${path} 가 없다`).toBe(true);
+      expect(statSync(path).size, `${script}: 파일과 매니페스트 크기가 다르다`).toBe(m.bytes);
+    }
+  });
+
+  it("남는 폰트가 없다 — 문자 체계를 뺐으면 파일도 지워야 한다", () => {
+    expect(Object.keys(manifest).sort()).toEqual(Object.keys(need).sort());
+  });
+
+  it("어느 문자 체계에도 안 걸리는 글자가 없다", () => {
+    // `SCRIPT_RANGES` 에 없는 글자는 "라틴·문장부호" 로 흘러가 서브셋이 안 만들어진다.
+    // 데바나가리 같은 걸 새로 넣으면 이 PR 이 막으려던 바로 그 두부가 다시 생긴다.
+    const stray = allToastChars().filter((c) => {
+      const n = c.codePointAt(0) ?? 0;
+      if (n < 0x0250) return false; // 라틴·라틴확장·문장부호 — Playfair 가 맡는다
+      return !Object.values(need).some((chars) => chars.includes(c));
+    });
+    expect(stray, `${stray.join("")} 를 담을 문자 체계가 없다`).toEqual([]);
+  });
+
+  it("문자 체계마다 쓸 폰트와 유니코드 구간이 정해져 있다", () => {
     for (const script of Object.keys(need)) {
       expect(SCRIPT_FONTS[script], script).toBeTruthy();
+      expect(SCRIPT_UNICODE_RANGE[script], script).toBeTruthy();
+    }
+  });
+
+  it("layout.tsx 의 unicode-range 가 표와 어긋나지 않는다", () => {
+    // 어긋나면 그 글자가 폰트에 있는데도 브라우저가 안 쓰거나(범위가 좁음), 없는데도
+    // 파일을 받아 본다(범위가 넓음). 선언은 정적이어야 해서 layout 에 손으로 적는다.
+    const src = readFileSync(join(import.meta.dirname, "../../app/layout.tsx"), "utf8");
+    for (const [script, range] of Object.entries(SCRIPT_UNICODE_RANGE)) {
+      const block = src.slice(src.indexOf(`./fonts/toast/${script}.woff2`));
+      const declared = block
+        .slice(0, block.indexOf("});"))
+        .match(/unicode-range", value: "([^"]+)"/);
+      expect(declared?.[1], `${script} 의 unicode-range`).toBe(range);
     }
   });
 

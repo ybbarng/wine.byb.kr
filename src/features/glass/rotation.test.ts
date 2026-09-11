@@ -3,6 +3,7 @@ import {
   isToastTurn,
   NAME_DELAY_S,
   NAME_LEAD_S,
+  NAME_MOVE_MS,
   rotationOrder,
   TOAST_DELAY_S,
   TOAST_EVERY,
@@ -11,8 +12,7 @@ import {
   WINE_HOLD_S,
 } from "./rotation";
 
-/** 이름·건배말이 미끄러지는 데 걸리는 시간(초). WineShowcase 의 `NAME_MOVE_MS`. */
-const MOVE_S = 0.42;
+const MOVE_S = NAME_MOVE_MS / 1000;
 
 const wines = ["a", "b", "c", "d", "e"].map((slug) => ({ slug }));
 

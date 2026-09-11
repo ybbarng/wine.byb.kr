@@ -38,14 +38,19 @@ const playfair = Playfair_Display({
 // 아홉 벌 다 합쳐 19KB 고, 한자 벌은 1.3KB(乾干杯 셋뿐)다.
 //
 // `preload: false` 라 파일은 **그 글자가 화면에 나올 때** 받는다. 지금 산지 데이터는
-// 12개국 전부 라틴 문자여서 아무도 안 받는다. 조지아 와인이 들어오는 날, 그 잔을 본
-// 사람만 2KB 를 받는다.
+// 12개국 전부 라틴 문자여서 아무도 안 받는다.
+//
+// `unicode-range` 는 빼면 안 된다. 없으면 브라우저가 "이 폰트에 이 글자가 있나"를
+// 알아보려고 **파일을 일단 받는다** — 조지아어 한 줄 띄우자고 앞에 놓인 그리스·키릴까지
+// 받아 보고 버리게 된다. 범위를 적어 두면 받기 전에 걸러진다. 값은 toast.ts 의
+// `SCRIPT_UNICODE_RANGE` 와 같아야 하고, 어긋나면 toast.test.ts 가 잡는다.
 const toastGreek = localFont({
   src: "./fonts/toast/greek.woff2",
   variable: "--font-toast-greek",
   display: "swap",
   preload: false,
   adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+370-3FF" }],
 });
 const toastCyrillic = localFont({
   src: "./fonts/toast/cyrillic.woff2",
@@ -53,6 +58,7 @@ const toastCyrillic = localFont({
   display: "swap",
   preload: false,
   adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+400-4FF" }],
 });
 const toastGeorgian = localFont({
   src: "./fonts/toast/georgian.woff2",
@@ -60,6 +66,7 @@ const toastGeorgian = localFont({
   display: "swap",
   preload: false,
   adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+10A0-10FF" }],
 });
 const toastArmenian = localFont({
   src: "./fonts/toast/armenian.woff2",
@@ -67,6 +74,7 @@ const toastArmenian = localFont({
   display: "swap",
   preload: false,
   adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+530-58F" }],
 });
 const toastHebrew = localFont({
   src: "./fonts/toast/hebrew.woff2",
@@ -74,6 +82,7 @@ const toastHebrew = localFont({
   display: "swap",
   preload: false,
   adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+590-5FF" }],
 });
 const toastArabic = localFont({
   src: "./fonts/toast/arabic.woff2",
@@ -81,6 +90,7 @@ const toastArabic = localFont({
   display: "swap",
   preload: false,
   adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+600-6FF" }],
 });
 const toastThai = localFont({
   src: "./fonts/toast/thai.woff2",
@@ -88,6 +98,7 @@ const toastThai = localFont({
   display: "swap",
   preload: false,
   adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+E00-E7F" }],
 });
 const toastHangul = localFont({
   src: "./fonts/toast/hangul.woff2",
@@ -95,6 +106,7 @@ const toastHangul = localFont({
   display: "swap",
   preload: false,
   adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+AC00-D7AF" }],
 });
 const toastHan = localFont({
   src: "./fonts/toast/han.woff2",
@@ -102,6 +114,7 @@ const toastHan = localFont({
   display: "swap",
   preload: false,
   adjustFontFallback: false,
+  declarations: [{ prop: "unicode-range", value: "U+4E00-9FFF" }],
 });
 
 /** 건배말 문자용 폰트들. 한 곳에 모아 `<html>` 에 한 번만 붙인다. */

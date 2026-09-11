@@ -104,17 +104,19 @@ const COUNTRIES: ReadonlyArray<readonly [code: string, names: readonly string[]]
 ];
 
 /**
- * 나라 → 그 나라에서 잔을 들 때 쓰는 말(ISO 639-1).
+ * 나라 → 그 나라에서 잔을 들 때 쓰는 말(ISO 639-1. 글자가 갈리면 `zh-TW` 처럼 지역까지).
  *
  * 공용어가 여럿인 나라는 **포도밭이 있는 쪽**으로 골랐다. 스위스는 독일어를 쓰는
- * 사람이 더 많지만 와인은 발레·보 같은 프랑스어권에서 거의 다 나오고, 남아공은
- * 영어가 공용어지만 와인 산지인 케이프는 아프리칸스가 뿌리다. 캐나다는 반대로
- * 나이아가라·오카나간 둘 다 영어권이라 영어다.
+ * 사람이 더 많지만 와인은 발레·보 같은 프랑스어권에서 거의 다 나오고, 룩셈부르크는
+ * 반대로 포도밭이 모젤 강변이라 독일어 쪽이다. 남아공은 영어가 공용어지만 와인 산지인
+ * 케이프는 아프리칸스가 뿌리고, 캐나다는 나이아가라·오카나간 둘 다 영어권이라 영어다.
+ *
+ * 대만을 중국과 가른 건 글자가 달라서다 — 같은 `zh` 로 묶으면 대만에 간체 `干杯` 가 간다.
  */
 const LANGUAGE_OF: Readonly<Record<string, string>> = {
   FR: "fr",
   CH: "fr",
-  LU: "fr",
+  LU: "de",
   BE: "nl",
   IT: "it",
   ES: "es",
@@ -141,7 +143,7 @@ const LANGUAGE_OF: Readonly<Record<string, string>> = {
   MD: "ro",
   BG: "bg",
   HR: "hr",
-  BA: "hr",
+  BA: "bs",
   SI: "sl",
   RS: "sr",
   MK: "mk",
@@ -165,7 +167,7 @@ const LANGUAGE_OF: Readonly<Record<string, string>> = {
   IL: "he",
   LB: "ar",
   CN: "zh",
-  TW: "zh",
+  TW: "zh-TW",
   JP: "ja",
   KR: "ko",
   TH: "th",
@@ -198,6 +200,7 @@ const TOASTS: Readonly<Record<string, { text: string; rtl?: true }>> = {
   ro: { text: "Noroc!" },
   bg: { text: "Наздраве!" },
   hr: { text: "Živjeli!" },
+  bs: { text: "Živjeli!" },
   sl: { text: "Na zdravje!" },
   sr: { text: "Живели!" },
   mk: { text: "На здравје!" },
@@ -221,6 +224,7 @@ const TOASTS: Readonly<Record<string, { text: string; rtl?: true }>> = {
   he: { text: "לחיים!", rtl: true },
   ar: { text: "بصحتكم!", rtl: true },
   zh: { text: "干杯!" },
+  "zh-TW": { text: "乾杯!" },
   ja: { text: "乾杯!" },
   ko: { text: "건배!" },
   th: { text: "ชนแก้ว!" },
@@ -244,17 +248,43 @@ export const SCRIPT_FONTS: Readonly<Record<string, string>> = {
   han: "Noto Serif JP",
 };
 
-const SCRIPT_RANGES: ReadonlyArray<readonly [script: string, re: RegExp]> = [
-  ["greek", /[Ͱ-Ͽ]/],
-  ["cyrillic", /[Ѐ-ӿ]/],
-  ["armenian", /[԰-֏]/],
-  ["hebrew", /[֐-׿]/],
-  ["arabic", /[؀-ۿ]/],
-  ["georgian", /[Ⴀ-ჿ]/],
-  ["thai", /[฀-๿]/],
-  ["hangul", /[가-힯]/],
-  ["han", /[一-鿿]/],
+/**
+ * 문자 체계별 유니코드 구간.
+ *
+ * 두 군데가 이 표를 함께 쓴다 — 글자를 문자 체계로 나누는 쪽(아래 `toastCharsByScript`)과
+ * `@font-face` 의 `unicode-range` 를 적는 쪽(layout.tsx). **범위 선언이 없으면 브라우저는
+ * 그 폰트에 그 글자가 있는지 알아보려고 파일을 일단 받는다** — 조지아어 한 줄 띄우자고
+ * 앞에 놓인 그리스·키릴 파일까지 받아 보고 버리게 된다.
+ *
+ * 글자 하나하나가 아니라 **구간**으로 적는다. 문구를 고쳐도 안 바뀌는 값이어야 폰트를
+ * 다시 만들 때마다 layout.tsx 를 따라 고치지 않는다.
+ */
+const SCRIPT_RANGES: ReadonlyArray<readonly [script: string, from: number, to: number]> = [
+  ["greek", 0x370, 0x3ff],
+  ["cyrillic", 0x400, 0x4ff],
+  ["armenian", 0x530, 0x58f],
+  ["hebrew", 0x590, 0x5ff],
+  ["arabic", 0x600, 0x6ff],
+  ["georgian", 0x10a0, 0x10ff],
+  ["thai", 0xe00, 0xe7f],
+  ["hangul", 0xac00, 0xd7af],
+  ["han", 0x4e00, 0x9fff],
 ];
+
+/** `@font-face` 의 `unicode-range` 에 그대로 넣을 값. layout.tsx 가 쓰고 테스트가 맞춰 본다. */
+export const SCRIPT_UNICODE_RANGE: Readonly<Record<string, string>> = Object.fromEntries(
+  SCRIPT_RANGES.map(([script, from, to]) => [
+    script,
+    `U+${from.toString(16).toUpperCase()}-${to.toString(16).toUpperCase()}`,
+  ])
+);
+
+/** 건배말에 나오는 글자 전부(중복 없이). */
+export function allToastChars(): string[] {
+  const out = new Set<string>();
+  for (const { text } of Object.values(TOASTS)) for (const ch of text) out.add(ch);
+  return [...out];
+}
 
 /**
  * 건배말에 쓰인 글자를 문자 체계별로 모은다. 라틴·문장부호는 뺀다 — Playfair 가 맡는다.
@@ -265,14 +295,15 @@ const SCRIPT_RANGES: ReadonlyArray<readonly [script: string, re: RegExp]> = [
  */
 export function toastCharsByScript(): Record<string, string> {
   const out: Record<string, Set<string>> = {};
-  for (const { text } of Object.values(TOASTS)) {
-    for (const ch of text) {
-      const hit = SCRIPT_RANGES.find(([, re]) => re.test(ch));
-      if (!hit) continue; // 라틴 글자·문장부호
-      const script = hit[0];
-      out[script] ??= new Set();
-      out[script].add(ch);
-    }
+  for (const ch of allToastChars()) {
+    const hit = SCRIPT_RANGES.find(([, from, to]) => {
+      const c = ch.codePointAt(0) ?? 0;
+      return c >= from && c <= to;
+    });
+    if (!hit) continue; // 라틴 글자·문장부호
+    const script = hit[0];
+    out[script] ??= new Set();
+    out[script].add(ch);
   }
   return Object.fromEntries(
     Object.entries(out).map(([script, chars]) => [script, [...chars].sort().join("")])

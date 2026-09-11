@@ -7,6 +7,7 @@ import {
   isToastTurn,
   NAME_DELAY_S,
   NAME_LEAD_S,
+  NAME_MOVE_MS,
   RESUME_AFTER_TOUCH_S,
   rotationOrder,
   TOAST_DELAY_S,
@@ -28,9 +29,6 @@ import type { RotationWine } from "@/features/wine/db/queries";
 //
 // 네 번에 한 번은 이름이 오기 전 틈에 그 나라 말 건배말이 들렀다 간다(toast.ts).
 // 이름과 같은 자리를 쓰므로 화면이 움직이는 횟수는 그대로다.
-
-/** 이름이 미끄러져 들어오고 나가는 시간(ms). 잔 슬라이드와 결이 맞는 정도로. */
-const NAME_MOVE_MS = 420;
 
 /**
  * 이름은 잔과 **같은 방향**으로 움직여야 한 덩어리로 보인다. 잔은 왼쪽으로 나가고
@@ -187,6 +185,9 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
         {toast && (
           <p
             data-testid="home-toast"
+            // 빠진 뒤에도 다음 교체(42초 뒤)까지 DOM 에 남는다. 안 가려 두면 화면에서
+            // 사라진 건배말을 스크린 리더가 그동안 계속 읽는다.
+            aria-hidden={toastPhase !== "shown"}
             className={`absolute inset-x-0 top-0 px-4 py-2 text-center transition-all ease-out ${NAME_CLASS[toastPhase]}`}
             style={{ transitionDuration: `${NAME_MOVE_MS}ms` }}
           >

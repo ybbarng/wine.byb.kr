@@ -45,6 +45,10 @@
 - `font-serif` — Playfair Display (제목·와인 이름)
 - `font-logo` — Cormorant Garamond (로고 워드마크 전용)
 - `font-mono` — Geist Mono (날짜·수치)
+- `font-toast` — 건배말 전용. 그 나라 문자 그대로 쓰는 자리(홈 건배말)에만 쓴다.
+  그리스·키릴·조지아·아르메니아·히브리·아랍·태국·한글·한자를 잘라낸 Noto 로 덮고
+  라틴은 Playfair 로 떨어진다. 다른 자리에 쓰지 말 것 — 그 글자들만 담은 폰트라
+  일반 본문에는 아무 도움이 안 되면서 목록만 길어진다.
 
 ## 공용 컴포넌트
 
