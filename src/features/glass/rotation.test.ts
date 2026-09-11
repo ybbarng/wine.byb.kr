@@ -19,18 +19,6 @@ describe("rotationOrder", () => {
     expect(order.map((w) => w.slug).sort()).toEqual(["a", "b", "c", "d", "e"]);
   });
 
-  it("보던 와인을 맨 앞에 둔다 — 상세를 다녀와도 거기서 이어지게", () => {
-    const order = rotationOrder(wines, seeded(7), "d");
-    expect(order[0].slug).toBe("d");
-    expect(order).toHaveLength(5);
-    expect(new Set(order.map((w) => w.slug)).size).toBe(5); // 앞에 두느라 중복되지 않는다
-  });
-
-  it("보던 와인이 목록에 없으면 그냥 섞는다", () => {
-    const order = rotationOrder(wines, seeded(3), "없는와인");
-    expect(order.map((w) => w.slug).sort()).toEqual(["a", "b", "c", "d", "e"]);
-  });
-
   it("실제로 섞는다 — 순서를 그대로 두면 늘 같은 와인으로 시작한다", () => {
     const same = ["a", "b", "c", "d", "e"];
     const shuffled = rotationOrder(wines, seeded(11)).map((w) => w.slug);

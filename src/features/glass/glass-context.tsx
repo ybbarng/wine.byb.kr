@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import type { RotationWine } from "@/features/wine/db/queries";
 
 export type GlassState = {
   absorb: [number, number, number];
@@ -42,8 +43,14 @@ type Ctx = {
   touchedAt: RefObject<number>;
   /** 잔을 만졌다고 알린다. 리렌더를 만들지 않으려고 ref 로 둔다. */
   noteTouch: () => void;
-  /** 홈 순환이 마지막으로 보여 준 와인 slug. 상세를 다녀와도 거기서 이어지게. */
-  lastHomeWine: RefObject<string | null>;
+  /**
+   * 홈 순환 상태 — 섞어 둔 순서와 어디까지 왔는지.
+   *
+   * 홈 화면은 페이지를 옮길 때마다 다시 마운트되지만 셸은 살아 있다. 그래서 여기에
+   * 둔다 — 상세를 다녀와도 순서가 다시 섞이지 않고 그 자리에서 이어진다.
+   * `i = -1` 은 아직 기본 잔(이름 없음)이라는 뜻이다.
+   */
+  rotation: RefObject<{ order: readonly RotationWine[]; i: number } | null>;
   /**
    * 잔이 실제로 미끄러지기 시작할 때마다 오르는 수.
    *
@@ -57,11 +64,16 @@ type Ctx = {
 };
 const GlassContext = createContext<Ctx | null>(null);
 
+/** 순환 와인 한 종을 잔 상태로. */
+export function glassFor(w: RotationWine): GlassState {
+  return { absorb: w.absorb, glass: w.glass, swirlScale: HOME_GLASS.swirlScale, abv: w.abv };
+}
+
 export function GlassProvider({ children }: { children: ReactNode }) {
+  const rotation = useRef<{ order: readonly RotationWine[]; i: number } | null>(null);
   const [state, setState] = useState<GlassState>(HOME_GLASS);
   const [revealContent, setRevealContent] = useState(true);
   const touchedAt = useRef(0);
-  const lastHomeWine = useRef<string | null>(null);
   const [swapSeq, setSwapSeq] = useState(0);
   const noteTouch = useCallback(() => {
     touchedAt.current = performance.now();
@@ -75,7 +87,7 @@ export function GlassProvider({ children }: { children: ReactNode }) {
       setRevealContent,
       touchedAt,
       noteTouch,
-      lastHomeWine,
+      rotation,
       swapSeq,
       noteSwap,
     }),

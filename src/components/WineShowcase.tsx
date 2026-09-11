@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { HOME_GLASS, useGlassOptional } from "@/features/glass/glass-context";
+import { glassFor, useGlassOptional } from "@/features/glass/glass-context";
 import {
   NAME_DELAY_S,
   NAME_LEAD_S,
@@ -12,8 +12,11 @@ import {
 } from "@/features/glass/rotation";
 import type { RotationWine } from "@/features/wine/db/queries";
 
-// 홈 랜딩: 검색바·헤더·와인잔·배경은 (main) 레이아웃이 제공한다. 여기선 어떤 와인을
-// 보여 줄지 정하고(순환), 잔 아래 이름을 얹고, 푸터를 둔다.
+// 홈 랜딩: 검색바·헤더·와인잔·배경은 (main) 레이아웃이 제공한다. 여기선 리듬을 돌리고
+// (순환), 잔 아래 이름을 얹고, 푸터를 둔다.
+//
+// **처음엔 기본 잔이다 — 이름도 없다.** 42초가 지나야 첫 순환 와인으로 바뀌면서 이름이
+// 따라 들어온다. 들어가자마자 바뀌면 "왜 벌써 바뀌지" 싶고, 리듬도 첫 잔만 어긋난다.
 //
 // 잔을 직접 바꾸지 않는다 — 잔 상태(setGlass)만 갈아 끼우면 GlassStage 가 "같은
 // 페이지에서 잔이 달라졌다"를 보고 교차 슬라이드로 바꿔 준다. 리듬 상수는 rotation.ts.
@@ -53,7 +56,7 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
   const ctx = useGlassOptional();
   const setGlass = ctx?.setGlass;
   const touchedAt = ctx?.touchedAt;
-  const lastHomeWine = ctx?.lastHomeWine;
+  const rotation = ctx?.rotation;
   const swapSeq = ctx?.swapSeq ?? 0;
   const reduced = useReducedMotion();
 
@@ -61,11 +64,13 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
   const [phase, setPhase] = useState<NamePhase>("enter");
   const year = new Date().getFullYear();
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: 순환은 마운트 때 한 번만 짠다
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 리듬은 마운트 때 한 번만 짠다
   useEffect(() => {
-    if (!setGlass || wines.length === 0) return;
-    const order = rotationOrder(wines, Math.random, lastHomeWine?.current);
-    let i = 0;
+    if (!setGlass || !rotation || wines.length === 0) return;
+    // 순서는 셸에 둔다 — 상세를 다녀와도 다시 섞이지 않고 그 자리에서 이어진다.
+    // i = -1 은 아직 기본 잔(이름 없음)이라는 뜻이다.
+    if (!rotation.current) rotation.current = { order: rotationOrder(wines), i: -1 };
+    const rot = rotation.current;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const wait = (ms: number, fn: () => void) => {
       timer = setTimeout(fn, ms);
@@ -74,13 +79,14 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
     const show = (w: RotationWine) => {
       setWine(w);
       setPhase("enter"); // 오른쪽 바깥에 갖다 놓는다. 등장 시점은 아래 효과가 잡는다.
-      if (lastHomeWine) lastHomeWine.current = w.slug;
-      setGlass({ absorb: w.absorb, glass: w.glass, swirlScale: HOME_GLASS.swirlScale, abv: w.abv });
+      setGlass(glassFor(w));
     };
 
-    show(order[0]);
-    // 움직임을 줄이려는 사용자에겐 한 잔만 보여 주고 교체하지 않는다.
-    if (!reduced && order.length > 1) scheduleNext();
+    // 이미 순환이 시작됐다면(상세를 다녀온 경우) 보던 와인으로 돌아간다.
+    // 아직이면 아무것도 하지 않는다 — 기본 잔이 이름 없이 떠 있는 상태 그대로.
+    if (rot.i >= 0) show(rot.order[rot.i]);
+    // 움직임을 줄이려는 사용자에겐 바꾸지 않는다.
+    if (!reduced && rot.order.length > 0) scheduleNext();
 
     function scheduleNext() {
       wait(WINE_HOLD_S * 1000, tick);
@@ -94,10 +100,10 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
         wait(1000, tick);
         return;
       }
-      setPhase("exit"); // 이름이 먼저 왼쪽으로 빠지고
+      setPhase("exit"); // 이름이 먼저 왼쪽으로 빠지고(첫 번째는 이름이 없어 티가 안 난다)
       wait(NAME_LEAD_S * 1000, () => {
-        i = (i + 1) % order.length;
-        show(order[i]); // 잔이 뒤따라 바뀐다
+        rot.i = (rot.i + 1) % rot.order.length;
+        show(rot.order[rot.i]); // 잔이 뒤따라 바뀐다
         scheduleNext();
       });
     }
@@ -105,7 +111,7 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [setGlass, wines, reduced]);
+  }, [setGlass, rotation, wines, reduced]);
 
   // 이름은 **잔이 실제로 미끄러지기 시작한 뒤** 얹는다.
   //
