@@ -153,6 +153,28 @@ export function stepSpin(spin: number, glassSpeed: number, dt: number): number {
   return Math.max(0, spin - (SPIN_DECAY_BASE + SPIN_DECAY_SLOW * (1 - spin)) * dt);
 }
 
+/**
+ * **접촉선 고착** — 아주 작은 출렁임을 실제로 멈춰 세우는 마찰(rad/s²).
+ *
+ * ζ·QUAD 는 둘 다 속도에 비례하는 항이라, 작아질수록 제동력도 같이 작아져 **영원히
+ * 안 멈춘다**. 실제로 재 보면 잔이 한 번 미끄러진 뒤 진폭 0.01 을 넘는 상태가 보르도
+ * 4.0초, 부르고뉴 6.8초씩 이어지고, 0.002 까지 내려가는 데 7~13초가 걸린다. 42초마다
+ * 잔을 바꾸고 18초마다 스월하는 화면에서는 이게 "가만히 있는데 계속 진동한다"가 된다
+ * (2026-09-11 실사용 피드백).
+ *
+ * 진짜 액체는 그렇지 않다. 작은 용기에서는 메니스커스가 벽에 고착돼(접촉각 이력),
+ * 미는 힘이 어느 선 아래로 내려가면 수면이 **그냥 선다**. 그래서 속도에 비례하지 않는
+ * 일정한 감속을 둔다 — 마른 마찰과 같은 꼴이라 유한한 시간에 정지한다.
+ *
+ * 큰 출렁임에는 사실상 영향이 없다(속도 5rad/s 에서 초당 2 를 깎아 봐야 QUAD 가 이미
+ * 훨씬 크게 먹는다). 작은 출렁임만 골라 세운다.
+ *
+ * 멈춘 자리는 완전한 수평이 아니라 `STICK/ω²` 만큼 기울어 있을 수 있다 — 보르도에서
+ * 0.003rad(0.17°)라 눈에 안 띈다. 이 값을 올리면 그 기울기가 커져 수면이 비뚤어진 채
+ * 서는 게 보이기 시작한다.
+ */
+export const CONTACT_STICK = 1.0;
+
 /** 이 잔의 슬로싱 상수. 형상에서 유도한다. */
 export interface SloshConstants {
   omega: number; // 1차 슬로싱 각진동수(rad/s)
@@ -231,6 +253,14 @@ export function stepSlosh(
     const cut = Math.min(1, SWIRL_FRICTION * dt);
     vx -= orbit * tanX * cut;
     vz -= orbit * tanZ * cut;
+  }
+  // 접촉선 고착 — 속도에서 일정량을 깎는다(마른 마찰). 남은 속도보다 크면 0 으로.
+  // 속도가 정확히 0 이면 나눗셈이 NaN 이 되므로 건너뛴다.
+  const sp = Math.hypot(vx, vz);
+  if (sp > 1e-12) {
+    const keep = Math.max(0, sp - CONTACT_STICK * dt) / sp;
+    vx *= keep;
+    vz *= keep;
   }
   const clamp = (v: number) => Math.max(-SLOSH_MAX, Math.min(SLOSH_MAX, v));
   return { x: clamp(s.x + vx * dt), z: clamp(s.z + vz * dt), vx, vz };

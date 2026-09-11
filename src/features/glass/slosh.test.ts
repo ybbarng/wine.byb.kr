@@ -45,6 +45,20 @@ function ringDown(c: SloshConstants, seconds = 25, x0 = 0.1) {
   return { hz, halfLife: half ? half.t : Number.POSITIVE_INFINITY };
 }
 
+/** 눈에 띌 만큼(0.004 이상) 남아 있는 동안 수면이 몇 번이나 한쪽으로 지나갔는지. */
+function swings(c: SloshConstants, x0: number): number {
+  let s: SloshState = { ...zeroSlosh(), x: x0 };
+  let n = 0;
+  let prev = s.x;
+  for (let t = 0; t < 20; t += DT) {
+    s = stepSlosh(s, { glassTiltVX: 0, glassTiltVZ: 0 }, c, DT);
+    const amp = Math.hypot(s.x, s.z, s.vx / c.omega, s.vz / c.omega);
+    if (prev <= 0 && s.x > 0 && amp > 0.004) n++;
+    prev = s.x;
+  }
+  return n;
+}
+
 describe("deriveSloshConstants — 형상에서 물리 유도", () => {
   it("보르도 잔은 약 4Hz 로 출렁인다", () => {
     // ω₁ = √(g·k·tanh(k·h)), k = ε₁₁/R. 수면 반경(벽 두께 뺀 내벽) ≈2.8cm·깊이 5.0cm.
@@ -93,13 +107,29 @@ describe("stepSlosh — 적분", () => {
     expect(halfLife).toBeLessThan(5); // 너무 오래 돌면 촐랑거린다
   });
 
-  it("크게 출렁일수록 빨리 죽는다 — 액체와 용수철을 가르는 축", () => {
+  it("작은 출렁임이 큰 출렁임의 축소 복사본이 아니다 — 액체와 용수철을 가르는 축", () => {
     // 선형 감쇠만 있으면 진폭과 무관하게 같은 비율로 줄어, 출렁임이 앞것의 축소
     // 복사본이 된다. 그게 "젤리 같다"의 정체다(2026-08-31·2026-09-09 실사용 피드백).
+    //
+    // 반감기로는 이제 이걸 못 잰다 — 작은 출렁임은 지수적으로 줄다 마는 게 아니라
+    // 접촉선 고착에 걸려 **선다**. 대신 몇 번 오가고 멈추는지를 본다. 선형 감쇠만
+    // 있으면 진폭과 무관하게 횟수가 같아진다.
     const c = constsFor("bordeaux");
-    const big = ringDown({ ...c }, 25, 0.28).halfLife;
-    const small = ringDown({ ...c }, 25, 0.06).halfLife;
-    expect(small / big, `큰 ${big.toFixed(2)}s · 작은 ${small.toFixed(2)}s`).toBeGreaterThan(1.3);
+    const big = swings(c, 0.28);
+    const small = swings(c, 0.06);
+    expect(big / small, `큰 ${big}회 · 작은 ${small}회`).toBeGreaterThan(1.5);
+  });
+
+  it("작은 출렁임은 정말 멈춘다 — 속도에 비례하는 감쇠만으로는 안 멈춘다", () => {
+    // ζ·QUAD 는 둘 다 속도에 비례해, 작아질수록 제동력도 같이 작아진다. 그래서 잔이
+    // 가만히 있어도 눈에 띄는 잔진동이 몇 초씩 남았다("가만히 있는데 계속 진동해",
+    // 2026-09-11). 접촉선 고착이 이걸 유한한 시간에 세운다.
+    const c = constsFor("burgundy"); // 감쇠가 가장 작아 제일 오래 간다
+    let s: SloshState = { ...zeroSlosh(), x: 0.03 };
+    for (let t = 0; t < 3; t += DT) {
+      s = stepSlosh(s, { glassTiltVX: 0, glassTiltVZ: 0 }, c, DT);
+    }
+    expect(Math.hypot(s.vx, s.vz)).toBe(0); // 느려지다 마는 게 아니라 딱 0
   });
 
   it("그래도 초기에 급사하지는 않는다 — 급사하면 꿀처럼 보인다", () => {
@@ -209,7 +239,10 @@ describe("회전 마찰 — 도는 것만 잡고 출렁임은 놔둔다", () => 
     }
     const hi = Math.max(...hist);
     const lo = Math.min(...hist);
-    return { round: hi > 1e-12 ? lo / hi : 0, mag: Math.hypot(s.x, s.z) };
+    // 멈춘 뒤에는 hi 와 lo 가 같아져 둥글기가 1 로 나온다 — 도는 게 아니라 선 것이다.
+    // 진폭이 눈에 안 띄면 회전도 없는 것으로 본다.
+    const stopped = hi < 0.006;
+    return { round: stopped ? 0 : hi > 1e-12 ? lo / hi : 0, mag: hi, stopped };
   }
 
   /** 정확히 원을 그리며 도는 초기 상태. */
@@ -306,9 +339,22 @@ describe("스월 뒤와 이동 뒤가 비슷한 시간에 멎는다", () => {
   });
 
   it("스월 뒤가 너무 빨리 죽지도 않는다", () => {
-    // 놓자마자 뚝 서면 물이 아니라 젤리로 보인다.
+    // 놓자마자 뚝 서면 물이 아니라 젤리로 보인다. 시간이 아니라 **몇 번 오가는지**로
+    // 본다 — 접촉선 고착이 들어온 뒤로는 잦아드는 시간이 짧아도 출렁임 자체는 남는다.
     const c = constsFor("bordeaux");
-    expect(quietAfter(c, swirlDrive(), AUTO_SWIRL_SECONDS)).toBeGreaterThan(0.7);
+    let s = zeroSlosh();
+    const drive = swirlDrive();
+    let n = 0;
+    let prev = 0;
+    for (let t = 0; t < 8; t += DT) {
+      s = stepSlosh(s, drive(t), c, DT);
+      if (t > AUTO_SWIRL_SECONDS) {
+        const amp = Math.hypot(s.x, s.z, s.vx / c.omega, s.vz / c.omega);
+        if (prev <= 0 && s.x > 0 && amp > 0.004) n++;
+      }
+      prev = s.x;
+    }
+    expect(n, `스월 뒤 ${n}회 오갔다`).toBeGreaterThanOrEqual(3);
   });
 
   it("실제 스월 파형으로도 회전이 3초 안에 잦아든다", () => {
@@ -327,7 +373,8 @@ describe("스월 뒤와 이동 뒤가 비슷한 시간에 멎는다", () => {
     }
     const hi = Math.max(...hist);
     const lo = Math.min(...hist);
-    const round = hi > 1e-12 ? lo / hi : 0;
+    // 멈췄으면(진폭이 눈에 안 띄면) 도는 게 아니다 — 둥글기는 볼 것도 없다.
+    const round = hi < 0.006 ? 0 : hi > 1e-12 ? lo / hi : 0;
     expect(round, `둥글기 ${round.toFixed(2)} · 기울기 ${hi.toFixed(3)}`).toBeLessThan(0.6);
     expect(hi).toBeLessThan(0.03); // 그 무렵엔 진폭도 눈에 안 띄어야 한다
   });
