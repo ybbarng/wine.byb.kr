@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { COVERED_COUNTRIES, countryCode, toastFor } from "./toast";
+import manifest from "../../app/fonts/toast/manifest.json" with { type: "json" };
+import {
+  COVERED_COUNTRIES,
+  countryCode,
+  SCRIPT_FONTS,
+  toastCharsByScript,
+  toastFor,
+} from "./toast";
 
 /** 산지 데이터에 실제로 들어 있는 국가명(2026-09 기준 12개). 여기가 다 나와야 한다. */
 const IN_DB = [
@@ -117,5 +124,33 @@ describe("나라 → 건배말", () => {
   it("모르는 나라면 아무 말도 하지 않는다", () => {
     expect(toastFor("바누아투")).toBeNull();
     expect(toastFor(null)).toBeNull();
+  });
+});
+
+describe("잘라낸 폰트가 지금 문구를 덮는가", () => {
+  // 라틴이 아닌 글자는 시스템 폰트에 기댈 수 없다(윈도우는 문자별 폰트를 나중에 까는
+  // 선택 기능으로 돌려놨다). 그래서 쓰는 글자만 잘라낸 woff2 를 레포에 넣어 둔다.
+  // 문구를 고치고 `npx tsx scripts/build-toast-fonts.ts` 를 안 돌리면 새 글자만
+  // 두부(□)가 되는데, 화면을 안 보면 아무도 모른다. 여기서 잡는다.
+  const need = toastCharsByScript();
+
+  it("빠진 글자가 없다 — 문구를 고쳤으면 폰트를 다시 만들어야 한다", () => {
+    for (const [script, chars] of Object.entries(need)) {
+      const have = (manifest as Record<string, { chars: string }>)[script]?.chars ?? "";
+      const missing = [...chars].filter((c) => !have.includes(c));
+      expect(missing, `${script}: ${missing.join("")} 가 빠졌다`).toEqual([]);
+    }
+  });
+
+  it("문자 체계마다 쓸 폰트가 정해져 있다", () => {
+    for (const script of Object.keys(need)) {
+      expect(SCRIPT_FONTS[script], script).toBeTruthy();
+    }
+  });
+
+  it("통째로 싣지 않는다 — 한 벌이 10KB 를 넘으면 잘라내기가 안 먹은 것이다", () => {
+    for (const [script, m] of Object.entries(manifest as Record<string, { bytes: number }>)) {
+      expect(m.bytes, `${script}: ${m.bytes}B`).toBeLessThan(10_000);
+    }
   });
 });

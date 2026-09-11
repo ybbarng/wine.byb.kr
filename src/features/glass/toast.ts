@@ -11,9 +11,13 @@
 // **그 나라 문자 그대로 쓴다.** 로마자로 옮겨 적으면(gaumarjos) 읽기는 쉬워도 어느
 // 나라 말인지가 사라진다. 대신 읽을 수 없는 글자일 때를 위해 나라 이름을 함께 준다.
 //
-// 폰트는 따로 싣지 않는다 — 그리스·키릴·조지아·히브리·태국·한자까지 브라우저가
-// 시스템 폰트로 채우는 것을 화면에서 확인했다. 글자마다 폰트를 되짚는 건 브라우저가
-// 알아서 하므로, 쓰는 쪽은 `lang` 만 정확히 달아 주면 된다.
+// **시스템 폰트에 기대지 않는다.** 윈도우는 문자별 폰트를 "그 언어를 쓰는 사람에게만
+// 나중에 까는" 선택 기능으로 돌려놔서, 태국 문자나 한자를 안 쓰는 사람 기기엔 아예
+// 없다. 대신 여기 적힌 글자만 잘라낸 폰트를 쓴다 — `scripts/build-toast-fonts.ts`,
+// 아홉 벌 다 합쳐 19KB, 그나마 그 글자가 화면에 나올 때만 내려받는다.
+//
+// 그래서 **문구를 고치면 폰트를 다시 만들어야 한다.** 안 그러면 새로 넣은 글자만
+// 두부(□)가 된다. `toast.test.ts` 가 매니페스트와 문구를 맞춰 보며 잡는다.
 //
 // 모르는 나라면 아무 말도 하지 않는다(null). 어설프게 영어 Cheers 로 때우면 그 와인이
 // 어디서 왔는지를 오히려 흐린다.
@@ -221,6 +225,59 @@ const TOASTS: Readonly<Record<string, { text: string; rtl?: true }>> = {
   ko: { text: "건배!" },
   th: { text: "ชนแก้ว!" },
 };
+
+/**
+ * 문자 체계 → 그 글자를 담을 폰트 이름(구글 폰트).
+ *
+ * 라틴은 Playfair 가 이미 맡고 있어 없다. 나머지는 `scripts/build-toast-fonts.ts` 가
+ * **여기 적힌 글자만** 잘라낸 파일을 만들어 `src/app/fonts/toast/` 에 넣는다.
+ */
+export const SCRIPT_FONTS: Readonly<Record<string, string>> = {
+  greek: "Noto Serif",
+  cyrillic: "Noto Serif",
+  georgian: "Noto Serif Georgian",
+  armenian: "Noto Serif Armenian",
+  hebrew: "Noto Serif Hebrew",
+  arabic: "Noto Naskh Arabic",
+  thai: "Noto Serif Thai",
+  hangul: "Noto Serif KR",
+  han: "Noto Serif JP",
+};
+
+const SCRIPT_RANGES: ReadonlyArray<readonly [script: string, re: RegExp]> = [
+  ["greek", /[Ͱ-Ͽ]/],
+  ["cyrillic", /[Ѐ-ӿ]/],
+  ["armenian", /[԰-֏]/],
+  ["hebrew", /[֐-׿]/],
+  ["arabic", /[؀-ۿ]/],
+  ["georgian", /[Ⴀ-ჿ]/],
+  ["thai", /[฀-๿]/],
+  ["hangul", /[가-힯]/],
+  ["han", /[一-鿿]/],
+];
+
+/**
+ * 건배말에 쓰인 글자를 문자 체계별로 모은다. 라틴·문장부호는 뺀다 — Playfair 가 맡는다.
+ *
+ * 폰트를 만드는 쪽(`scripts/build-toast-fonts.ts`)과 만들어진 파일이 문구를 덮는지
+ * 확인하는 쪽(`toast.test.ts`)이 **같은 함수**를 본다. 따로 세면 문구를 고치고 폰트를
+ * 다시 안 만들었을 때 아무도 모른다.
+ */
+export function toastCharsByScript(): Record<string, string> {
+  const out: Record<string, Set<string>> = {};
+  for (const { text } of Object.values(TOASTS)) {
+    for (const ch of text) {
+      const hit = SCRIPT_RANGES.find(([, re]) => re.test(ch));
+      if (!hit) continue; // 라틴 글자·문장부호
+      const script = hit[0];
+      out[script] ??= new Set();
+      out[script].add(ch);
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(out).map(([script, chars]) => [script, [...chars].sort().join("")])
+  );
+}
 
 /**
  * 건배말을 아는 나라들(대표 표기).

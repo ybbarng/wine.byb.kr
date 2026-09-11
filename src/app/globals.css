@@ -30,12 +30,15 @@
   --font-sans: "Pretendard Variable", var(--font-geist-sans), system-ui,
     sans-serif;
   --font-serif: var(--font-playfair);
-  /* 건배말 — 그 나라 문자 그대로 쓰므로 라틴 말고도 그리스·키릴·조지아·히브리·태국·
-     한자가 들어온다. Playfair 는 라틴·키릴까지만 덮고, 나머지 글자는 브라우저가
-     글자 단위로 되짚어 시스템 폰트에서 찾는다(화면에서 확인했다). Noto 이름을 적어
-     두는 건 시스템 폰트가 얇은 리눅스·안드로이드를 위한 안전망이다. */
-  --font-toast: var(--font-playfair), "Noto Serif Georgian", "Noto Serif Hebrew",
-    "Noto Serif Thai", "Noto Serif CJK KR", serif;
+  /* 건배말 — 그 나라 문자 그대로 쓰므로 라틴 말고도 그리스·키릴·조지아·아르메니아·
+     히브리·아랍·태국·한글·한자가 들어온다. 브라우저는 **글자 단위로** 이 목록을 훑어
+     그 글자를 가진 첫 폰트를 쓴다. 앞쪽 Playfair 가 라틴을 맡고, 나머지는 뒤의 잘라낸
+     Noto 들이 하나씩 받는다(layout.tsx — 쓰일 때만 내려받는다). 서로 겹치는 글자가
+     없으므로 뒤쪽 순서는 상관없다. */
+  --font-toast: var(--font-playfair), var(--font-toast-greek), var(--font-toast-cyrillic),
+    var(--font-toast-georgian), var(--font-toast-armenian), var(--font-toast-hebrew),
+    var(--font-toast-arabic), var(--font-toast-thai), var(--font-toast-hangul),
+    var(--font-toast-han), serif;
   --font-logo: var(--font-logo);
   --font-mono: var(--font-geist-mono);
 }
