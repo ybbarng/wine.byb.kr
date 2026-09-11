@@ -49,6 +49,8 @@ export type RotationWine = {
   glass: number;
   /** "샤블리 · 프랑스" 처럼 이름 아래 붙일 한 줄. 없으면 null. */
   origin: string | null;
+  /** 나라 이름만 따로. 건배말을 그 나라 말로 고르는 데 쓴다(features/glass/toast.ts). */
+  country: string | null;
 };
 
 /**
@@ -97,6 +99,7 @@ export async function getRotationWines(): Promise<RotationWine[]> {
       absorb,
       glass,
       origin: parts.length > 0 ? [...new Set(parts)].join(" · ") : null,
+      country,
     };
   });
 }

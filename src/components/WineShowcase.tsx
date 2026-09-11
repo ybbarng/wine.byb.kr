@@ -4,12 +4,17 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { glassFor, useGlassOptional } from "@/features/glass/glass-context";
 import {
+  isToastTurn,
   NAME_DELAY_S,
   NAME_LEAD_S,
   RESUME_AFTER_TOUCH_S,
   rotationOrder,
+  TOAST_DELAY_S,
+  TOAST_EXIT_S,
+  TOAST_NAME_DELAY_S,
   WINE_HOLD_S,
 } from "@/features/glass/rotation";
+import { type Toast, toastFor } from "@/features/glass/toast";
 import type { RotationWine } from "@/features/wine/db/queries";
 
 // 홈 랜딩: 검색바·헤더·와인잔·배경은 (main) 레이아웃이 제공한다. 여기선 리듬을 돌리고
@@ -20,6 +25,9 @@ import type { RotationWine } from "@/features/wine/db/queries";
 //
 // 잔을 직접 바꾸지 않는다 — 잔 상태(setGlass)만 갈아 끼우면 GlassStage 가 "같은
 // 페이지에서 잔이 달라졌다"를 보고 교차 슬라이드로 바꿔 준다. 리듬 상수는 rotation.ts.
+//
+// 네 번에 한 번은 이름이 오기 전 틈에 그 나라 말 건배말이 들렀다 간다(toast.ts).
+// 이름과 같은 자리를 쓰므로 화면이 움직이는 횟수는 그대로다.
 
 /** 이름이 미끄러져 들어오고 나가는 시간(ms). 잔 슬라이드와 결이 맞는 정도로. */
 const NAME_MOVE_MS = 420;
@@ -62,6 +70,9 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
 
   const [wine, setWine] = useState<RotationWine | null>(null);
   const [phase, setPhase] = useState<NamePhase>("enter");
+  // 이번 교체에 끼워 넣을 건배말. null 이면 이름이 평소대로 일찍 들어온다.
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [toastPhase, setToastPhase] = useState<NamePhase>("enter");
   const year = new Date().getFullYear();
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: 리듬은 마운트 때 한 번만 짠다
@@ -103,7 +114,12 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
       setPhase("exit"); // 이름이 먼저 왼쪽으로 빠지고(첫 번째는 이름이 없어 티가 안 난다)
       wait(NAME_LEAD_S * 1000, () => {
         rot.i = (rot.i + 1) % rot.order.length;
-        show(rot.order[rot.i]); // 잔이 뒤따라 바뀐다
+        const next = rot.order[rot.i];
+        // 건배말은 이름이 비운 자리에 잠깐 들어갔다 나온다. 나라를 모르는 와인이면
+        // 그냥 건너뛴다 — 모르면 말하지 않는다.
+        setToast(isToastTurn(rot.i) ? toastFor(next.country) : null);
+        setToastPhase("enter");
+        show(next); // 잔이 뒤따라 바뀐다
         scheduleNext();
       });
     }
@@ -121,12 +137,25 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
   //
   // wine 도 함께 보는 건 안전판이다 — 잔이 끝내 안 움직이는 경우(색·잔이 같아 교체가
   // 생략되는 등)에도 이름은 떠야 한다.
+  //
+  // 건배말이 있는 회차는 이 자리를 건배말이 먼저 쓴다 — 들어왔다 나간 뒤에 이름이
+  // 온다. 그래서 타이머가 셋이고 이름은 늦다.
   // biome-ignore lint/correctness/useExhaustiveDependencies: swapSeq 는 읽는 값이 아니라 "잔이 밀리기 시작했다"는 신호다. 그때 타이머를 다시 잡으려고 일부러 넣는다.
   useEffect(() => {
     if (!wine) return;
-    const t = setTimeout(() => setPhase("shown"), NAME_DELAY_S * 1000);
-    return () => clearTimeout(t);
-  }, [wine, swapSeq]);
+    if (!toast) {
+      const t = setTimeout(() => setPhase("shown"), NAME_DELAY_S * 1000);
+      return () => clearTimeout(t);
+    }
+    const timers = [
+      setTimeout(() => setToastPhase("shown"), TOAST_DELAY_S * 1000),
+      setTimeout(() => setToastPhase("exit"), TOAST_EXIT_S * 1000),
+      setTimeout(() => setPhase("shown"), TOAST_NAME_DELAY_S * 1000),
+    ];
+    return () => {
+      for (const t of timers) clearTimeout(t);
+    };
+  }, [wine, toast, swapSeq]);
 
   return (
     <>
@@ -153,6 +182,24 @@ export default function WineShowcase({ wines }: { wines: RotationWine[] }) {
           </span>
           <span className="mt-0.5 block text-xs text-muted">{wine?.origin ?? " "}</span>
         </Link>
+        {/* 건배말은 이름과 **같은 자리**에 겹쳐 둔다(흐름 밖으로 빼서 절대 위치).
+            위아래로 나란히 두면 건배말이 뜨는 회차만 이름이 아래로 밀려 내려간다. */}
+        {toast && (
+          <p
+            data-testid="home-toast"
+            className={`absolute inset-x-0 top-0 px-4 py-2 text-center transition-all ease-out ${NAME_CLASS[toastPhase]}`}
+            style={{ transitionDuration: `${NAME_MOVE_MS}ms` }}
+          >
+            <span
+              lang={toast.lang}
+              dir={toast.rtl ? "rtl" : undefined}
+              className="block font-toast text-lg text-foreground md:text-xl"
+            >
+              {toast.text}
+            </span>
+            <span className="mt-0.5 block text-xs text-muted">{toast.countryKo}</span>
+          </p>
+        )}
       </div>
       <footer className="pointer-events-none absolute inset-x-0 bottom-0 z-30 flex items-center justify-between gap-4 px-6 py-3 text-[11px] text-muted">
         <span>© {year} ybbarng</span>
