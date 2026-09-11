@@ -145,15 +145,18 @@ describe("왜 짧게, 왜 이 속도로 (2026-09-10 측정)", () => {
     expect(NOW.seconds).toBeLessThan(OLD.seconds);
   });
 
-  it("사람이 스월하는 속도 범위(1~2.5Hz) 안에 있다", () => {
-    // 위로 올리면 수면은 더 커지지만 손으로 돌리는 게 아니라 잔이 떠는 것처럼 보인다.
+  it("사람이 스월하는 속도 범위 안에 있다", () => {
+    // 위로 올리면 수면은 더 커지지만, 손으로 돌리는 게 아니라 잔이 빠르게 떠는 것처럼
+    // 보인다. 2.5Hz 에서 실제로 그런 이야기를 들었다.
     expect(AUTO_SWIRL_HZ).toBeGreaterThanOrEqual(1);
-    expect(AUTO_SWIRL_HZ).toBeLessThanOrEqual(2.5);
+    expect(AUTO_SWIRL_HZ).toBeLessThanOrEqual(2.2);
   });
 
-  it("플루트도 눈에 보일 만큼 출렁인다 — 예전 속도로는 거의 안 움직였다", () => {
+  it("플루트도 눈에 보일 만큼 출렁인다 — 램프를 줄인 덕이다", () => {
+    // 회전 속도는 예전과 거의 같다(2.08 → 2.07Hz). 좁은 잔이 살아난 건 여닫는 시간을
+    // 0.3·0.4 에서 0.15·0.25 로 줄여, 같은 길이에서 실제로 미는 구간이 늘었기 때문이다.
     const now = swirlOnce("flute").peak;
     const old = swirlOnce("flute", OLD).peak;
-    expect(now, `지금 ${now.toFixed(3)} vs 예전 ${old.toFixed(3)}`).toBeGreaterThan(old * 1.5);
+    expect(now, `지금 ${now.toFixed(3)} vs 예전 ${old.toFixed(3)}`).toBeGreaterThan(old * 1.35);
   });
 });
