@@ -41,20 +41,18 @@ export const RESUME_AFTER_TOUCH_S = 15;
  * 매번 무작위로 뽑으면 같은 와인이 연달아 나오는 일이 생각보다 자주 생기고(60종이라도
  * 체감으로는 자주 겹친다), 한 바퀴 도는 동안 아예 안 나오는 와인도 생긴다.
  *
- * `first` 를 주면 그 와인을 맨 앞에 둔다 — 상세를 보다 홈으로 돌아왔을 때 보던 잔에서
- * 이어지게 하는 용도다.
+ * 어디까지 왔는지는 셸이 `homeIndex` 로 들고 있다 — 상세를 다녀와도 그 자리에서
+ * 이어지므로 여기서 특정 와인을 앞으로 끌어올 필요가 없다.
  */
 export function rotationOrder<T extends { slug: string }>(
   wines: readonly T[],
-  random: () => number = Math.random,
-  first?: string | null
+  random: () => number = Math.random
 ): T[] {
-  const rest = wines.filter((w) => w.slug !== first);
+  const out = [...wines];
   // Fisher–Yates.
-  for (let i = rest.length - 1; i > 0; i--) {
+  for (let i = out.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
-    [rest[i], rest[j]] = [rest[j], rest[i]];
+    [out[i], out[j]] = [out[j], out[i]];
   }
-  const head = wines.find((w) => w.slug === first);
-  return head ? [head, ...rest] : rest;
+  return out;
 }
