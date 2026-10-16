@@ -276,6 +276,8 @@ const GRAPES: { slug: string; nameKo: string; nameLocal: string; color: string }
   { slug: "semillon", nameKo: "세미용", nameLocal: "Sémillon", color: "white" },
   { slug: "rondo", nameKo: "론도", nameLocal: "Rondo", color: "red" },
   { slug: "yamasachi", nameKo: "야마사치", nameLocal: "Yamasachi (山幸)", color: "red" },
+  { slug: "yama-sauvignon", nameKo: "야마 소비뇽", nameLocal: "Yama Sauvignon", color: "red" },
+  { slug: "armo-noir", nameKo: "아르모 누아르", nameLocal: "Armo Noir", color: "red" },
   // 껍질은 붉은빛(옛 이름 베니시오야=紅塩谷)이지만 화이트 와인으로 빚는다.
   { slug: "tabiji", nameKo: "다비지", nameLocal: "Tabiji (旅路)", color: "white" },
 ];
@@ -391,6 +393,18 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
   "osa-winery-tabi": {
     notesKo:
       "오타루에서 태어난 희귀 품종 다비지(旅路)로 빚은 오사 와이너리의 화이트. 껍질이 붉은 포도지만 화이트로 빚어, 청포도 알을 그대로 깨문 듯한 생생한 포도 향이 먼저 온다. 유럽 품종 와인과는 결이 다른 '포도 그 자체' 같은 맛이 이 와인의 개성이니, 익숙한 과일 이름을 찾기보다 그 낯선 포도 맛을 그대로 즐기면 된다. 차게 해서 가벼운 일식과 곁들이기 좋다.",
+  },
+  "yoichi-winery-tarujuku-zweigeltrebe": {
+    notesKo:
+      "요이치 와이너리가 오랫동안 내 온 대표 레드로, 츠바이겔트를 오크통에서 길게 숙성했다. 서늘한 요이치의 츠바이겔트라 산미가 먼저 날카롭게 서는데, 그 뒤에 오크에서 온 바닐라·삼나무 향과 떫은맛이 과실을 얼마나 감싸는지 보자. 잔에서 몇 분 공기를 쐬면 처음의 각진 느낌이 누그러지니, 첫 모금과 나중 모금을 비교해 보면 좋다.",
+  },
+  "otobe-winery-yama-sauvignon-tarujukusei": {
+    notesKo:
+      "일본 산머루와 카베르네 소비뇽을 교배한 야마 소비뇽을 오크통에서 숙성한 레드. 잔에서는 산머루를 닮은 짙은 색이 먼저 보이고, 입에서는 농축된 검은 과실과 또렷한 산미가 함께 온다. 오크 숙성이 그 산미를 얼마나 둥글게 다듬었는지, 카베르네에서 온 짜임새가 느껴지는지에 주목해 보자.",
+  },
+  "hakkenzan-winery-kyoko": {
+    notesKo:
+      "삿포로 남쪽 핫켄잔 기슭의 와이너리가 아르모 누아르를 주로 써서 빚은 레드. 오크통이 아니라 탱크에서 숙성해 나무 향보다 과실이 앞에 선다. 미디엄 바디에 산미와 떫은맛이 뼈대를 받치는 구조라, 과일 맛 뒤로 그 둘이 어떻게 받쳐 주는지 느껴 보자.",
   },
   "memuro-winery-yamasachi": {
     notesKo:
@@ -1120,6 +1134,74 @@ const ENTRIES: Entry[] = [
       purchasePrice: 8610,
       purchasePlace: "삿포로 오텀페스트",
       memo: "상대적으로 어두운 붉은색. 지난번 마트에서 산 작년 햇와인 론도에서 나던 기름 냄새가 없고 무난한 와인 느낌. 포도 맛이나 떫은 느낌은 약한 편. 글라스 1,000엔.",
+    },
+  },
+  // 10/1 오텀페스트 와인 부스의 '숙성 와인' 시음 세트(각 60ml 3종, 2,000엔). 가격은 3등분했다.
+  {
+    regionSlug: "yoichi",
+    producer: {
+      slug: "yoichi-winery",
+      nameKo: "요이치 와이너리",
+      nameLocal: "Yoichi Winery (余市ワイナリー)",
+    },
+    wine: {
+      slug: "yoichi-winery-tarujuku-zweigeltrebe",
+      nameKo: "오크 숙성 츠바이겔트레베",
+      nameLocal: "Tarujuku Zweigeltrebe (樽熟ツヴァイゲルトレーベ)",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "zweigelt", percent: 100 }],
+    tasting: {
+      drankOn: "2026-10-01",
+      purchasedOn: "2026-10-01",
+      purchasePrice: 5740,
+      purchasePlace: "삿포로 오텀페스트",
+      memo: "날카롭고 공격적인 느낌. 산미가 있고 알코올도 높게 느껴졌다. 숙성 와인 시음 세트(각 60ml 3종, 2,000엔)의 첫 잔.",
+    },
+  },
+  {
+    regionSlug: "hokkaido",
+    producer: {
+      slug: "otobe-winery",
+      nameKo: "오토베 와이너리",
+      nameLocal: "Otobe Winery (乙部ワイナリー)",
+    },
+    wine: {
+      slug: "otobe-winery-yama-sauvignon-tarujukusei",
+      nameKo: "야마 소비뇽 오크 숙성",
+      nameLocal: "Yama Sauvignon Tarujukusei (ヤマソービニヨン 樽熟成)",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "yama-sauvignon", percent: 100 }],
+    tasting: {
+      drankOn: "2026-10-01",
+      purchasedOn: "2026-10-01",
+      purchasePrice: 5740,
+      purchasePlace: "삿포로 오텀페스트",
+      memo: "산미가 있는데 부드럽고 조화로운 느낌. 숙성 와인 시음 세트(각 60ml 3종, 2,000엔)의 둘째 잔.",
+    },
+  },
+  {
+    regionSlug: "hokkaido",
+    producer: {
+      slug: "hakkenzan-winery",
+      nameKo: "핫켄잔 와이너리",
+      nameLocal: "Hakkenzan Winery (八剣山ワイナリー)",
+    },
+    wine: {
+      slug: "hakkenzan-winery-kyoko",
+      nameKo: "교코",
+      nameLocal: "Kyōkō (峡紅)",
+      type: "red",
+    },
+    // 메뉴판에 '아르모 누아르 주체'라고만 적혀 있어 비율은 비워 둔다.
+    grapeSlugs: [{ slug: "armo-noir" }],
+    tasting: {
+      drankOn: "2026-10-01",
+      purchasedOn: "2026-10-01",
+      purchasePrice: 5740,
+      purchasePlace: "삿포로 오텀페스트",
+      memo: "셋 중 가장 밝은 색. 포도주스 같은 맛. 숙성 와인 시음 세트(각 60ml 3종, 2,000엔)의 셋째 잔.",
     },
   },
 ];
