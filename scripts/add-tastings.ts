@@ -210,6 +210,56 @@ const REGIONS: RegionSeed[] = [
     latitude: 43.585,
     longitude: 11.316,
   },
+  {
+    slug: "japan",
+    nameKo: "일본",
+    nameLocal: "Japan",
+    country: "일본",
+    level: "country",
+    parentSlug: null,
+    latitude: 36.2,
+    longitude: 138.25,
+  },
+  {
+    slug: "hokkaido",
+    nameKo: "홋카이도",
+    nameLocal: "Hokkaido (北海道)",
+    country: "일본",
+    level: "region",
+    parentSlug: "japan",
+    latitude: 43.3,
+    longitude: 142.4,
+  },
+  {
+    slug: "yoichi",
+    nameKo: "요이치",
+    nameLocal: "Yoichi (余市)",
+    country: "일본",
+    level: "subregion",
+    parentSlug: "hokkaido",
+    latitude: 43.19,
+    longitude: 140.78,
+  },
+  {
+    slug: "sorachi",
+    nameKo: "소라치",
+    nameLocal: "Sorachi (空知)",
+    country: "일본",
+    level: "subregion",
+    parentSlug: "hokkaido",
+    latitude: 43.43,
+    longitude: 141.83,
+  },
+  {
+    slug: "tokachi",
+    nameKo: "도카치",
+    nameLocal: "Tokachi (十勝)",
+    country: "일본",
+    level: "subregion",
+    parentSlug: "hokkaido",
+    latitude: 42.91,
+    longitude: 143.05,
+  },
 ];
 
 // 없으면 만들 품종. GRAPE_ABSORB(wine-glass.ts) 색은 nameKo 로 찾으니 nameKo 를 맞춘다.
@@ -224,6 +274,10 @@ const GRAPES: { slug: string; nameKo: string; nameLocal: string; color: string }
   { slug: "parellada", nameKo: "파레야다", nameLocal: "Parellada", color: "white" },
   { slug: "canaiolo", nameKo: "카나이올로", nameLocal: "Canaiolo", color: "red" },
   { slug: "semillon", nameKo: "세미용", nameLocal: "Sémillon", color: "white" },
+  { slug: "rondo", nameKo: "론도", nameLocal: "Rondo", color: "red" },
+  { slug: "yamasachi", nameKo: "야마사치", nameLocal: "Yamasachi (山幸)", color: "red" },
+  // 껍질은 붉은빛(옛 이름 베니시오야=紅塩谷)이지만 화이트 와인으로 빚는다.
+  { slug: "tabiji", nameKo: "다비지", nameLocal: "Tabiji (旅路)", color: "white" },
 ];
 
 // 와인별 abv(라벨 기준 추정 — 정확값은 라벨 확인 후 조정)와 시음 포인트.
@@ -321,6 +375,32 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     notesKo:
       "이름의 '미네랄시퍼'가 모젤의 점판암을 가리킨다. 첫 향은 라임과 아삭한 풋사과, 잔에 두고 공기를 먹이면 살구·복숭아가 올라온다. 입에 넣으면 산미가 곧게 서고 그 뒤로 젖은 돌 같은 짭짤한 기운이 남는데, 이게 모젤 리슬링에서 흔히 말하는 미네랄이다. 도수가 11.5도로 낮아 가볍다고 느끼기 쉽지만 그만큼 산미와 과실이 또렷하게 드러난다. 너무 차게 하면 향이 닫히니 8~10도쯤에서 마시고, 잔에서 온도가 올라갈수록 달라지는 걸 지켜보면 재미있다.",
   },
+  // 홋카이도 와인들은 라벨 도수를 확인하지 못해 abv 를 비워 둔다.
+  "hokkaido-wine-otaru-hatsushibori-rondo": {
+    notesKo:
+      "그해 수확한 포도를 열처리 없이 바로 병에 담는 홋카이도 와인의 햇와인 '하쓰시보리'. 론도는 추위에 강한 독일 교배 품종이라 색이 짙게 나오는데, 잔에 따르면 그 진한 보랏빛부터 보인다. 첫 향은 갓 으깬 포도와 체리 같은 풋풋한 과실이고, 입에서는 타닌보다 산미와 과즙이 앞선다. 햇와인이라 오래 두기보다 사서 곧 마시는 게 맞고, 숙성 향 대신 막 담근 포도의 생기를 느껴보면 된다.",
+  },
+  "hokkaido-wine-tsurunuma-rondo": {
+    notesKo:
+      "홋카이도 와인이 소라치 우라우스의 직영 농장 쓰루누마에서 기른 론도로 빚은 레드. 론도 특유의 짙은 색에 비해 맛은 생각보다 순한 편이라, 색만 보고 묵직한 와인을 기대하면 의외라고 느낄 수 있다. 체리·자두 같은 검붉은 과실을 찾아보고, 떫은맛이 얼마나 가볍게 지나가는지 확인해 보자. 너무 차갑지 않게 14~16도쯤이 과실이 잘 드러난다.",
+  },
+  "occigabi-zweigelt": {
+    notesKo:
+      "요이치 언덕의 오치가비가 자기 밭 포도로 빚은 츠바이겔트. 오스트리아 품종이지만 서늘한 홋카이도에서 자라 색이 밝고 산미가 또렷하게 선다. 첫 향의 붉은 체리와 은은한 후추를 맡아본 뒤, 입안에서 가벼운 몸집에 비해 타닌이 살짝 조여 오는 느낌에 주목해 보자. 살짝 차게 마셔도 좋은 레드다.",
+  },
+  "osa-winery-tabi": {
+    notesKo:
+      "오타루에서 태어난 희귀 품종 다비지(旅路)로 빚은 오사 와이너리의 화이트. 껍질이 붉은 포도지만 화이트로 빚어, 청포도 알을 그대로 깨문 듯한 생생한 포도 향이 먼저 온다. 유럽 품종 와인과는 결이 다른 '포도 그 자체' 같은 맛이 이 와인의 개성이니, 익숙한 과일 이름을 찾기보다 그 낯선 포도 맛을 그대로 즐기면 된다. 차게 해서 가벼운 일식과 곁들이기 좋다.",
+  },
+  "memuro-winery-yamasachi": {
+    notesKo:
+      "도카치 메무로 땅에서 기른 야마사치로만 빚은 레드. 야마사치는 일본 산머루를 교배해 만든 홋카이도 품종으로, 2020년 국제 와인기구(OIV)에 일본 품종으로는 세 번째로 이름을 올렸다. 잔에서는 거의 검게 보이는 진한 색이 먼저 눈에 들어오고, 입에 넣으면 산머루에서 온 강한 산미가 확 치고 올라온다. 타닌보다 산미가 뼈대인 와인이라, 기름진 고기나 간장 양념 요리와 함께하면 그 산미가 오히려 반갑다.",
+  },
+  "pierre-zero-blanc-de-blancs": {
+    abv: 0,
+    notesKo:
+      "프랑스 샤르도네 와인에서 알코올만 빼낸 무알코올 스파클링. 배·사과·시트러스 껍질 향은 와인 그대로인데, 알코올이 주는 무게와 온기가 빠져 입안이 훨씬 가볍다. 일반 스파클링보다 기포가 순하게 느껴지는지, 알코올 대신 산미가 맛의 중심을 잡는지 비교해 보면 재미있다. 아주 차게 해서 건배주로 쓰기 좋다.",
+  },
 };
 
 type Entry = {
@@ -340,6 +420,7 @@ type Entry = {
     purchasedOn?: string; // YYYY-MM-DD (픽업/구매일; 편의점 직접구매 등 모르면 생략)
     purchasePrice?: number; // 모르면 생략
     purchasePlace?: string; // 구매처 불명이면 생략
+    memo?: string; // 시음 메모(bodyText). 외화로 산 건 원화로 환산해 purchasePrice 에 두고 원가는 여기 적는다.
   };
 };
 
@@ -903,6 +984,144 @@ const ENTRIES: Entry[] = [
       purchasePlace: "GS25",
     },
   },
+  // 2026 가을 홋카이도 여행. 엔화는 여행 중 환전 환율(100엔≈861원)로 원화 환산했다.
+  {
+    regionSlug: "hokkaido",
+    producer: {
+      slug: "hokkaido-wine",
+      nameKo: "홋카이도 와인",
+      nameLocal: "Hokkaido Wine (北海道ワイン)",
+    },
+    wine: {
+      slug: "hokkaido-wine-otaru-hatsushibori-rondo",
+      nameKo: "오타루 하쓰시보리 론도",
+      nameLocal: "Otaru Hatsushibori Rondo (おたる初しぼり ロンド)",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "rondo", percent: 100 }],
+    tasting: {
+      drankOn: "2026-09-27",
+      purchasedOn: "2026-09-27",
+      purchasePrice: 14380,
+      purchasePlace: "이온 맥스밸류 (삿포로)",
+      memo: "휘발유 같은 향이 계속 남았다. 2025년 햇와인. 1,670엔.",
+    },
+  },
+  {
+    regionSlug: "spain",
+    producer: { slug: "alsinac", nameKo: "알시낙", nameLocal: "Alsinac" },
+    wine: {
+      slug: "alsinac-cava-brut",
+      nameKo: "알시낙 까바 브뤼",
+      nameLocal: "Alsinac Cava Brut",
+      type: "sparkling",
+      classification: "Cava DO",
+    },
+    grapeSlugs: [],
+    tasting: {
+      drankOn: "2026-10-01",
+      purchasedOn: "2026-10-01",
+      purchasePlace: "단초 (JR타워 호텔 닛코 삿포로)",
+      memo: "풍부한 탄산감, 중상 정도의 산미. 생일 저녁 코스와 함께.",
+    },
+  },
+  {
+    regionSlug: "랑그독-루시옹",
+    producer: { slug: "pierre-chavin", nameKo: "피에르 샤뱅", nameLocal: "Pierre Chavin" },
+    wine: {
+      slug: "pierre-zero-blanc-de-blancs",
+      nameKo: "피에르 제로 블랑 드 블랑",
+      nameLocal: "Pierre Zéro Blanc de Blancs",
+      type: "sparkling",
+    },
+    grapeSlugs: [{ slug: "샤르도네" }],
+    tasting: {
+      drankOn: "2026-10-01",
+      purchasedOn: "2026-10-01",
+      purchasePlace: "단초 (JR타워 호텔 닛코 삿포로)",
+      memo: "상큼한 산미, 적은 탄산. 생일 저녁 코스와 함께.",
+    },
+  },
+  {
+    regionSlug: "hokkaido",
+    producer: { slug: "osa-winery", nameKo: "오사 와이너리", nameLocal: "OSA Winery" },
+    wine: {
+      slug: "osa-winery-tabi",
+      nameKo: "타비",
+      nameLocal: "Tabi",
+      type: "white",
+    },
+    grapeSlugs: [{ slug: "tabiji", percent: 100 }],
+    tasting: {
+      drankOn: "2026-10-01",
+      purchasedOn: "2026-10-01",
+      purchasePrice: 12050,
+      purchasePlace: "단초 (JR타워 호텔 닛코 삿포로)",
+      memo: "청포도 향에, 맛도 포도알을 먹는 듯한 특이한 맛. 글라스 1,400엔(영수증의 화이트와인 글라스로 추정).",
+    },
+  },
+  {
+    regionSlug: "tokachi",
+    producer: {
+      slug: "memuro-winery",
+      nameKo: "메무로 와이너리",
+      nameLocal: "Memuro Winery (めむろワイナリー)",
+    },
+    wine: {
+      slug: "memuro-winery-yamasachi",
+      nameKo: "야마사치",
+      nameLocal: "Yamasachi (山幸)",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "yamasachi", percent: 100 }],
+    tasting: {
+      drankOn: "2026-10-01",
+      purchasedOn: "2026-10-01",
+      purchasePrice: 8610,
+      purchasePlace: "단초 (JR타워 호텔 닛코 삿포로)",
+      memo: "검붉은색, 강렬한 산미, 독특한 풍미. 글라스 1,000엔(영수증의 레드와인 글라스로 추정).",
+    },
+  },
+  {
+    regionSlug: "yoichi",
+    producer: { slug: "occigabi", nameKo: "오치가비 와이너리", nameLocal: "OcciGabi Winery" },
+    wine: {
+      slug: "occigabi-zweigelt",
+      nameKo: "오치가비 츠바이겔트",
+      nameLocal: "OcciGabi Zweigelt",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "zweigelt", percent: 100 }],
+    tasting: {
+      drankOn: "2026-10-02",
+      purchasedOn: "2026-10-02",
+      purchasePrice: 6890,
+      purchasePlace: "삿포로 오텀페스트",
+      memo: "밝은 빨간색. 쓰루누마 론도보다 떫은 느낌이 상대적으로 강하다. 글라스 800엔.",
+    },
+  },
+  {
+    regionSlug: "sorachi",
+    producer: {
+      slug: "hokkaido-wine",
+      nameKo: "홋카이도 와인",
+      nameLocal: "Hokkaido Wine (北海道ワイン)",
+    },
+    wine: {
+      slug: "hokkaido-wine-tsurunuma-rondo",
+      nameKo: "쓰루누마 론도",
+      nameLocal: "Tsurunuma Rondo (鶴沼 ロンド)",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "rondo", percent: 100 }],
+    tasting: {
+      drankOn: "2026-10-02",
+      purchasedOn: "2026-10-02",
+      purchasePrice: 8610,
+      purchasePlace: "삿포로 오텀페스트",
+      memo: "상대적으로 어두운 붉은색. 지난번 마트에서 산 작년 햇와인 론도에서 나던 기름 냄새가 없고 무난한 와인 느낌. 포도 맛이나 떫은 느낌은 약한 편. 글라스 1,000엔.",
+    },
+  },
 ];
 
 async function main() {
@@ -1026,10 +1245,11 @@ async function main() {
       // 이미 있는 노트는 사용자가 앱에서 편집했을 수 있다. 시드는 **비어 있는 칸만
       // 채우고** 사용자가 넣은 값은 절대 덮지 않는다. (과거: 시드가 구매처·음용일을
       // 시드값으로 덮어써, 사용자가 앱에서 적은 음용일이 배포마다 null 로 지워졌다.)
-      const fill: { purchasePlace?: string | null; drankOn?: Date | null } = {};
+      const fill: { purchasePlace?: string | null; drankOn?: Date | null; bodyText?: string } = {};
       const place = e.tasting.purchasePlace ?? null;
       if (dup.purchasePlace == null && place != null) fill.purchasePlace = place;
       if (dup.drankOn == null && drankOn != null) fill.drankOn = drankOn;
+      if (dup.bodyText == null && e.tasting.memo != null) fill.bodyText = e.tasting.memo;
       if (Object.keys(fill).length > 0) {
         await db.tastingNote.update({ where: { id: dup.id }, data: fill });
         console.log(`~ 채움: ${e.wine.nameLocal} (${Object.keys(fill).join(", ")})`);
@@ -1045,6 +1265,7 @@ async function main() {
         purchasedOn,
         purchasePrice: e.tasting.purchasePrice,
         purchasePlace: e.tasting.purchasePlace ?? null,
+        bodyText: e.tasting.memo ?? null,
       },
     });
     console.log(
