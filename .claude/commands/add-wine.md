@@ -56,10 +56,10 @@ description: 준 와인을 사이트에 추가 — 상세·산지·생산자·�
 
 7. **커밋·배포**
    - 기본 브랜치면 브랜치부터. 커밋 → PR → 머지.
-   - add-tastings 는 배포 스크립트(`./server`)가 자동 실행하니 머지하면 서버 반영된다.
-   - 단 `./server` 자체를 바꾸거나 **새 스크립트를 추가**했다면 첫 배포엔 안 돈다
-     (실행 중인 옛 server) → 그 배포 뒤 서버에서 1회 수동 실행:
-     `ssh ybbarng@byb.kr 'cd /home/ybbarng/wine.byb.kr && . "$HOME/.nvm/nvm.sh" && pnpm exec tsx scripts/<스크립트>.ts'`
+   - add-tastings 는 배포 때 `ops/release.sh` 가 자동 실행하니 머지하면 서버 반영된다.
+   - **새 스크립트를 추가**했다면 `ops/release.sh` 에 한 줄 넣는다. 스크립트도 이미지에 들어가므로 그 배포에서 바로 돈다.
+     한 번만 돌릴 스크립트면 서버에서:
+     `cd ~/servers/byb.kr/apps/wine && docker compose run --rm tools node_modules/.bin/tsx scripts/<스크립트>.ts`
 
 ## 앱에서 먼저 기록한 와인 보강
 사용자가 급하게 사이트(`/wine/new` → `/journal/new`)에서 와인과 시음을 먼저 남기고 나중에

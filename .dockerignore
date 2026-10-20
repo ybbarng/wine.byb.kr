@@ -1,0 +1,19 @@
+# 이미지에 넣지 않는 것 — 비밀값·DB·로컬 산출물
+.env*
+!.env.example
+data/
+*.db
+*.db-journal
+*.db.bak.*
+node_modules/
+.next/
+src/generated/
+test-results/
+playwright-report/
+.glass-snapshots/
+.claude/
+.serena/
+.git/
+shot*.mjs
+*.tsbuildinfo
+docs/fluid-journey/
