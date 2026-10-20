@@ -444,7 +444,9 @@ type Entry = {
   };
   // 단일 품종이거나 대표 품종이 확실할 때만. 애매한 블렌드는 비워 두고 나중에 보강.
   grapeSlugs: { slug: string; percent?: number }[];
-  tasting: {
+  // 앱에서 먼저 기록한 와인을 보강만 할 땐 생략한다. 앱 기록과 구매일·가격이 하나라도
+  // 다르면 시드가 같은 시음을 한 건 더 만들어 버린다.
+  tasting?: {
     drankOn?: string; // YYYY-MM-DD (아직 안 마셨으면 생략)
     purchasedOn?: string; // YYYY-MM-DD (픽업/구매일; 편의점 직접구매 등 모르면 생략)
     purchasePrice?: number; // 모르면 생략
@@ -897,7 +899,8 @@ const ENTRIES: Entry[] = [
     tasting: { drankOn: "2026-05-08" },
   },
   {
-    regionSlug: "bordeaux",
+    // 뱅 드 프랑스(지역 표시 없는 등급)라 보르도가 아니라 나라 단위로 둔다.
+    regionSlug: "france",
     producer: {
       slug: "gcf",
       nameKo: "그랑 셰 드 프랑스",
@@ -1301,6 +1304,70 @@ async function main() {
     const region = await db.region.findUnique({ where: { slug: e.regionSlug } });
     if (!region) throw new Error(`산지 없음: ${e.regionSlug}`);
 
+    // 앱(/wine/new)에서 먼저 만든 와인은 산지가 나라 단위이고, 생산자는 한국어 이름
+    // slug 에 원어 이름이 없는 행으로 따로 생겨 있다. 아래 upsert 전에 시드 slug 로
+    // 옮겨 두지 않으면 생산자가 둘로 갈라지고 산지는 나라에 머문다.
+    const existing = await db.wine.findUnique({
+      where: { slug: e.wine.slug },
+      select: {
+        id: true,
+        type: true,
+        abv: true,
+        classification: true,
+        regionId: true,
+        region: { select: { level: true } },
+        producer: { select: { id: true, slug: true, nameLocal: true } },
+      },
+    });
+    const appProducer =
+      existing?.producer &&
+      existing.producer.slug !== e.producer.slug &&
+      existing.producer.nameLocal == null
+        ? existing.producer
+        : null;
+    if (appProducer) {
+      const taken = await db.producer.findUnique({
+        where: { slug: e.producer.slug },
+        select: { id: true },
+      });
+      if (!taken) {
+        await db.producer.update({
+          where: { id: appProducer.id },
+          data: { slug: e.producer.slug, nameKo: e.producer.nameKo, regionId: region.id },
+        });
+        console.log(`~ 생산자 정리: ${appProducer.slug} → ${e.producer.slug}`);
+      }
+    }
+    // 더 자세한 산지로만 옮긴다(지금 산지가 시드 산지의 상위일 때). 반대로 옮기면
+    // 이미 세부 산지가 잡힌 와인이 나라 단위로 되돌아간다.
+    let moveRegion = existing != null && existing.regionId !== region.id;
+    if (moveRegion && existing?.regionId != null) {
+      let cur = region.parentId;
+      const seen = new Set<string>();
+      moveRegion = false;
+      while (cur && !seen.has(cur)) {
+        if (cur === existing.regionId) {
+          moveRegion = true;
+          break;
+        }
+        seen.add(cur);
+        const p = await db.region.findUnique({ where: { id: cur }, select: { parentId: true } });
+        cur = p?.parentId ?? null;
+      }
+      // 앱에서 시드와 다른 나라 이름("France" 등)을 적으면 새 나라 행이 생겨 여기 걸린다.
+      // DB 쪽이 시드보다 자세한 기존 와인(브라운 브라더스 등)은 안 옮기는 게 맞아 조용히 둔다.
+      if (!moveRegion && existing.region?.level === "country")
+        console.warn(`! 산지 안 옮김: ${e.wine.nameLocal} (상위 관계 아님)`);
+    }
+    // 앱에서 생산자를 비워 둔 와인도 시드 생산자에 붙인다.
+    const moveProducer = appProducer != null || (existing != null && existing.producer == null);
+    if (existing?.producer && existing.producer.slug !== e.producer.slug && !appProducer) {
+      // 같은 앱 생산자를 쓰던 다른 와인이 먼저 시드 생산자로 바뀐 경우 등. 손으로 정리한다.
+      console.warn(
+        `! 생산자 안 옮김: ${e.wine.nameLocal} (${existing.producer.slug} ≠ ${e.producer.slug})`
+      );
+    }
+
     const producer = await db.producer.upsert({
       where: { slug: e.producer.slug },
       update: { nameLocal: e.producer.nameLocal },
@@ -1316,11 +1383,15 @@ async function main() {
     const wine = await db.wine.upsert({
       where: { slug: e.wine.slug },
       // nameLocal·abv·notesKo·classification 은 재실행 때도 갱신(시드가 단일 소스).
+      // 단 abv·classification 은 앱에서도 넣을 수 있어, 시드가 비워 두면 있던 값을 둔다.
       update: {
         nameLocal: e.wine.nameLocal,
-        abv: d.abv ?? null,
+        abv: d.abv ?? existing?.abv ?? null,
         notesKo: d.notesKo ?? null,
-        classification: e.wine.classification ?? null,
+        classification: e.wine.classification ?? existing?.classification ?? null,
+        ...(existing?.type == null ? { type: e.wine.type } : {}),
+        ...(moveProducer ? { producerId: producer.id } : {}),
+        ...(moveRegion ? { regionId: region.id } : {}),
       },
       create: {
         slug: e.wine.slug,
@@ -1344,6 +1415,22 @@ async function main() {
           data: { wineId: wine.id, grapeId: grape.id, percent: g.percent ?? null },
         });
       }
+    }
+
+    if (moveRegion) console.log(`~ 산지 정리: ${e.wine.nameLocal} → ${e.regionSlug}`);
+
+    // 생산자가 이미 있던 시드 생산자로 합쳐졌으면, 앱이 만든 빈 생산자는 지운다.
+    if (appProducer && appProducer.id !== producer.id) {
+      const left = await db.wine.count({ where: { producerId: appProducer.id } });
+      if (left === 0) await db.producer.delete({ where: { id: appProducer.id } });
+      console.log(
+        `~ 생산자 합침: ${appProducer.slug} → ${e.producer.slug}${left === 0 ? " (빈 앱 생산자 삭제)" : ""}`
+      );
+    }
+
+    if (!e.tasting) {
+      console.log(`~ 보강: ${e.wine.nameLocal}`);
+      continue;
     }
 
     // 아직 안 마신 와인은 drankOn 없이 구매 기록만 남긴다.
