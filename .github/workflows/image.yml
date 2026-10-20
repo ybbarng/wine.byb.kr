@@ -8,6 +8,10 @@ name: Image
 on:
   push:
     branches: [main]
+    # 문서만 바뀐 커밋은 이미지를 다시 만들거나 배포하지 않는다
+    paths-ignore:
+      - "docs/**"
+      - "**/*.md"
   workflow_dispatch:
 
 concurrency:
