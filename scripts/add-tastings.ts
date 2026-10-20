@@ -201,6 +201,16 @@ const REGIONS: RegionSeed[] = [
     longitude: 138.61,
   },
   {
+    slug: "barossa-valley",
+    nameKo: "바로사 밸리",
+    nameLocal: "Barossa Valley",
+    country: "호주",
+    level: "region",
+    parentSlug: "australia",
+    latitude: -34.53,
+    longitude: 138.95,
+  },
+  {
     slug: "chianti-classico",
     nameKo: "키안티 클라시코",
     nameLocal: "Chianti Classico",
@@ -414,6 +424,11 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     abv: 0,
     notesKo:
       "프랑스 샤르도네 와인에서 알코올만 빼낸 무알코올 스파클링. 배·사과·시트러스 껍질 향은 와인 그대로인데, 알코올이 주는 무게와 온기가 빠져 입안이 훨씬 가볍다. 일반 스파클링보다 기포가 순하게 느껴지는지, 알코올 대신 산미가 맛의 중심을 잡는지 비교해 보면 재미있다. 아주 차게 해서 건배주로 쓰기 좋다.",
+  },
+  "two-hands-gnarly-dudes-shiraz": {
+    abv: 13.8,
+    notesKo:
+      "바로사 밸리 쉬라즈를 오래 쓴 프랑스 오크통에서 숙성한 투핸즈의 대표 와인. 잔을 기울이면 가장자리까지 검붉은 진한 색이 먼저 보이고, 향에서는 블랙베리·자두 같은 검은 과실 위로 후추와 말린 허브가 올라온다. 새 오크가 아니라 나무 향이 과실을 덮지 않으니, 과실 뒤로 고기 같은 짭짤한 풍미가 어떻게 이어지는지 따라가 보자. 떫은맛은 촘촘하지만 거칠지 않다. 너무 따뜻하면 알코올이 도드라지니 16~18도 정도로 약간 서늘하게 마시는 게 좋다.",
   },
 };
 
@@ -1202,6 +1217,24 @@ const ENTRIES: Entry[] = [
       purchasePrice: 5740,
       purchasePlace: "삿포로 오텀페스트",
       memo: "셋 중 가장 밝은 색. 포도주스 같은 맛. 숙성 와인 시음 세트(각 60ml 3종, 2,000엔)의 셋째 잔.",
+    },
+  },
+  {
+    regionSlug: "barossa-valley",
+    producer: { slug: "two-hands", nameKo: "투핸즈", nameLocal: "Two Hands Wines" },
+    wine: {
+      slug: "two-hands-gnarly-dudes-shiraz",
+      nameKo: "투핸즈 낼리 듀즈 쉬라즈",
+      nameLocal: "Two Hands Gnarly Dudes Shiraz",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "쉬라즈", percent: 100 }],
+    tasting: {
+      drankOn: "2026-10-16",
+      purchasedOn: "2026-10-15",
+      purchasePrice: 44800,
+      purchasePlace: "GS25 잠실스타점",
+      memo: "2022 빈티지.",
     },
   },
 ];

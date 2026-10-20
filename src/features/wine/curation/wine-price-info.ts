@@ -20,6 +20,11 @@ const PRICES: Record<string, WinePrice> = {
     note: "VDP 회원 생산자의 입문급(구츠바인) 리즐링. 현지가는 낮지만 국내 수입가가 붙는다.",
   },
   "esterhazy-klimt-red": { low: 15000, high: 24000 },
+  "two-hands-gnarly-dudes-shiraz": {
+    low: 38000,
+    high: 52000,
+    note: "투핸즈의 바로사 쉬라즈. 신세계엘앤비 수입.",
+  },
   "chateau-pey-la-tour-reserve": { low: 18000, high: 28000 },
   "tosti-moscato-d-asti": { low: 14000, high: 22000 },
   "montgras-intriga-maxima": {
