@@ -54,3 +54,36 @@ jobs:
           # 두 타깃이 deps·build 단계를 같이 쓰므로 캐시를 나눠 갖는다
           cache-from: type=gha,scope=wine
           cache-to: type=gha,scope=wine,mode=max
+
+  # 서버에 배포한다. 서버의 배포 키는 forced-command 로 servers 저장소의 apps/wine/deploy.sh 만 실행한다.
+  # 이미지를 받을 토큰은 이 실행의 GITHUB_TOKEN 을 표준입력으로 넘긴다(서버에 남지 않고, 실행이 끝나면 만료된다).
+  # main 이면 운영 배포, 그 밖의 브랜치면 DB 사본으로 띄워 확인만 하는 시험(test).
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: SSH → deploy.sh
+        env:
+          KEY: ${{ secrets.SERVER_SSH_KEY }}
+          HOST: ${{ secrets.SERVER_HOST }}
+          USER: ${{ secrets.SERVER_USER }}
+          PORT: ${{ secrets.SERVER_PORT || '22' }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODE: ${{ github.ref == 'refs/heads/main' && 'deploy' || 'test' }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          printf '%s\n' "$TOKEN" | ssh -i ~/.ssh/deploy_key -p "$PORT" \
+            -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes \
+            "$USER@$HOST" "$MODE $GITHUB_SHA"
+          rm -f ~/.ssh/deploy_key
