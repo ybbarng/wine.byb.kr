@@ -20,7 +20,9 @@ FROM base AS deps
 COPY package.json pnpm-lock.yaml ./
 COPY prisma ./prisma
 COPY prisma.config.ts ./
-RUN pnpm install --frozen-lockfile
+# 이미지 안에서만 node_modules 를 평평하게 깐다. pnpm 기본(심볼릭 링크) 구조에서는 Next standalone 이
+# 일부 모듈(@swc/helpers 등)을 빠뜨려 server.js 가 시작하지 못한다. 로컬 개발 방식은 바꾸지 않는다.
+RUN echo "node-linker=hoisted" > .npmrc && pnpm install --frozen-lockfile
 
 # 빌드 — prisma generate + next build (DB 조회 페이지는 force-dynamic 이라 빌드에 DB 가 필요 없다)
 FROM deps AS build
