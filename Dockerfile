@@ -8,6 +8,9 @@
 # 두 타깃 모두 DB 는 컨테이너 밖(서버 폴더)을 /data 로 붙여 쓴다(DATABASE_URL=file:/data/wine.db).
 
 FROM node:24-bookworm-slim AS base
+# prisma CLI(db push 의 schema engine)가 openssl 을 찾는다. slim 이미지에는 없다.
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 ENV PNPM_HOME=/pnpm PATH=/pnpm:$PATH
 RUN corepack enable
 WORKDIR /app
