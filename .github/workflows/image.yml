@@ -7,7 +7,7 @@ name: Image
 
 on:
   push:
-    branches: [main, docker-image]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:

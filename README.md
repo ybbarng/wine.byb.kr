@@ -40,8 +40,5 @@ pnpm test:e2e      # Playwright e2e — 브라우저 인터랙션 회귀 가드
 
 ## 배포
 
-byb.kr Ubuntu 서버에서 nginx 리버스 프록시 뒤에 pm2로 구동한다. 포트는 서버 `.env` 의 `PORT` 로 지정한다.
-
-```bash
-pnpm server   # .env 로드 → DB 백업 → 빌드 → pm2 재시작 → 헬스체크
-```
+byb.kr 서버에서 Docker 컨테이너로 돈다(nginx → Traefik → wine). `main` 에 push 하면 GitHub Actions 가
+이미지를 빌드해 GHCR 에 올리고 서버에 배포한다. 자세한 내용은 [docs/DEPLOY.md](docs/DEPLOY.md).

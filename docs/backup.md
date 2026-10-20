@@ -141,14 +141,13 @@ health와 똑같이 byb.kr에 rclone·GPG 암호·크론을 두는 방식. rclon
 
 **2단계(완료)** — 자동 실행. 매일 04:00 KST + 수동 실행.
 
-`SERVER_SSH_KEY`는 **forced-command 키**(`command="cd .../wine.byb.kr && ./server"`)라
+`SERVER_SSH_KEY`는 **forced-command 키**(지금은 `command="./servers/byb.kr/apps/wine/deploy.sh"`, 처음엔 `./server`)라
 Actions에서 임의 명령을 돌릴 수 없다. 그래서 **백업 전용 키를 따로** 뒀다 — 권한을 가르는
 게 핵심이다. 이 키는 덤프 하나만 실행할 수 있어, 새어도 기록을 읽는 것 외엔 못 한다.
 
-- `ops/dump-tastings-remote.sh` — forced-command로 실행되는 래퍼.
-  **forced-command는 로그인 셸이 아니라 `node`·`pnpm`이 PATH에 없다**(`server`가 nvm을
-  따로 부르는 이유). nvm과 서버 `.env`를 먼저 불러온다. 받는 쪽이 stdout을 그대로 파일로
-  쓰므로 **JSON만 내보내고** 잡음은 표준에러로 흘린다.
+- 덤프 래퍼 — forced-command로 실행된다. 2026-10-20 컨테이너로 옮기면서 `ops/dump-tastings-remote.sh`(nvm·`.env` 를
+  불러 pnpm 으로 실행)를 지우고 `servers` 저장소의 `byb.kr/apps/wine/dump-tastings.sh` 로 바꿨다. `tools` 이미지로
+  `scripts/dump-tastings.ts --stdout` 을 돌린다. 받는 쪽이 stdout을 그대로 파일로 쓰므로 **JSON만 내보내고** 잡음은 버린다.
 - `.github/workflows/backup.yml` — 커밋 전에 검사한다: 비었는지 · 유효한 JSON 배열인지 ·
   **기록 수가 줄지 않았는지**. 줄었으면 커밋하지 않고 실패시켜 사람이 보게 한다. 깨진
   파일로 백업을 덮으면 백업이 아니라 손실이기 때문이다. 바뀐 게 없으면 커밋하지 않는다.

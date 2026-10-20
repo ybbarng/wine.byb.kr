@@ -1,79 +1,51 @@
 # 배포 가이드
 
-`wine.byb.kr` → byb.kr Ubuntu 서버 → nginx → `localhost:3103` (pm2). ftf와 동일한 구조다.
+`wine.byb.kr` → byb.kr 서버 → nginx(TLS) → Traefik → `wine` 컨테이너. (2026-10-20 pm2 에서 옮김)
 
-- 최초 1회: 서버에서 아래 **부트스트랩**을 직접 실행한다.
-- 이후: `main` 에 push 하면 GitHub Actions가 SSH로 서버의 `./server` 를 실행해 자동 배포한다.
-- 포트 같은 배포 환경 종속 값은 **서버의 `.env` 에만** 둔다(저장소에 없음).
+- 서버를 돌리는 설정(compose·배포·백업 덤프 스크립트)은 **`ybbarng/servers` 저장소의 `byb.kr/apps/wine/`** 에 있다.
+  이 저장소는 앱 코드와 이미지 빌드만 맡는다.
+- `main` 에 push 하면 `.github/workflows/image.yml` 이
+  1. 이미지 두 개를 빌드해 GHCR 에 올리고
+     - `ghcr.io/ybbarng/wine.byb.kr` — 앱 (`Dockerfile` 의 `runner`, Next standalone)
+     - `ghcr.io/ybbarng/wine.byb.kr-tools` — DB 반영·시드·백업 덤프 (`tools`)
+  2. 배포 키로 서버에 SSH 접속해 `deploy <sha>` 를 보낸다.
+- 서버에서 빌드하지 않는다.
 
----
+## 서버에서 일어나는 일 (`servers/byb.kr/apps/wine/deploy.sh`)
 
-## 1. 최초 부트스트랩 (서버에서 1회)
+1. DB 백업 (`~/data/wine/wine.db.bak.*`, 최근 14개)
+2. 이미지 받기 — 그 실행의 `GITHUB_TOKEN` 을 SSH 표준입력으로 받아 임시로만 쓰고 지운다.
+   서버에 오래 남는 토큰은 없다(classic PAT 는 회사 조직까지 읽을 수 있어서 쓰지 않는다).
+3. `tools` 컨테이너로 [`ops/release.sh`](../ops/release.sh) — `prisma db push` + 멱등 시드
+4. 앱 컨테이너 교체, 헬스체크, 지난 이미지 정리
 
-현재 운영 서버 기준: 계정 `ybbarng`, 경로 `/home/ybbarng/wine.byb.kr`, 포트 `3104`.
+## 새 시드 스크립트를 추가할 때
 
-```bash
-# 서버에 SSH 접속 후
-cd ~                 # 저장소를 홈 바로 아래 둔다 (SERVER_PATH 의 부모)
-git clone https://github.com/ybbarng/wine.byb.kr.git
-cd wine.byb.kr
+`ops/release.sh` 에 한 줄 추가한다. 스크립트도 이미지에 들어가므로 **머지하면 그 배포에서 바로 돈다**
+(옛 `./server` 처럼 "다음 배포부터"가 아니다).
 
-# 배포 환경 종속 값 — 이 파일은 서버에만 존재한다
-cat > .env <<EOF
-PORT=3104
-ADMIN_PASSWORD=여기에-실제-비밀번호
-SESSION_SECRET=$(openssl rand -hex 32)
-EOF
-chmod 600 .env
-
-# 첫 구동 (빌드 + pm2 시작 + 헬스체크)
-./server
-
-# 재부팅 후에도 뜨도록 pm2 저장
-pm2 save
-pm2 startup   # 안내되는 명령을 한 번 실행
-```
-
-## 2. nginx + HTTPS (서버에서 1회)
+## 손으로 해야 할 때 (서버에서)
 
 ```bash
-sudo cp deploy/nginx/wine.byb.kr.conf /etc/nginx/sites-available/wine.byb.kr
-sudo ln -s /etc/nginx/sites-available/wine.byb.kr /etc/nginx/sites-enabled/
-sudo nginx -t && sudo systemctl reload nginx
-
-# Let's Encrypt 인증서 (443 블록 자동 추가)
-sudo certbot --nginx -d wine.byb.kr
+cd ~/servers/byb.kr/apps/wine
+docker compose ps
+docker compose logs --tail 100 wine
+docker compose run --rm tools node_modules/.bin/tsx scripts/db-summary.ts   # DB 요약
+# 이미 받아 둔 이미지로 다시 배포
+SSH_ORIGINAL_COMMAND="deploy $(docker images --format '{{.Tag}}' ghcr.io/ybbarng/wine.byb.kr | grep -v latest | head -1)" ./deploy.sh </dev/null
 ```
 
-## 3. 자동 배포용 GitHub Secrets (1회)
+## 키와 시크릿
 
-저장소 Settings → Secrets and variables → Actions 에 등록(현재 운영 서버 기준):
+GitHub → Settings → Secrets and variables → Actions:
 
 | Secret | 값 |
 | --- | --- |
-| `SERVER_HOST` | `byb.kr` |
-| `SERVER_USER` | `ybbarng` |
-| `SERVER_SSH_KEY` | 배포용 개인키. 공개키는 서버 `~/.ssh/authorized_keys` 에 **forced command** 로 등록 |
-| `SERVER_PORT` | SSH 포트 (기본 22면 생략) |
-| `SERVER_PATH` | `/home/ybbarng/wine.byb.kr` |
+| `SERVER_HOST` / `SERVER_USER` / `SERVER_PORT` | `byb.kr` / `ybbarng` / (22 면 생략) |
+| `SERVER_SSH_KEY` | 배포 키. 서버 `authorized_keys` 에서 `command="/home/ybbarng/servers/byb.kr/apps/wine/deploy.sh"` 로 묶여 있다 |
+| `BACKUP_SSH_KEY` | 백업 키. `command="/home/ybbarng/servers/byb.kr/apps/wine/dump-tastings.sh"` 로 묶여 있다 |
 
-이후 `main` push → `.github/workflows/deploy.yml` 이 서버에서 `./server` 실행.
+두 키 모두 forced-command 라 새어도 배포·덤프 말고는 할 수 있는 게 없다.
+로컬에서 키를 시험할 땐 `-o IdentitiesOnly=yes` 를 붙인다(없으면 다른 키로 붙어 평범한 셸이 열린다).
 
-### 배포 키 보안 (forced command)
-
-배포 전용 키는 만능키를 재사용하지 않고 별도로 만든다. 서버 `~/.ssh/authorized_keys` 에서 그 공개키 앞에 강제 명령을 걸어, 키가 유출돼도 배포 외에는 아무것도 못 하게 한다.
-
-```
-command="cd /home/ybbarng/wine.byb.kr && ./server",no-port-forwarding,no-X11-forwarding,no-agent-forwarding ssh-ed25519 AAAA...공개키... wine-deploy
-```
-
-로컬에서 검증할 때는 지정 키만 쓰도록 `-o IdentitiesOnly=yes` 를 붙인다(안 그러면 다른 키로 붙어 일반 셸이 열린다):
-
-```bash
-ssh -i ~/.ssh/wine_deploy -o IdentitiesOnly=yes ybbarng@byb.kr   # 접속하면 ./server 가 자동 실행
-```
-
-## 참고
-
-- `./server` 동작: `.env` 로드 → SQLite 백업(`data/wine.db.bak.*`, 최근 14개) → `git pull` → `pnpm install` → `pnpm build` → `pm2 restart` → 헬스체크.
-- 포트를 바꾸면 서버 `.env` 의 `PORT` 와 `deploy/nginx/wine.byb.kr.conf` 의 `proxy_pass` 를 함께 바꾼다.
+서버에만 있는 값(`ADMIN_PASSWORD`, `SESSION_SECRET`)은 `servers/byb.kr/apps/wine/.env` 에 있다.

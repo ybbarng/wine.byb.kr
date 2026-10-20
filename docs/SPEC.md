@@ -228,10 +228,8 @@
 
 ### 배포
 - 원격 저장소: **https://github.com/ybbarng/wine.byb.kr**
-- **byb.kr Ubuntu 서버 + nginx 리버스 프록시 + pm2**.
-- 도메인 `wine.byb.kr` (DNS 연결 완료) → nginx server block → `localhost:3104`.
-- **포트(3104)는 배포 환경 종속 값** — 저장소에 하드코딩하지 않고 **서버의 `.env`(`PORT=3104`)** 에만 둔다. `ecosystem.config.js`는 `process.env.PORT`를 참조하고, `server` 스크립트가 `pm2 start` 전에 `.env`를 로드해 주입한다. 저장소에는 `.env.example`(개발 기본 `PORT=3000`)만 커밋. (당초 3103을 쓰려 했으나 서버에서 이미 점유 중이라 3104로.)
-- 배포 스크립트: 참고 프로젝트의 `server` + `ecosystem.config.js` 패턴 재사용(`.env` 로드 → DB 백업 → pnpm build → pm2 restart → 헬스체크).
+- **byb.kr 서버의 Docker 컨테이너** — nginx(TLS) → Traefik → `wine`. 2026-10-20 pm2 에서 옮김. 자세한 내용은 [DEPLOY.md](DEPLOY.md).
+- 이미지는 GitHub Actions 가 빌드해 GHCR 에 올리고, 서버 설정은 `ybbarng/servers` 저장소의 `byb.kr/apps/wine/` 에 있다.
 - **SQLite 파일 백업**: 배포 시 자동 백업(`data/wine.db.bak.*`, 최근 14개 유지) + 주기적 백업. 기록이 핵심 자산이라 데이터 안전 최우선.
 
 ---
@@ -277,7 +275,7 @@
 ### 결정된 사항 (기록)
 - **동호회 공유 방향**: 단일 인스턴스(나만 편집/누구나 조회) + 데이터 모델은 멀티유저 확장 여지 유지. (§3.1)
 - **인증**: 단일 `ADMIN_PASSWORD` + 세션 쿠키 유지. OAuth는 커뮤니티 승격 시 재검토.
-- **배포**: `wine.byb.kr` → byb.kr Ubuntu(계정 `ybbarng`, `/home/ybbarng/wine.byb.kr`) → nginx → `localhost:3104`. 포트는 서버 `.env` 에만. main push 시 GitHub Actions가 forced command 배포 키로 `./server` 실행. (§7 배포, docs/DEPLOY.md)
+- **배포**: `wine.byb.kr` → byb.kr 서버 → nginx → Traefik → `wine` 컨테이너. main push 시 GitHub Actions 가 이미지를 빌드해 올리고, forced command 배포 키로 서버의 `deploy.sh` 를 실행. (§7 배포, docs/DEPLOY.md)
 - **DB**: SQLite 파일 `data/wine.db`, 배포 시 자동 백업.
 
 ---
