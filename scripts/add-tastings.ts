@@ -1315,6 +1315,7 @@ async function main() {
         abv: true,
         classification: true,
         regionId: true,
+        region: { select: { level: true } },
         producer: { select: { id: true, slug: true, nameLocal: true } },
       },
     });
@@ -1342,15 +1343,29 @@ async function main() {
     let moveRegion = existing != null && existing.regionId !== region.id;
     if (moveRegion && existing?.regionId != null) {
       let cur = region.parentId;
+      const seen = new Set<string>();
       moveRegion = false;
-      while (cur) {
+      while (cur && !seen.has(cur)) {
         if (cur === existing.regionId) {
           moveRegion = true;
           break;
         }
+        seen.add(cur);
         const p = await db.region.findUnique({ where: { id: cur }, select: { parentId: true } });
         cur = p?.parentId ?? null;
       }
+      // 앱에서 시드와 다른 나라 이름("France" 등)을 적으면 새 나라 행이 생겨 여기 걸린다.
+      // DB 쪽이 시드보다 자세한 기존 와인(브라운 브라더스 등)은 안 옮기는 게 맞아 조용히 둔다.
+      if (!moveRegion && existing.region?.level === "country")
+        console.warn(`! 산지 안 옮김: ${e.wine.nameLocal} (상위 관계 아님)`);
+    }
+    // 앱에서 생산자를 비워 둔 와인도 시드 생산자에 붙인다.
+    const moveProducer = appProducer != null || (existing != null && existing.producer == null);
+    if (existing?.producer && existing.producer.slug !== e.producer.slug && !appProducer) {
+      // 같은 앱 생산자를 쓰던 다른 와인이 먼저 시드 생산자로 바뀐 경우 등. 손으로 정리한다.
+      console.warn(
+        `! 생산자 안 옮김: ${e.wine.nameLocal} (${existing.producer.slug} ≠ ${e.producer.slug})`
+      );
     }
 
     const producer = await db.producer.upsert({
@@ -1375,7 +1390,7 @@ async function main() {
         notesKo: d.notesKo ?? null,
         classification: e.wine.classification ?? existing?.classification ?? null,
         ...(existing?.type == null ? { type: e.wine.type } : {}),
-        ...(appProducer ? { producerId: producer.id } : {}),
+        ...(moveProducer ? { producerId: producer.id } : {}),
         ...(moveRegion ? { regionId: region.id } : {}),
       },
       create: {
@@ -1408,7 +1423,9 @@ async function main() {
     if (appProducer && appProducer.id !== producer.id) {
       const left = await db.wine.count({ where: { producerId: appProducer.id } });
       if (left === 0) await db.producer.delete({ where: { id: appProducer.id } });
-      console.log(`~ 생산자 합침: ${appProducer.slug} → ${e.producer.slug}`);
+      console.log(
+        `~ 생산자 합침: ${appProducer.slug} → ${e.producer.slug}${left === 0 ? " (빈 앱 생산자 삭제)" : ""}`
+      );
     }
 
     if (!e.tasting) {
