@@ -31,7 +31,7 @@ RUN pnpm run build
 # 도구 — 빌드 단계를 그대로 쓴다(전체 node_modules·scripts·prisma 포함)
 FROM build AS tools
 ENV NODE_ENV=production DATABASE_URL=file:/data/wine.db
-CMD ["pnpm", "exec", "tsx", "scripts/db-summary.ts"]
+CMD ["node_modules/.bin/tsx", "scripts/db-summary.ts"]
 
 # 실행 — standalone 출력 + 정적 파일
 FROM node:24-bookworm-slim AS runner

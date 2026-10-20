@@ -7,13 +7,17 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+# pnpm 을 거치지 않고 설치된 실행 파일을 바로 쓴다. 컨테이너는 바깥과 통신하지 않아서
+# corepack 이 pnpm 을 내려받으려 하면 실패한다.
+BIN=node_modules/.bin
+
 echo "🗄  Syncing DB schema..."
-pnpm db:push
+"$BIN/prisma" db push
 
 run_seed() {
   local label="$1" script="$2"
   echo "$label"
-  pnpm exec tsx "$script" || echo "⚠️  $script skipped (non-fatal)"
+  "$BIN/tsx" "$script" || echo "⚠️  $script skipped (non-fatal)"
 }
 
 run_seed "🍷 Applying tasting seed..." scripts/add-tastings.ts
