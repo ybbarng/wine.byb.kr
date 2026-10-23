@@ -1654,5 +1654,28 @@
     "isPublic": true,
     "createdAt": "2026-10-20T01:55:39.251Z",
     "updatedAt": "2026-10-20T01:55:39.251Z"
+  },
+  {
+    "id": "cmvkx2c5x000201qkzf60kn5x",
+    "wineSlug": "wine",
+    "vintageYear": 2025,
+    "drankOn": "2026-10-23",
+    "purchasedOn": "2026-10-23",
+    "purchasePrice": 31900,
+    "purchaseCurrency": "KRW",
+    "purchasePlace": "Gs",
+    "rating": 3,
+    "repurchase": "아마",
+    "value": "보통",
+    "colorHex": null,
+    "aromasConfirmed": "[\"감초\",\"말린 자두\"]",
+    "flavorFelt": "{\"acidity\":2,\"tannin\":4,\"sweetness\":1,\"body\":4}",
+    "bodyText": "떫거나 쌉쌀한 맛이 강하게 느껴짐. 신맛은 거의 느껴지지 않음.",
+    "foodPaired": "간장 제육볶음 백반",
+    "photos": null,
+    "owner": "admin",
+    "isPublic": true,
+    "createdAt": "2026-10-23T11:58:42.453Z",
+    "updatedAt": "2026-10-23T13:33:14.239Z"
   }
 ]
