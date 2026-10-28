@@ -270,6 +270,26 @@ const REGIONS: RegionSeed[] = [
     latitude: 42.91,
     longitude: 143.05,
   },
+  {
+    slug: "navarra",
+    nameKo: "나바라",
+    nameLocal: "Navarra",
+    country: "스페인",
+    level: "region",
+    parentSlug: "spain",
+    latitude: 42.55,
+    longitude: -1.75,
+  },
+  {
+    slug: "ventoux",
+    nameKo: "방투",
+    nameLocal: "Ventoux",
+    country: "프랑스",
+    level: "subregion",
+    parentSlug: "론",
+    latitude: 44.08, // 몽 방투 남쪽 비탈의 포도밭
+    longitude: 5.2,
+  },
 ];
 
 // 없으면 만들 품종. GRAPE_ABSORB(wine-glass.ts) 색은 nameKo 로 찾으니 nameKo 를 맞춘다.
@@ -429,6 +449,22 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     abv: 13.8,
     notesKo:
       "바로사 밸리 쉬라즈를 오래 쓴 프랑스 오크통에서 숙성한 투핸즈의 대표 와인. 잔을 기울이면 가장자리까지 검붉은 진한 색이 먼저 보이고, 향에서는 블랙베리·자두 같은 검은 과실 위로 후추와 말린 허브가 올라온다. 새 오크가 아니라 나무 향이 과실을 덮지 않으니, 과실 뒤로 고기 같은 짭짤한 풍미가 어떻게 이어지는지 따라가 보자. 떫은맛은 촘촘하지만 거칠지 않다. 너무 따뜻하면 알코올이 도드라지니 16~18도 정도로 약간 서늘하게 마시는 게 좋다.",
+  },
+  // 빈티지마다 다를 수 있어 2022 빈티지 기준 도수를 적었다.
+  "hacienda-de-arinzano-chardonnay": {
+    abv: 14,
+    notesKo:
+      "나바라의 단일 포도밭 등급인 '파고 데 아린자노'에서 나온 샤르도네. 첫 향은 노란 사과와 복숭아, 멜론 같은 잘 익은 과실이고, 잔을 조금 돌리면 오렌지 껍질이나 은은한 향신료가 올라오는지 찾아보자. 도수가 14도라 서늘한 산지 샤르도네보다 입안이 둥글고 묵직한데, 그 무게를 산미가 얼마나 받쳐 주는지가 이 와인의 관전 포인트다. 너무 차게 마시면 과실이 닫히니 10~12도쯤이 좋고, 잔에서 온도가 오르며 향이 풍성해지는 것도 느껴 보자.",
+  },
+  "michele-chiarlo-nivole-moscato-d-asti": {
+    abv: 5,
+    notesKo:
+      "'니볼레'는 피에몬테 말로 구름이라는 뜻이다. 잔에 따르면 짙은 기포 대신 잔잔하게 이는 기포부터 보이고, 코를 대면 복숭아·살구에 흰 꽃 향이 화사하게 올라온다. 입에서는 단맛이 먼저 오지만 산미가 뒤따라 끝맛을 깔끔하게 정리하는데, 그 덕에 생각보다 덜 달게 느껴지는지 확인해 보자. 도수가 5도로 낮으니 아주 차게 해서 과일이나 디저트와 가볍게 곁들이기 좋다.",
+  },
+  "marrenon-orca-ventoux": {
+    abv: 15,
+    notesKo:
+      "몽 방투 남쪽 비탈의 오래된 그르나슈를 늦게 따서 프랑스 오크통에서 1년 숙성한 레드. 마레농이 좋은 해에만 내는 와인이다. 첫 향은 익은 체리에 담배잎 같은 숙성 향이 섞여 나오고, 입에 넣으면 잘 익은 과실 뒤로 블랙커런트·라즈베리의 상큼함이 따라온다. 도수가 15도로 높지만 일교차 큰 산지라 무겁게만 느껴지지 않으니, 끝에 남는 허브와 볶은 커피 같은 여운을 따라가 보자. 생산자는 마시기 세 시간 전에 디캔팅하고 17도 정도로 마시라고 권한다.",
   },
 };
 
@@ -1240,6 +1276,57 @@ const ENTRIES: Entry[] = [
       memo: "2022 빈티지.",
     },
   },
+  // 시음은 2026-10-23 앱에서 먼저 남겼다(위 wineRenames 로 slug 를 옮긴다). 보강만 한다.
+  {
+    regionSlug: "ventoux",
+    producer: { slug: "marrenon", nameKo: "마레농", nameLocal: "Marrenon" },
+    wine: {
+      slug: "marrenon-orca-ventoux",
+      nameKo: "마레농 오르카 방투",
+      nameLocal: "Marrenon Orca Ventoux",
+      type: "red",
+      classification: "Ventoux AOC",
+    },
+    grapeSlugs: [
+      { slug: "그르나슈", percent: 90 },
+      { slug: "쉬라즈", percent: 10 },
+    ],
+  },
+  // 10/27 앱 예약, 픽업일을 구매일로 둔다. 아직 안 마셨다.
+  {
+    regionSlug: "navarra",
+    producer: { slug: "arinzano", nameKo: "아린자노", nameLocal: "Arínzano" },
+    wine: {
+      slug: "hacienda-de-arinzano-chardonnay",
+      nameKo: "하시엔다 데 아린자노 샤르도네",
+      nameLocal: "Hacienda de Arínzano Chardonnay",
+      type: "white",
+      classification: "Pago de Arínzano DOP",
+    },
+    grapeSlugs: [{ slug: "샤르도네", percent: 100 }],
+    tasting: {
+      purchasedOn: "2026-10-30",
+      purchasePrice: 27920,
+      purchasePlace: "와인25플러스",
+    },
+  },
+  {
+    regionSlug: "piemonte",
+    producer: { slug: "michele-chiarlo", nameKo: "미켈레 끼아를로", nameLocal: "Michele Chiarlo" },
+    wine: {
+      slug: "michele-chiarlo-nivole-moscato-d-asti",
+      nameKo: "미켈레 끼아를로 니볼레 모스카토 다스티",
+      nameLocal: "Michele Chiarlo Nivole Moscato d'Asti",
+      type: "sparkling",
+      classification: "Moscato d'Asti DOCG",
+    },
+    grapeSlugs: [{ slug: "무스캇", percent: 100 }],
+    tasting: {
+      purchasedOn: "2026-11-02",
+      purchasePrice: 29200,
+      purchasePlace: "와인25플러스",
+    },
+  },
 ];
 
 async function main() {
@@ -1281,22 +1368,32 @@ async function main() {
     ["domaine-vincent-fournier", "domaine-vincent-prunier"],
     ["domaine-des-ardillers", "domaine-des-hardieres"],
   ];
-  const wineRenames: [string, string][] = [
+  // 세 번째 값을 주면 한국어 이름도 같이 바꾼다. 시드 upsert 는 앱에서 적은 nameKo 를
+  // 건드리지 않으니, 앱에서 임시 이름으로 급히 만든 와인은 여기서만 고칠 수 있다.
+  const wineRenames: [string, string, string?][] = [
     [
       "domaine-vincent-fournier-bourgogne-chardonnay",
       "domaine-vincent-prunier-bourgogne-chardonnay",
     ],
     ["domaine-des-ardillers-anjou-blanc", "domaine-des-hardieres-anjou-blanc"],
+    // 2026-10-23 앱에서 이름을 "ㄱㄱㄱ"으로 급히 남겨 slug 가 "wine" 이 됐다.
+    ["wine", "marrenon-orca-ventoux", "마레농 오르카 방투"],
   ];
   for (const [from, to] of producerRenames) {
     const old = await db.producer.findUnique({ where: { slug: from }, select: { id: true } });
     const taken = await db.producer.findUnique({ where: { slug: to }, select: { id: true } });
     if (old && !taken) await db.producer.update({ where: { slug: from }, data: { slug: to } });
   }
-  for (const [from, to] of wineRenames) {
+  for (const [from, to, nameKo] of wineRenames) {
     const old = await db.wine.findUnique({ where: { slug: from }, select: { id: true } });
     const taken = await db.wine.findUnique({ where: { slug: to }, select: { id: true } });
-    if (old && !taken) await db.wine.update({ where: { slug: from }, data: { slug: to } });
+    if (old && !taken) {
+      await db.wine.update({
+        where: { slug: from },
+        data: { slug: to, ...(nameKo ? { nameKo } : {}) },
+      });
+      console.log(`~ 와인 slug 정리: ${from} → ${to}`);
+    }
   }
 
   // 2) 기록.
