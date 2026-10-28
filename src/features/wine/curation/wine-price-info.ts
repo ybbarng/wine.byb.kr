@@ -64,9 +64,9 @@ const PRICES: Record<string, WinePrice> = {
     note: "국내가를 찾지 못해 스페인 현지가(약 19유로)로 추정했다.",
   },
   "michele-chiarlo-nivole-moscato-d-asti": {
-    low: 24000,
-    high: 34000,
-    note: "375ml 하프 보틀 기준. 국내가를 찾지 못해 미국 소매가(12~15달러)로 추정했다.",
+    low: 30000,
+    high: 42000,
+    note: "750ml 기준(하프 보틀 375ml도 있다). 국내가를 찾지 못해 미국 소매가(19~26달러)로 추정했다.",
   },
   "marrenon-orca-ventoux": {
     low: 30000,

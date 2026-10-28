@@ -1396,6 +1396,29 @@ async function main() {
     }
   }
 
+  // 1.8) 앱에서 잘못 적은 시음 기록 값을 사용자 요청으로 고친다. 아래 시드는 앱 값을
+  // 덮지 않으므로 여기서만 바꾼다. 적어 둔 옛 값과 지금 값이 모두 같을 때만 바꿔야
+  // 한다. 조건 없이 바꾸면 사용자가 나중에 앱에서 다시 고친 값을 배포마다 되돌린다.
+  const noteFixes: {
+    id: string;
+    from: { vintageYear: number; purchasePlace: string };
+    to: { vintageYear: number; purchasePlace: string };
+  }[] = [
+    // 마레농 오르카 방투(2026-10-23): 병입 연도를 빈티지로 적었다. 라벨 빈티지는 2023.
+    {
+      id: "cmvkx2c5x000201qkzf60kn5x",
+      from: { vintageYear: 2025, purchasePlace: "Gs" },
+      to: { vintageYear: 2023, purchasePlace: "GS25 잠실스타점" },
+    },
+  ];
+  for (const f of noteFixes) {
+    const { count } = await db.tastingNote.updateMany({
+      where: { id: f.id, ...f.from },
+      data: f.to,
+    });
+    if (count > 0) console.log(`~ 시음 기록 고침: ${f.id}`);
+  }
+
   // 2) 기록.
   for (const e of ENTRIES) {
     const region = await db.region.findUnique({ where: { slug: e.regionSlug } });
