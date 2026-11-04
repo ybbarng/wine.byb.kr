@@ -24,6 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
+import { launchChrome } from "./chrome.mjs";
 
 const DIR = path.join(process.cwd(), ".glass-snapshots");
 const BASE = process.env.GLASS_SNAP_URL ?? "http://localhost:3000";
@@ -54,9 +55,9 @@ function isBlank(file) {
 
 async function capture(label) {
   if (!label) throw new Error("라벨이 필요하다: capture <label>");
-  const { chromium } = await import("playwright");
   fs.mkdirSync(DIR, { recursive: true });
-  const browser = await chromium.launch({
+  // 패치된 시스템 Chrome만 띄운다(scripts/chrome.mjs)
+  const browser = await launchChrome({
     headless: true,
     args: ["--ignore-gpu-blocklist"],
   });

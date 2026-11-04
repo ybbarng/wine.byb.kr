@@ -16,15 +16,16 @@ import fs from "node:fs";
 import path from "node:path";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
+import { launchChrome } from "./chrome.mjs";
 
 const BASE = "http://localhost:3000";
 const STEP_MS = 0;
 const RUN_MS = 40_000;
 const TMP = path.join(process.cwd(), ".glass-snapshots", "timeline");
 
-const { chromium } = await import("playwright");
 fs.mkdirSync(TMP, { recursive: true });
-const browser = await chromium.launch({ headless: true, args: ["--ignore-gpu-blocklist"] });
+// 패치된 시스템 Chrome만 띄운다(scripts/chrome.mjs)
+const browser = await launchChrome({ headless: true, args: ["--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width: 260, height: 430 } });
 await page.addInitScript(() => {
   Object.defineProperty(navigator, "gpu", { get: () => undefined });
