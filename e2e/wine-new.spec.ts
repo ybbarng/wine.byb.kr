@@ -29,6 +29,12 @@ for (const vp of [
     test.beforeEach(async ({ page }) => {
       await page.goto("/wine/new");
       await expect(page.getByRole("heading", { name: "새 와인" })).toBeVisible();
+      // 서버가 그린 화면만 보고 누르면, React 가 이어받기 전이라 브라우저 기본 GET 제출로
+      // /wine/new?nameKo= 가 다시 열린다. 폼에 React 핸들러가 붙을 때까지 기다린다.
+      await page.waitForFunction(() => {
+        const form = document.querySelector("form");
+        return form !== null && Object.keys(form).some((k) => k.startsWith("__reactProps"));
+      });
     });
 
     test("와인잔 무대가 폼을 덮지 않는다", async ({ page }) => {
