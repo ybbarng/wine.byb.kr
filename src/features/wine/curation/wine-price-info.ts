@@ -73,6 +73,16 @@ const PRICES: Record<string, WinePrice> = {
     high: 45000,
     note: "나라셀라 수입. 국내가를 찾지 못해 프랑스 현지가(약 12유로)로 추정했다.",
   },
+  "penley-project-merlot": {
+    low: 35000,
+    high: 50000,
+    note: "국내가를 찾지 못해 호주 현지가(약 42호주달러)로 추정했다.",
+  },
+  "alba-de-domus": {
+    low: 55000,
+    high: 80000,
+    note: "도무스 아우레아의 세컨드 와인. 국내가를 찾지 못해 미국 소매가(35~50달러)로 추정했다.",
+  },
 };
 
 export function winePrice(slug: string): WinePrice | null {
