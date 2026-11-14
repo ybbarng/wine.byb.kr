@@ -290,6 +290,16 @@ const REGIONS: RegionSeed[] = [
     latitude: 44.08, // 몽 방투 남쪽 비탈의 포도밭
     longitude: 5.2,
   },
+  {
+    slug: "coonawarra",
+    nameKo: "쿠나와라",
+    nameLocal: "Coonawarra",
+    country: "호주",
+    level: "region",
+    parentSlug: "australia",
+    latitude: -37.29,
+    longitude: 140.83,
+  },
 ];
 
 // 없으면 만들 품종. GRAPE_ABSORB(wine-glass.ts) 색은 nameKo 로 찾으니 nameKo 를 맞춘다.
@@ -465,6 +475,18 @@ const WINE_DETAILS: Record<string, { abv?: number; notesKo?: string }> = {
     abv: 15,
     notesKo:
       "몽 방투 남쪽 비탈의 오래된 그르나슈를 늦게 따서 프랑스 오크통에서 1년 숙성한 레드. 마레농이 좋은 해에만 내는 와인이다. 첫 향은 익은 체리에 담배잎 같은 숙성 향이 섞여 나오고, 입에 넣으면 잘 익은 과실 뒤로 블랙커런트·라즈베리의 상큼함이 따라온다. 도수가 15도로 높지만 일교차 큰 산지라 무겁게만 느껴지지 않으니, 끝에 남는 허브와 볶은 커피 같은 여운을 따라가 보자. 생산자는 마시기 세 시간 전에 디캔팅하고 17도 정도로 마시라고 권한다.",
+  },
+  // 도수는 사용자가 본 2021 빈티지 라벨 값.
+  "penley-project-merlot": {
+    abv: 14.5,
+    notesKo:
+      "쿠나와라의 붉은 테라 로사 땅에서 자란 메를로에 펜리가 '프로젝트'라는 이름을 붙여 낸 와인. 첫 향은 라즈베리 같은 붉은 과실에 제비꽃 향이 얹힌 밝은 쪽이라, 자두·초콜릿 향의 묵직한 메를로를 떠올렸다면 결이 꽤 다르게 느껴질 수 있다. 입에 넣으면 떫은맛은 둥글게 물러나 있고, 서늘한 산지답게 산미가 과실을 끝까지 받쳐 주니 그 상큼함이 여운까지 이어지는지 따라가 보자. 병에서 몇 해 지나면 가장자리부터 벽돌빛이 돌고 과실도 한결 부드러워지는데, 16도 안팎으로 살짝 서늘하게 마시면 남은 과실이 더 또렷하다.",
+  },
+  // 빈티지를 모른다. 확인된 빈티지 도수가 14.9~15.4도라 15도로 추정했다.
+  "alba-de-domus": {
+    abv: 15,
+    notesKo:
+      "산티아고 동쪽 안데스 자락, 마쿨의 자갈밭에서 나온 카베르네 소비뇽 중심의 레드로 도무스 아우레아의 세컨드 와인이다. 첫 향은 체리·자두 같은 검붉은 과실에 민트와 월계수 잎 같은 서늘한 허브가 섞여 나오는데, 이 민트 향이 알토 마이포 카베르네를 알아보는 단서이니 꼭 찾아보자. 도수가 15도 안팎이라 입안은 묵직하지만 떫은맛이 곱고 산미가 살아 있어 처지지 않는다. 프랑스 오크통에서 1년 반 넘게 숙성한 와인이라 열고 30분에서 1시간쯤 두거나 디캔팅하면 향이 훨씬 풀리고, 16~18도로 마시면 알코올이 덜 도드라진다.",
   },
 };
 
@@ -1324,6 +1346,46 @@ const ENTRIES: Entry[] = [
     tasting: {
       purchasedOn: "2026-11-02",
       purchasePrice: 29200,
+      purchasePlace: "와인25플러스",
+    },
+  },
+  // 11/5 앱 예약, 11/9 픽업. 마신 날은 듣지 못해 픽업한 주의 금요일로 추정했다.
+  {
+    regionSlug: "coonawarra",
+    producer: { slug: "penley-estate", nameKo: "펜리 에스테이트", nameLocal: "Penley Estate" },
+    wine: {
+      slug: "penley-project-merlot",
+      nameKo: "펜리 프로젝트 메를로",
+      nameLocal: "Penley Project Merlot",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "메를로" }],
+    tasting: {
+      drankOn: "2026-11-13",
+      purchasedOn: "2026-11-09",
+      purchasePrice: 29900,
+      purchasePlace: "와인25플러스",
+      memo: "시간이 좀 된 와인이라 그런지 어두운 적갈색 느낌. 탄닌감이 그렇게 강하지 않았고 전체적으로 부드러우면서 산미 있는 맛. 괜찮았던 것 같다. 2021 빈티지.",
+    },
+  },
+  // 11/12 앱 예약, 같은 날 픽업. 아직 안 마셨다. 블렌드가 빈티지마다 달라 대표 품종만 둔다.
+  {
+    regionSlug: "maipo-valley",
+    producer: {
+      slug: "vina-quebrada-de-macul",
+      nameKo: "비냐 케브라다 데 마쿨",
+      nameLocal: "Viña Quebrada de Macul",
+    },
+    wine: {
+      slug: "alba-de-domus",
+      nameKo: "알바 드 도머스",
+      nameLocal: "Alba de Domus",
+      type: "red",
+    },
+    grapeSlugs: [{ slug: "까베르네-소비뇽" }],
+    tasting: {
+      purchasedOn: "2026-11-12",
+      purchasePrice: 48000,
       purchasePlace: "와인25플러스",
     },
   },
