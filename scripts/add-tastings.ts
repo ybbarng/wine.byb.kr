@@ -509,6 +509,7 @@ type Entry = {
     purchasedOn?: string; // YYYY-MM-DD (픽업/구매일; 편의점 직접구매 등 모르면 생략)
     purchasePrice?: number; // 모르면 생략
     purchasePlace?: string; // 구매처 불명이면 생략
+    vintageYear?: number; // 산 병의 빈티지. 모르면 생략
     memo?: string; // 시음 메모(bodyText). 외화로 산 건 원화로 환산해 purchasePrice 에 두고 원가는 여기 적는다.
   };
 };
@@ -1365,7 +1366,8 @@ const ENTRIES: Entry[] = [
       purchasedOn: "2026-11-09",
       purchasePrice: 29900,
       purchasePlace: "와인25플러스",
-      memo: "시간이 좀 된 와인이라 그런지 어두운 적갈색 느낌. 탄닌감이 그렇게 강하지 않았고 전체적으로 부드러우면서 산미 있는 맛. 괜찮았던 것 같다. 2021 빈티지.",
+      vintageYear: 2021,
+      memo: "시간이 좀 된 와인이라 그런지 어두운 적갈색 느낌. 탄닌감이 그렇게 강하지 않았고 전체적으로 부드러우면서 산미 있는 맛. 괜찮았던 것 같다.",
     },
   },
   // 11/12 앱 예약, 같은 날 픽업. 아직 안 마셨다. 블렌드가 빈티지마다 달라 대표 품종만 둔다.
@@ -1629,9 +1631,16 @@ async function main() {
       // 이미 있는 노트는 사용자가 앱에서 편집했을 수 있다. 시드는 **비어 있는 칸만
       // 채우고** 사용자가 넣은 값은 절대 덮지 않는다. (과거: 시드가 구매처·음용일을
       // 시드값으로 덮어써, 사용자가 앱에서 적은 음용일이 배포마다 null 로 지워졌다.)
-      const fill: { purchasePlace?: string | null; drankOn?: Date | null; bodyText?: string } = {};
+      const fill: {
+        purchasePlace?: string | null;
+        drankOn?: Date | null;
+        bodyText?: string;
+        vintageYear?: number;
+      } = {};
       const place = e.tasting.purchasePlace ?? null;
       if (dup.purchasePlace == null && place != null) fill.purchasePlace = place;
+      if (dup.vintageYear == null && e.tasting.vintageYear != null)
+        fill.vintageYear = e.tasting.vintageYear;
       if (dup.drankOn == null && drankOn != null) fill.drankOn = drankOn;
       if (dup.bodyText == null && e.tasting.memo != null) fill.bodyText = e.tasting.memo;
       if (Object.keys(fill).length > 0) {
@@ -1649,6 +1658,7 @@ async function main() {
         purchasedOn,
         purchasePrice: e.tasting.purchasePrice,
         purchasePlace: e.tasting.purchasePlace ?? null,
+        vintageYear: e.tasting.vintageYear ?? null,
         bodyText: e.tasting.memo ?? null,
       },
     });
